@@ -6,6 +6,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Medal, Crown, TrendingUp, Target, Users } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { CountUp } from "@/components/CountUp";
@@ -132,6 +133,7 @@ function LeaderboardPage() {
 
   const myAddress = wallet.publicKey?.toBase58();
   const myRank = myAddress ? sorted.findIndex((t) => t.owner === myAddress) + 1 : 0;
+  const myStats = myAddress ? sorted.find((t) => t.owner === myAddress) : null;
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -147,16 +149,47 @@ function LeaderboardPage() {
         </div>
 
         {myAddress && myRank > 0 && (
-          <div className="glass-panel px-4 py-2.5 flex items-center gap-3">
+          <div className="glass-panel premium-card px-4 py-2.5 flex items-center gap-3">
             <span className="text-xs text-text-muted">Your Rank</span>
             <span className="text-lg font-mono font-bold text-violet-400">#{myRank}</span>
           </div>
         )}
       </div>
 
+      {/* Your Stats Panel */}
+      {myStats && (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-panel premium-card p-6 border-violet-500/20"
+        >
+          <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-4">Your Stats</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wider">Rank</div>
+              <div className="text-xl font-mono font-bold text-violet-400">#{myRank}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wider">Volume</div>
+              <div className="text-xl font-mono font-bold">{myStats.totalVolumeSol.toFixed(2)} SOL</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wider">Win Rate</div>
+              <div className="text-xl font-mono font-bold text-[#10E58C]">
+                {myStats.settledCount > 0 ? `${Math.round((myStats.winsCount / myStats.settledCount) * 100)}%` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wider">Positions</div>
+              <div className="text-xl font-mono font-bold">{myStats.positionsCount}</div>
+            </div>
+          </div>
+        </motion.section>
+      )}
+
       {/* Aggregate stats */}
       <section className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="glass-panel p-6 flex items-center space-x-4">
+        <div className="glass-panel premium-card p-6 flex items-center space-x-4">
           <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
             <TrendingUp className="w-6 h-6" />
           </div>
@@ -168,7 +201,7 @@ function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="glass-panel p-6 flex items-center space-x-4">
+        <div className="glass-panel premium-card p-6 flex items-center space-x-4">
           <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
             <Users className="w-6 h-6" />
           </div>
@@ -180,7 +213,7 @@ function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="glass-panel p-6 flex items-center space-x-4 col-span-2 md:col-span-1">
+        <div className="glass-panel premium-card p-6 flex items-center space-x-4 col-span-2 md:col-span-1">
           <div className="p-3 bg-[#10E58C]/10 rounded-xl text-[#10E58C]">
             <Target className="w-6 h-6" />
           </div>
@@ -231,46 +264,53 @@ function LeaderboardPage() {
         </div>
       ) : (
         <section className="space-y-3">
-          {sorted.slice(0, 50).map((trader, index) => {
-            const rank = index + 1;
-            const isMe = myAddress === trader.owner;
-            const winRate =
-              trader.settledCount > 0 ? Math.round((trader.winsCount / trader.settledCount) * 100) : null;
+          <AnimatePresence mode="popLayout">
+            {sorted.slice(0, 50).map((trader, index) => {
+              const rank = index + 1;
+              const isMe = myAddress === trader.owner;
+              const winRate =
+                trader.settledCount > 0 ? Math.round((trader.winsCount / trader.settledCount) * 100) : null;
 
-            return (
-              <div
-                key={trader.owner}
-                className={`glass-panel glass-panel-hover p-5 flex items-center justify-between gap-4 ${
-                  rank === 1 ? "rank-glow-1" : rank === 2 ? "rank-glow-2" : rank === 3 ? "rank-glow-3" : ""
-                } ${isMe ? "border-violet-500/40" : ""}`}
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <RankBadge rank={rank} />
-                  <div className="min-w-0">
-                    <div className="font-mono text-sm font-bold text-text-primary truncate">
-                      {shortAddr(trader.owner)}
-                      {isMe && (
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 align-middle">
-                          You
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-text-muted font-mono">
-                      {trader.positionsCount} position{trader.positionsCount !== 1 ? "s" : ""}
-                      {winRate !== null && <span> &middot; {winRate}% win rate</span>}
+              return (
+                <motion.div
+                  key={trader.owner}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, delay: index * 0.03 }}
+                  className={`glass-panel glass-panel-hover premium-card p-5 flex items-center justify-between gap-4 ${
+                    rank === 1 ? "rank-glow-1" : rank === 2 ? "rank-glow-2" : rank === 3 ? "rank-glow-3" : ""
+                  } ${isMe ? "border-violet-500/40" : ""}`}
+                >
+                  <div className="flex items-center gap-4 min-w-0">
+                    <RankBadge rank={rank} />
+                    <div className="min-w-0">
+                      <div className="font-mono text-sm font-bold text-text-primary truncate">
+                        {shortAddr(trader.owner)}
+                        {isMe && (
+                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 align-middle">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-text-muted font-mono">
+                        {trader.positionsCount} position{trader.positionsCount !== 1 ? "s" : ""}
+                        {winRate !== null && <span> &middot; {winRate}% win rate</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-right flex-shrink-0">
-                  <div className="font-mono font-bold text-text-primary text-sm">
-                    {trader.totalVolumeSol.toFixed(2)} SOL
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-mono font-bold text-text-primary text-sm">
+                      {trader.totalVolumeSol.toFixed(2)} SOL
+                    </div>
+                    <div className="text-[10px] text-text-muted uppercase tracking-wider">Volume</div>
                   </div>
-                  <div className="text-[10px] text-text-muted uppercase tracking-wider">Volume</div>
-                </div>
-              </div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </section>
       )}
     </div>

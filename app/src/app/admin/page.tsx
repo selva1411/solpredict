@@ -6,6 +6,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import { 
   ShieldCheck, 
   Plus, 
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { getConfigPda, getMarketPda, getMockPriceUpdatePda } from "@/lib/pda";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -39,6 +41,17 @@ interface Market {
   };
 }
 
+// Motion variants
+const cardVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
+};
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
 function AdminPage() {
   const { program, wallet, connection } = useProgram();
   const [config, setConfig] = useState<any>(null);
@@ -54,9 +67,27 @@ function AdminPage() {
   const [comparison, setComparison] = useState<number>(0); // 0 = GreaterThan, 1 = LessThan
   const [durationSecs, setDurationSecs] = useState<number>(300); // 5 mins for quick test
   
-  // Settlement states
+  // Settlement states — per-market settle prices (FIX: was a single shared value)
   const [settlingId, setSettlingId] = useState<string | null>(null);
-  const [settlePrice, setSettlePrice] = useState<number>(260.00);
+  const [settlePrices, setSettlePrices] = useState<Map<string, number>>(new Map());
+
+  // Confirmation modal state
+  const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; marketPda: PublicKey | null }>({
+    isOpen: false,
+    marketPda: null,
+  });
+
+  const getSettlePrice = (marketKey: string): number => {
+    return settlePrices.get(marketKey) ?? 260.00;
+  };
+
+  const setSettlePrice = (marketKey: string, value: number) => {
+    setSettlePrices((prev) => {
+      const next = new Map(prev);
+      next.set(marketKey, value);
+      return next;
+    });
+  };
 
   const fetchConfigAndMarkets = async () => {
     try {
@@ -164,8 +195,11 @@ function AdminPage() {
   // 3. Settle Market using a Mock Price Feed update
   const handleMockSettle = async (market: Market) => {
     if (!wallet || !wallet.publicKey) return;
+    const marketKey = market.publicKey.toBase58();
+    const price = getSettlePrice(marketKey);
+
     try {
-      setSettlingId(market.publicKey.toBase58());
+      setSettlingId(marketKey);
       
       const mockPayer = Keypair.generate();
       
@@ -180,7 +214,7 @@ function AdminPage() {
       await program.provider.sendAndConfirm!(fundTx);
 
       const mockPriceUpdatePda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
-      const priceVal = new anchor.BN(Math.round(settlePrice * 100)); // Store with 2 decimals
+      const priceVal = new anchor.BN(Math.round(price * 100)); // Store with 2 decimals
 
       // 1. Create the Pyth Mock Price Update Account
       await program.methods
@@ -219,7 +253,7 @@ function AdminPage() {
     }
   };
 
-  // 4. Cancel Market
+  // 4. Cancel Market (with confirmation modal)
   const handleCancelMarket = async (marketPda: PublicKey) => {
     if (!wallet || !wallet.publicKey) return;
     try {
@@ -291,16 +325,42 @@ function AdminPage() {
 
   return (
     <div className="space-y-10 animate-fade-in max-w-5xl mx-auto">
-      <div className="border-b border-white/5 pb-4">
+      {/* Cancel Confirmation Modal */}
+      <ConfirmModal
+        isOpen={cancelModal.isOpen}
+        title="Cancel Market"
+        message="Are you sure you want to cancel this market? All traders will be able to claim full refunds. This action cannot be undone."
+        confirmLabel="Cancel Market"
+        cancelLabel="Keep Market"
+        destructive
+        onConfirm={() => {
+          if (cancelModal.marketPda) {
+            handleCancelMarket(cancelModal.marketPda);
+          }
+          setCancelModal({ isOpen: false, marketPda: null });
+        }}
+        onCancel={() => setCancelModal({ isOpen: false, marketPda: null })}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="border-b border-white/5 pb-4"
+      >
         <h1 className="text-3xl font-extrabold font-display bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
           Admin Observatory Console
         </h1>
         <p className="text-text-muted text-sm">Initialize config singleton, create contracts, settle outputs, and withdraw protocol fees.</p>
-      </div>
+      </motion.div>
 
       {/* 1. INITIALIZE CONFIG SECTION (Shown only if not initialized) */}
       {!config ? (
-        <section className="glass-panel p-8 space-y-6 border border-amber-500/25 bg-amber-500/3">
+        <motion.section
+          variants={cardVariants}
+          initial="hidden"
+          animate="visible"
+          className="glass-panel premium-card p-8 space-y-6 border border-amber-500/25 bg-amber-500/3"
+        >
           <div className="flex items-center space-x-3 text-amber-400">
             <AlertTriangle className="w-6 h-6" />
             <h2 className="text-lg font-bold font-display">Config PDA Not Found</h2>
@@ -322,33 +382,43 @@ function AdminPage() {
               Initialize Config PDA
             </button>
           </div>
-        </section>
+        </motion.section>
       ) : (
-        <section className="grid sm:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 space-y-1">
+        <motion.section
+          className="grid sm:grid-cols-3 gap-6"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div variants={cardVariants} className="glass-panel premium-card p-6 space-y-1">
             <div className="text-xs text-text-muted">Fee Percentage</div>
             <div className="text-xl font-mono font-bold text-violet-400">
               {(config.feeBps / 100).toFixed(1)}% ({config.feeBps} bps)
             </div>
-          </div>
-          <div className="glass-panel p-6 space-y-1">
+          </motion.div>
+          <motion.div variants={cardVariants} className="glass-panel premium-card p-6 space-y-1">
             <div className="text-xs text-text-muted">Total Markets Formed</div>
             <div className="text-xl font-mono font-bold text-cyan-400">{config.marketCount}</div>
-          </div>
-          <div className="glass-panel p-6 space-y-1 overflow-hidden">
+          </motion.div>
+          <motion.div variants={cardVariants} className="glass-panel premium-card p-6 space-y-1 overflow-hidden">
             <div className="text-xs text-text-muted">Admin Account</div>
             <div className="text-xs font-mono font-semibold truncate text-text-primary pt-1">
               {config.admin.toBase58()}
             </div>
-          </div>
-        </section>
+          </motion.div>
+        </motion.section>
       )}
 
       {config && (
         <div className="grid md:grid-cols-5 gap-8">
           {/* 2. CREATE MARKET FORM PANEL */}
-          <section className="md:col-span-2 space-y-6">
-            <div className="glass-panel p-6 space-y-6">
+          <motion.section
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="md:col-span-2 space-y-6"
+          >
+            <div className="glass-panel premium-card p-6 space-y-6">
               <div className="flex items-center space-x-2 border-b border-white/5 pb-3">
                 <Plus className="w-5 h-5 text-violet-400" />
                 <h2 className="text-base font-bold font-display">Create Prediction Contract</h2>
@@ -436,11 +506,16 @@ function AdminPage() {
                 </button>
               </form>
             </div>
-          </section>
+          </motion.section>
 
           {/* 3. MANAGE MARKETS LIST & SETTLEMENT */}
-          <section className="md:col-span-3 space-y-6">
-            <div className="glass-panel p-6 space-y-6">
+          <motion.section
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            className="md:col-span-3 space-y-6"
+          >
+            <div className="glass-panel premium-card p-6 space-y-6">
               <div className="flex items-center space-x-2 border-b border-white/5 pb-3">
                 <Settings className="w-5 h-5 text-cyan-400" />
                 <h2 className="text-base font-bold font-display">Manage & Settle Markets</h2>
@@ -452,9 +527,15 @@ function AdminPage() {
                 <div className="space-y-4">
                   {markets.map((m) => {
                     const status = getStatusString(m.account.status);
+                    const marketKey = m.publicKey.toBase58();
                     
                     return (
-                      <div key={m.publicKey.toBase58()} className="p-4 border border-white/5 bg-white/2 rounded-xl space-y-4">
+                      <motion.div
+                        key={marketKey}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 border border-white/5 bg-white/2 rounded-xl premium-card space-y-4"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-mono text-text-muted">ID #{m.account.marketId.toString()}</span>
                           <span className={`px-2 py-0.5 text-[9px] font-bold rounded ${
@@ -471,8 +552,8 @@ function AdminPage() {
                               <input
                                 type="number"
                                 step="0.01"
-                                value={settlePrice}
-                                onChange={(e) => setSettlePrice(Number(e.target.value))}
+                                value={getSettlePrice(marketKey)}
+                                onChange={(e) => setSettlePrice(marketKey, Number(e.target.value))}
                                 className="w-24 glass-input py-1 px-2 text-xs font-mono"
                                 placeholder="Price"
                               />
@@ -481,10 +562,10 @@ function AdminPage() {
                                 onClick={() => handleMockSettle(m)}
                                 className="btn-primary py-1.5 px-4 text-[10px]"
                               >
-                                {settlingId === m.publicKey.toBase58() ? "Settling..." : "Mock Settle"}
+                                {settlingId === marketKey ? "Settling..." : "Mock Settle"}
                               </button>
                               <button
-                                onClick={() => handleCancelMarket(m.publicKey)}
+                                onClick={() => setCancelModal({ isOpen: true, marketPda: m.publicKey })}
                                 className="bg-red-500/10 border border-red-500/30 text-[#FF4D6D] hover:bg-red-500/20 py-1.5 px-4 text-[10px] rounded-xl transition-all cursor-pointer font-semibold"
                               >
                                 Cancel
@@ -512,13 +593,13 @@ function AdminPage() {
                             )}
                           </div>
                         )}
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
               )}
             </div>
-          </section>
+          </motion.section>
         </div>
       )}
     </div>

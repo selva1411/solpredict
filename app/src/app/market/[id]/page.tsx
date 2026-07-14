@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
@@ -9,6 +9,7 @@ import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, 
   Clock, 
@@ -17,11 +18,17 @@ import {
   Activity, 
   AlertCircle,
   HelpCircle,
-  Award
+  Award,
+  Share2
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
 import confetti from "canvas-confetti";
+import { FlipCountdown } from "@/components/FlipCountdown";
+import { Sparkline } from "@/components/Sparkline";
+
+// 3D Probability Orb — client-only, no SSR
+const ProbabilityOrb3D = dynamic(() => import("@/components/ProbabilityOrb3D"), { ssr: false });
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -72,6 +79,9 @@ function MarketDetailPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [successFlip, setSuccessFlip] = useState<boolean>(false);
 
+  // Sparkline history — stores probability snapshots
+  const probHistory = useRef<number[]>([50]);
+
   const marketPda = new PublicKey(id as string);
 
   // Fetch market details and transactions
@@ -79,6 +89,14 @@ function MarketDetailPage() {
     try {
       const marketAcc = await program.account.market.fetch(marketPda);
       setMarket(marketAcc as any);
+
+      // Record probability snapshot for sparkline
+      const acc = marketAcc as any;
+      const yesP = acc.yesPoolLamports.toNumber();
+      const noP = acc.noPoolLamports.toNumber();
+      const total = yesP + noP;
+      const yesProbVal = total > 0 ? Math.round((yesP / total) * 100) : 50;
+      probHistory.current = [...probHistory.current, yesProbVal].slice(-30);
     } catch (err: any) {
       console.error("Error fetching market:", err);
       toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
@@ -97,7 +115,6 @@ function MarketDetailPage() {
       for (const sig of sigs) {
         // Parse basic details from the transaction
         const date = sig.blockTime ? new Date(sig.blockTime * 1000) : new Date();
-        const shortSig = sig.signature.substring(0, 8) + "...";
         
         // Push a simulated activity row based on signatures
         items.push({
@@ -232,20 +249,6 @@ function MarketDetailPage() {
     return `$${normalized.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   };
 
-  const timeRemaining = (): string => {
-    const now = Math.floor(Date.now() / 1000);
-    const end = market.endTs.toNumber();
-    const diff = end - now;
-    if (diff <= 0) return "Trading Period Expired";
-    
-    const days = Math.floor(diff / 86400);
-    const hours = Math.floor((diff % 86400) / 3600);
-    const minutes = Math.floor((diff % 3600) / 60);
-
-    if (days > 0) return `${days}d ${hours}h left`;
-    return `${hours}h ${minutes}m left`;
-  };
-
   return (
     <div className="space-y-8 animate-fade-in">
       <Link href="/" className="inline-flex items-center space-x-2 text-xs text-text-muted hover:text-text-primary transition-colors">
@@ -256,7 +259,12 @@ function MarketDetailPage() {
       <div className="grid md:grid-cols-3 gap-8 items-start">
         {/* Left Column: Contract Details & Visual indicators */}
         <section className="md:col-span-2 space-y-8">
-          <div className="glass-panel p-8 space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="glass-panel premium-card p-8 space-y-6"
+          >
             <div className="flex items-center space-x-3">
               <span className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md bg-white/5 border border-white/8 text-violet-400">
                 {categoryStr}
@@ -289,16 +297,20 @@ function MarketDetailPage() {
 
               <div className="space-y-1">
                 <div className="text-[10px] text-text-muted uppercase tracking-wider">Ending Clock</div>
-                <div className="text-xs font-mono font-semibold text-[#FF4D6D] flex items-center space-x-1 pt-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>{timeRemaining()}</span>
+                <div className="pt-1">
+                  <FlipCountdown endTs={market.endTs.toNumber()} compact />
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Liquid Odds visual display */}
-          <div className="glass-panel p-8 space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="glass-panel premium-card p-8 space-y-6"
+          >
             <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center space-x-2">
               <TrendingUp className="w-4 h-4 text-violet-400" />
               <span>Implied Odds / Probability split</span>
@@ -313,7 +325,12 @@ function MarketDetailPage() {
                 
                 {/* Horizontal probability meter */}
                 <div className="w-full h-4 rounded-full overflow-hidden bg-[#FF4D6D]/20 flex">
-                  <div className="h-full bg-[#10E58C] transition-all duration-500 ease-out" style={{ width: `${yesProb}%` }}></div>
+                  <motion.div
+                    className="h-full bg-[#10E58C]"
+                    initial={{ width: "50%" }}
+                    animate={{ width: `${yesProb}%` }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-2">
@@ -326,19 +343,35 @@ function MarketDetailPage() {
                     <div className="font-bold text-[#FF4D6D] text-sm pt-1">{noPool.toFixed(2)} SOL</div>
                   </div>
                 </div>
+
+                {/* Sparkline Price History */}
+                {probHistory.current.length > 2 && (
+                  <div className="pt-2">
+                    <div className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Probability Trend</div>
+                    <Sparkline
+                      data={probHistory.current}
+                      width={320}
+                      height={40}
+                      color="#8B5CF6"
+                      fillColor="#8B5CF6"
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* 3D probability orb split */}
-              <div className="flex-shrink-0 w-32 h-32 rounded-full border-2 border-white/10 relative overflow-hidden flex items-center justify-center bg-radial-gradient from-white/5 to-transparent">
-                <div className="absolute inset-0 bg-[#10E58C]/15 blur-md" style={{ clipPath: `polygon(0 0, ${yesProb}% 0, ${yesProb}% 100%, 0 100%)` }} />
-                <div className="absolute inset-0 bg-[#FF4D6D]/15 blur-md" style={{ clipPath: `polygon(${yesProb}% 0, 100% 0, 100% 100%, ${yesProb}% 100%)` }} />
-                <span className="text-2xl font-black font-mono tracking-tighter text-text-primary z-10">{yesProb}%</span>
-              </div>
+              {/* 3D probability orb */}
+              <ProbabilityOrb3D yesProb={yesProb} size={140} />
             </div>
-          </div>
+          </motion.div>
 
           {/* Activity Feed */}
-          <div className="glass-panel p-6 space-y-4">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="glass-panel premium-card p-6 space-y-4"
+          >
             <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center space-x-2">
               <Activity className="w-4 h-4 text-cyan-400" />
               <span>On-Chain Activity Logs</span>
@@ -348,26 +381,39 @@ function MarketDetailPage() {
               {activity.length === 0 ? (
                 <p className="text-text-muted text-center py-6">No recent transactions indexed.</p>
               ) : (
-                activity.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center py-2 border-b border-white/3">
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        item.side === "YES" ? "bg-[#10E58C]/15 text-[#10E58C]" : "bg-[#FF4D6D]/15 text-[#FF4D6D]"
-                      }`}>
-                        {item.side}
-                      </span>
-                      <span className="text-text-primary font-semibold">{item.quantity} shares</span>
-                    </div>
-                    <div className="text-text-muted text-[10px]">{item.time}</div>
-                  </div>
-                ))
+                <AnimatePresence>
+                  {activity.map((item, index) => (
+                    <motion.div
+                      key={item.signature}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="flex justify-between items-center py-2 border-b border-white/3"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          item.side === "YES" ? "bg-[#10E58C]/15 text-[#10E58C]" : "bg-[#FF4D6D]/15 text-[#FF4D6D]"
+                        }`}>
+                          {item.side}
+                        </span>
+                        <span className="text-text-primary font-semibold">{item.quantity} shares</span>
+                      </div>
+                      <div className="text-text-muted text-[10px]">{item.time}</div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               )}
             </div>
-          </div>
+          </motion.div>
         </section>
 
         {/* Right Column: Trading Panel card */}
-        <section className={`md:col-span-1 glass-panel p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}>
+        <motion.section
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className={`md:col-span-1 glass-panel premium-card p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
+        >
           <h3 className="text-base font-bold font-display border-b border-white/5 pb-3">
             Prediction Dashboard
           </h3>
@@ -386,10 +432,11 @@ function MarketDetailPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* YES / NO toggles */}
-              <div className="grid grid-cols-2 gap-3">
-                <button
+              {/* YES / NO toggles with motion */}
+              <div className="grid grid-cols-2 gap-3 relative">
+                <motion.button
                   onClick={() => setTradeSide("YES")}
+                  whileTap={{ scale: 0.97 }}
                   className={`py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                     tradeSide === "YES"
                       ? "bg-[#10E58C]/20 border border-[#10E58C] text-[#10E58C] shadow-[0_0_24px_rgba(16,229,140,0.15)]"
@@ -397,9 +444,10 @@ function MarketDetailPage() {
                   }`}
                 >
                   Predict YES
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   onClick={() => setTradeSide("NO")}
+                  whileTap={{ scale: 0.97 }}
                   className={`py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                     tradeSide === "NO"
                       ? "bg-[#FF4D6D]/20 border border-[#FF4D6D] text-[#FF4D6D] shadow-[0_0_24px_rgba(255,77,109,0.15)]"
@@ -407,7 +455,7 @@ function MarketDetailPage() {
                   }`}
                 >
                   Predict NO
-                </button>
+                </motion.button>
               </div>
 
               {/* Quantity stepper */}
@@ -465,9 +513,10 @@ function MarketDetailPage() {
               </div>
 
               {/* BUY button */}
-              <button
+              <motion.button
                 disabled={submitting}
                 onClick={handleBuy}
+                whileTap={{ scale: 0.97 }}
                 className={`w-full py-3.5 mt-2 rounded-xl text-xs font-bold transition-all ${
                   tradeSide === "YES" ? "btn-yes bg-[#10E58C]/15 border-[#10E58C]/30 text-[#10E58C]" : "btn-no bg-[#FF4D6D]/15 border-[#FF4D6D]/30 text-[#FF4D6D]"
                 }`}
@@ -476,10 +525,10 @@ function MarketDetailPage() {
                   <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin inline-block mr-2 align-middle"></span>
                 ) : null}
                 <span>Sign & Confirm Trade</span>
-              </button>
+              </motion.button>
             </div>
           )}
-        </section>
+        </motion.section>
       </div>
     </div>
   );

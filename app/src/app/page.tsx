@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { 
   TrendingUp, 
   Search, 
@@ -14,11 +15,19 @@ import {
   Activity, 
   ShieldAlert, 
   HelpCircle,
-  Database
+  Database,
+  Star,
+  Zap
 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
 import * as anchor from "@coral-xyz/anchor";
+import { CountUp } from "@/components/CountUp";
+import { FlipCountdown } from "@/components/FlipCountdown";
+import { HowItWorks } from "@/components/HowItWorks";
+
+// 3D Hero — client-only, no SSR
+const HeroScene = dynamic(() => import("@/components/HeroScene"), { ssr: false });
 
 interface Market {
   publicKey: PublicKey;
@@ -49,6 +58,22 @@ interface Market {
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
+// Motion variants
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } },
+};
+
+const scaleIn = {
+  hidden: { opacity: 0, scale: 0.92 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.4, ease: "easeOut" as const } },
+};
+
 function HomePage() {
   const { program, connection } = useProgram();
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -56,6 +81,25 @@ function HomePage() {
   const [search, setSearch] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("Open");
+  const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
+
+  // Load watchlist from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("solpredict-watchlist");
+      if (saved) setWatchlist(new Set(JSON.parse(saved)));
+    } catch {}
+  }, []);
+
+  const toggleWatchlist = (key: string) => {
+    setWatchlist((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      localStorage.setItem("solpredict-watchlist", JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   // Fetch all markets
   const fetchMarkets = async () => {
@@ -159,71 +203,159 @@ function HomePage() {
     });
 
     return {
-      volume: (totalVolumeLamports / 1e9).toFixed(2),
+      volume: totalVolumeLamports / 1e9,
       open: openCount,
       settled: settledCount,
       total: markets.length
     };
   })();
 
+  // Featured market — highest volume open market
+  const featuredMarket = markets
+    .filter((m) => getStatusString(m.account.status) === "Open")
+    .sort((a, b) => {
+      const volA = a.account.yesPoolLamports.toNumber() + a.account.noPoolLamports.toNumber();
+      const volB = b.account.yesPoolLamports.toNumber() + b.account.noPoolLamports.toNumber();
+      return volB - volA;
+    })[0];
+
   return (
-    <div className="space-y-10 animate-fade-in">
-      {/* Premium Obsidian Hero Banner */}
-      <section className="relative overflow-hidden glass-panel px-6 py-10 sm:px-12 sm:py-16 text-center space-y-6">
-        <div className="absolute inset-0 bg-radial-gradient from-violet-500/10 to-transparent -z-10" />
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight font-display bg-gradient-to-r from-violet-400 via-indigo-200 to-cyan-400 bg-clip-text text-transparent">
-          Predict the Future. Own the Outcome.
-        </h1>
-        <p className="max-w-2xl mx-auto text-sm sm:text-base text-text-muted">
-          Welcome to the future of forecasting. Own fractional positions on YES/NO contracts, backed by the speed of Solana and secured by real-time Pyth price oracles.
-        </p>
+    <div className="space-y-10">
+      {/* 3D Hero Banner with Text Overlay */}
+      <section className="relative overflow-hidden glass-panel premium-card text-center">
+        {/* 3D Background Layer */}
+        <div className="absolute inset-0 -z-10 opacity-70">
+          <HeroScene />
+        </div>
+        <div className="absolute inset-0 bg-radial-gradient from-violet-500/10 to-transparent -z-5" />
+
+        <div className="relative px-6 py-12 sm:px-12 sm:py-16 space-y-6">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-4xl sm:text-5xl font-extrabold tracking-tight font-display bg-gradient-to-r from-violet-400 via-indigo-200 to-cyan-400 bg-clip-text text-transparent"
+          >
+            Predict the Future. Own the Outcome.
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
+            className="max-w-2xl mx-auto text-sm sm:text-base text-text-muted"
+          >
+            Welcome to the future of forecasting. Own fractional positions on YES/NO contracts, backed by the speed of Solana and secured by real-time Pyth price oracles.
+          </motion.p>
+        </div>
       </section>
 
+      {/* Featured Market Spotlight */}
+      {featuredMarket && (
+        <motion.section
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <Link href={`/market/${featuredMarket.publicKey.toBase58()}`} className="block">
+            <div className="glass-panel glass-panel-hover premium-card p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 border-violet-500/20">
+              <div className="flex items-center space-x-3 flex-shrink-0">
+                <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
+                  <Zap className="w-7 h-7" />
+                </div>
+              </div>
+              <div className="flex-1 space-y-2 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start space-x-2">
+                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-violet-500/15 border border-violet-500/30 text-violet-400">
+                    Featured
+                  </span>
+                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-white/5 border border-white/8 text-text-muted">
+                    {getCategoryString(featuredMarket.account.category)}
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold font-display text-text-primary">
+                  {featuredMarket.account.question}
+                </h3>
+                <div className="flex items-center justify-center sm:justify-start space-x-4 text-xs text-text-muted font-mono">
+                  <span className="text-[#10E58C] font-semibold">
+                    YES {getImpliedProbability(featuredMarket.account.yesPoolLamports, featuredMarket.account.noPoolLamports).yes}%
+                  </span>
+                  <span>•</span>
+                  <span>
+                    {((featuredMarket.account.yesPoolLamports.toNumber() + featuredMarket.account.noPoolLamports.toNumber()) / 1e9).toFixed(2)} SOL Volume
+                  </span>
+                </div>
+              </div>
+              <div className="flex-shrink-0">
+                <FlipCountdown endTs={featuredMarket.account.endTs.toNumber()} compact />
+              </div>
+            </div>
+          </Link>
+        </motion.section>
+      )}
+
       {/* Platform Statistics */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-6 flex items-center space-x-4">
+      <motion.section
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
           <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
             <Coins className="w-6 h-6" />
           </div>
           <div>
             <div className="text-xs text-text-muted">Total Volume</div>
-            <div className="text-xl font-mono font-bold">{stats.volume} SOL</div>
+            <div className="text-xl font-mono font-bold">
+              <CountUp value={stats.volume} decimals={2} suffix=" SOL" />
+            </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="glass-panel p-6 flex items-center space-x-4">
+        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
           <div className="p-3 bg-[#10E58C]/10 rounded-xl text-[#10E58C]">
             <Activity className="w-6 h-6" />
           </div>
           <div>
             <div className="text-xs text-text-muted">Open Markets</div>
-            <div className="text-xl font-mono font-bold">{stats.open}</div>
+            <div className="text-xl font-mono font-bold">
+              <CountUp value={stats.open} />
+            </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="glass-panel p-6 flex items-center space-x-4">
+        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
           <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
             <Layers className="w-6 h-6" />
           </div>
           <div>
             <div className="text-xs text-text-muted">Settled Markets</div>
-            <div className="text-xl font-mono font-bold">{stats.settled}</div>
+            <div className="text-xl font-mono font-bold">
+              <CountUp value={stats.settled} />
+            </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="glass-panel p-6 flex items-center space-x-4">
+        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
           <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
             <Database className="w-6 h-6" />
           </div>
           <div>
             <div className="text-xs text-text-muted">Total Scaffolded</div>
-            <div className="text-xl font-mono font-bold">{stats.total}</div>
+            <div className="text-xl font-mono font-bold">
+              <CountUp value={stats.total} />
+            </div>
           </div>
-        </div>
-      </section>
+        </motion.div>
+      </motion.section>
 
       {/* Markets Explorer Toolbar */}
-      <section className="space-y-4">
+      <motion.section
+        className="space-y-4"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.4, delay: 0.15 }}
+      >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Category Tabs */}
           <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
@@ -281,7 +413,7 @@ function HomePage() {
             className="w-full pl-12 pr-4 py-3 bg-white/3 border border-white/8 rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:border-violet-500/50 transition-all font-sans text-sm"
           />
         </div>
-      </section>
+      </motion.section>
 
       {/* Markets Grid */}
       {loading ? (
@@ -299,7 +431,12 @@ function HomePage() {
           </div>
         </div>
       ) : (
-        <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.section
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {filteredMarkets.map((market) => {
             const status = getStatusString(market.account.status);
             const prob = getImpliedProbability(market.account.yesPoolLamports, market.account.noPoolLamports);
@@ -309,9 +446,15 @@ function HomePage() {
               market.account.yesPoolLamports.toNumber() + 
               market.account.noPoolLamports.toNumber()
             ) / 1e9;
+            const key = market.publicKey.toBase58();
+            const isWatched = watchlist.has(key);
 
             return (
-              <div key={market.publicKey.toBase58()} className="glass-panel glass-panel-hover p-6 flex flex-col h-full justify-between gap-6">
+              <motion.div
+                key={key}
+                variants={scaleIn}
+                className="glass-panel glass-panel-hover premium-card p-6 flex flex-col h-full justify-between gap-6"
+              >
                 {/* Card Top */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -319,7 +462,17 @@ function HomePage() {
                       {category}
                     </span>
                     
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-2">
+                      {/* Watchlist Star */}
+                      <button
+                        onClick={(e) => { e.preventDefault(); toggleWatchlist(key); }}
+                        className="cursor-pointer p-1 hover:bg-white/5 rounded transition-colors"
+                        aria-label={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+                      >
+                        <Star
+                          className={`w-4 h-4 transition-colors ${isWatched ? "text-yellow-400 fill-yellow-400 star-pop" : "text-text-muted"}`}
+                        />
+                      </button>
                       <span className={`w-2.5 h-2.5 rounded-full ${
                         status === "Open" ? "bg-[#10E58C] animate-pulse" : status === "Settled" ? "bg-text-muted" : "bg-[#FF4D6D]"
                       }`}></span>
@@ -329,7 +482,7 @@ function HomePage() {
                     </div>
                   </div>
 
-                  <Link href={`/market/${market.publicKey.toBase58()}`}>
+                  <Link href={`/market/${key}`}>
                     <h3 className="text-base font-bold font-display hover:text-violet-400 transition-colors line-clamp-3">
                       {market.account.question}
                     </h3>
@@ -343,7 +496,7 @@ function HomePage() {
                     <span className="text-[#FF4D6D] font-semibold">NO: {prob.no}%</span>
                   </div>
                   <div className="w-full h-2 rounded-full overflow-hidden bg-[#FF4D6D]/20 flex">
-                    <div className="h-full bg-[#10E58C]" style={{ width: `${prob.yes}%` }}></div>
+                    <div className="h-full bg-[#10E58C] transition-all duration-500" style={{ width: `${prob.yes}%` }}></div>
                   </div>
                 </div>
 
@@ -362,16 +515,19 @@ function HomePage() {
                   </div>
                 </div>
 
-                <Link href={`/market/${market.publicKey.toBase58()}`} className="w-full">
+                <Link href={`/market/${key}`} className="w-full">
                   <button className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/8 text-xs font-bold transition-all cursor-pointer text-center text-text-primary">
                     View Market Specs
                   </button>
                 </Link>
-              </div>
+              </motion.div>
             );
           })}
-        </section>
+        </motion.section>
       )}
+
+      {/* How It Works Section */}
+      <HowItWorks />
     </div>
   );
 }

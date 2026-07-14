@@ -5,6 +5,8 @@ import Link from "next/link";
 import "./globals.css";
 import { WalletContextProvider } from "@/components/WalletContextProvider";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
+import { ScrollProgress } from "@/components/ScrollProgress";
+import { MobileNav } from "@/components/MobileNav";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -41,6 +43,19 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans bg-space-deep text-text-primary">
         <WalletContextProvider>
+          {/* Scroll Progress Bar */}
+          <ScrollProgress />
+
+          {/* Aurora Ambient Background */}
+          <div className="aurora-bg">
+            <div className="aurora-blob aurora-blob-1" />
+            <div className="aurora-blob aurora-blob-2" />
+            <div className="aurora-blob aurora-blob-3" />
+          </div>
+
+          {/* Fintech Mesh Grid Overlay */}
+          <div className="grid-overlay" />
+
           {/* Obsidian Navigation Glass Header */}
           <header className="sticky top-0 z-50 w-full border-b border-white/8 bg-[#050510]/60 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -58,6 +73,9 @@ export default function RootLayout({
                   <Link href="/portfolio" className="px-3 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition-colors">
                     Portfolio
                   </Link>
+                  <Link href="/leaderboard" className="px-3 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition-colors">
+                    Leaderboard
+                  </Link>
                   <Link href="/admin" className="px-3 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition-colors">
                     Admin
                   </Link>
@@ -71,6 +89,9 @@ export default function RootLayout({
                   <span className="text-xs font-mono font-medium text-text-muted">SOL/USD: $267.12</span>
                 </div>
                 
+                {/* Mobile Nav */}
+                <MobileNav />
+
                 {/* Client-only Wallet Button wrapper */}
                 <ClientWalletButton />
               </div>
