@@ -1,0 +1,272 @@
+warning: unexpected `cfg` condition value: `custom-heap`
+  --> programs/solpredict/src/lib.rs:16:1
+   |
+16 | #[program]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `$crate::custom_heap_default` crate for guidance on how handle this unexpected cfg
+   = help: the macro `$crate::custom_heap_default` may come from an old version of the `solana_program_entrypoint` crate, try updating your dependency with `cargo update -p solana_program_entrypoint`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+   = note: this warning originates in the macro `$crate::custom_heap_default` which comes from the expansion of the attribute macro `program` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `custom-panic`
+  --> programs/solpredict/src/lib.rs:16:1
+   |
+16 | #[program]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `$crate::custom_panic_default` crate for guidance on how handle this unexpected cfg
+   = help: the macro `$crate::custom_panic_default` may come from an old version of the `solana_program_entrypoint` crate, try updating your dependency with `cargo update -p solana_program_entrypoint`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `$crate::custom_panic_default` which comes from the expansion of the attribute macro `program` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/initialize_config.rs:12:10
+   |
+12 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/initialize_market.rs:13:10
+   |
+13 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/buy_shares.rs:16:10
+   |
+16 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/settle_market.rs:18:10
+   |
+18 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/claim_rewards.rs:15:10
+   |
+15 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/cancel_market.rs:12:10
+   |
+12 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/claim_refund.rs:14:10
+   |
+14 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/instructions/withdraw_fees.rs:12:10
+   |
+12 | #[derive(Accounts)]
+   |          ^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+ --> programs/solpredict/src/instructions/mock_create_price_update.rs:6:10
+  |
+6 | #[derive(Accounts)]
+  |          ^^^^^^^^
+  |
+  = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+  = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+  = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+  = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: ambiguous glob re-exports
+  --> programs/solpredict/src/instructions/mod.rs:11:9
+   |
+11 | pub use initialize_config::*;
+   |         ^^^^^^^^^^^^^^^^^^^^ the name `handler` in the value namespace is first re-exported here
+...
+19 | pub use mock_create_price_update::*;
+   |         --------------------------- but the name `handler` in the value namespace is also re-exported here
+   |
+   = note: `#[warn(ambiguous_glob_reexports)]` on by default
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/lib.rs:16:1
+   |
+16 | #[program]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `program` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `program` may come from an old version of the `anchor_attribute_program` crate, try updating your dependency with `cargo update -p anchor_attribute_program`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `program` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `anchor-debug`
+  --> programs/solpredict/src/lib.rs:16:1
+   |
+16 | #[program]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cpi`, `default`, `idl-build`, `no-entrypoint`, `no-idl`, and `no-log-ix-name`
+   = note: using a cfg inside a derive macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `Accounts` crate for guidance on how handle this unexpected cfg
+   = help: the derive macro `Accounts` may come from an old version of the `anchor_derive_accounts` crate, try updating your dependency with `cargo update -p anchor_derive_accounts`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the derive macro `Accounts` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of deprecated method `anchor_lang::prelude::AccountInfo::<'a>::realloc`: Use AccountInfo::resize() instead
+  --> programs/solpredict/src/lib.rs:16:1
+   |
+16 | #[program]
+   | ^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+   = note: this warning originates in the attribute macro `program` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `solpredict` (lib) generated 20 warnings (5 duplicates)
+    Finished `release` profile [optimized] target(s) in 0.26s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running unittests src/lib.rs (/home/selva/solana_projects/solpredict/target/debug/deps/solpredict-6ee32b7ee42af73a)
+
+Found a 'test' script in the Anchor.toml. Running it as a test suite!
+
+Running test suite: "/home/selva/solana_projects/solpredict/Anchor.toml"
+
+(node:44326) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/selva/solana_projects/solpredict/tests/solpredict.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/selva/solana_projects/solpredict/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+  SOLPredict Integration Suite
+    Phase 2: initialize_config + initialize_market
+HIGH FEE ERROR MESSAGE: AnchorError thrown in programs/solpredict/src/instructions/initialize_config.rs:38. Error Code: FeeTooHigh. Error Number: 6019. Error Message: Fee percentage exceeds maximum allowed (10%).
+HIGH FEE ERROR OBJECT: AnchorError: AnchorError thrown in programs/solpredict/src/instructions/initialize_config.rs:38. Error Code: FeeTooHigh. Error Number: 6019. Error Message: Fee percentage exceeds maximum allowed (10%).
+    at AnchorError.parse (/home/selva/solana_projects/solpredict/node_modules/@coral-xyz/anchor/src/error.ts:152:14)
+    at translateError (/home/selva/solana_projects/solpredict/node_modules/@coral-xyz/anchor/src/error.ts:277:35)
+    at MethodsBuilder.rpc [as _rpcFn] (/home/selva/solana_projects/solpredict/node_modules/@coral-xyz/anchor/src/program/namespace/rpc.ts:35:29)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  errorLogs: [
+    'Program log: AnchorError thrown in programs/solpredict/src/instructions/initialize_config.rs:38. Error Code: FeeTooHigh. Error Number: 6019. Error Message: Fee percentage exceeds maximum allowed (10%).'
+  ],
+  logs: [
+    'Program EVUC7kTnVWsoGzEH8xWeLbKM6W6i91sABaKWkgCztiZ7 invoke [1]',
+    'Program log: Instruction: InitializeConfig',
+    'Program 11111111111111111111111111111111 invoke [2]',
+    'Program 11111111111111111111111111111111 success',
+    'Program log: AnchorError thrown in programs/solpredict/src/instructions/initialize_config.rs:38. Error Code: FeeTooHigh. Error Number: 6019. Error Message: Fee percentage exceeds maximum allowed (10%).',
+    'Program EVUC7kTnVWsoGzEH8xWeLbKM6W6i91sABaKWkgCztiZ7 consumed 8121 of 200000 compute units',
+    'Program EVUC7kTnVWsoGzEH8xWeLbKM6W6i91sABaKWkgCztiZ7 failed: custom program error: 0x1783'
+  ],
+  error: {
+    errorCode: { code: 'FeeTooHigh', number: 6019 },
+    errorMessage: 'Fee percentage exceeds maximum allowed (10%)',
+    comparedValues: undefined,
+    origin: {
+      file: 'programs/solpredict/src/instructions/initialize_config.rs',
+      line: 38
+    }
+  },
+  _programErrorStack: ProgramErrorStack {
+    stack: [
+      [PublicKey [PublicKey(EVUC7kTnVWsoGzEH8xWeLbKM6W6i91sABaKWkgCztiZ7)]]
+    ]
+  }
+}
+      ✔ Initialize Config fails when fee is too high (>10%) (484ms)
+      ✔ Initialize Config successfully (806ms)
+      ✔ Initialize Config fails on duplicate initialization
+      ✔ Initialize Market successfully (394ms)
+      ✔ Initialize Market fails with unauthorized admin key (439ms)
+      ✔ Initialize Market fails if end time is in the past
+    Phase 3: buy_shares
+buyer1.publicKey: BsPFoG5BiydeGjABq8z1TH2SFV3u5SYZEvVVNhhkjbBt
+marketPda: CM7dvSFMNAt5WwMKzCM3FrDGZdnS7qD8qvG6tP31j3KF
+treasuryPda: 5yuDas7z97MauuirMVmk22FPHYDFyEkoyqFDfKUAVBzq
+yesMintPda: EvHob1GR8W5MJ64D5gW1BwhHZw4auUkg9drfx6cvwynA
+noMintPda: EWfvk4D7gTjvpBKefKvkrCH9DL3xWTGfCa1SiFLhSU64
+buyerYesAta: 99Z8GZhHvx2WGdxVARqHBsaZqK7FbD8TnZwVuzt7uYEz
+buyerNoAta: 2msiZuRJL2L7U777rLqaR8b8cd59Vnb6j6W6P6Gs9YtK
+positionPda: F26CcSx95rQJiHDuyRdprjK95jh2Ak4zhguQbqxQCfin
+      ✔ Buyer1 buys 10 YES shares successfully (440ms)
+      ✔ Buyer2 buys 20 NO shares successfully (434ms)
+QTY ERROR MESSAGE: AnchorError thrown in programs/solpredict/src/instructions/buy_shares.rs:113. Error Code: InvalidQuantity. Error Number: 6013. Error Message: Quantity must be greater than zero and within limits.
+      ✔ Buying fails if quantity is zero
+    Phase 4: settle_market + Oracle
+      ✔ Fails settlement if oracle price is stale (>60s age) (5838ms)
+      ✔ Fails settlement if price update contains wrong feed ID (850ms)
+      ✔ Fails settlement if oracle confidence is too low (>2% conf/price)
+      ✔ Settle Market successfully: YES wins (with exponent normalization) (1278ms)
+    Phase 5: claim_rewards, cancel_market, claim_refund, withdraw_fees
+      ✔ Auto-cancels if the winning side has zero supply (One-Sided Market check) (428ms)
+      ✔ Losers claim a full refund on cancelled market successfully (427ms)
+      ✔ Withdraw fees fails if market is not settled (it was cancelled)
+
+
+  16 passing (18s)
+
