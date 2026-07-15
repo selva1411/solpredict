@@ -1,0 +1,114 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useProgram } from "@/hooks/useProgram";
+import { ClientWalletButton } from "@/components/ClientWalletButton";
+import { MobileNav } from "@/components/MobileNav";
+import { Activity, Briefcase, Trophy, Settings } from "lucide-react";
+
+export function Navigation() {
+  const { role, isLoading } = useUserRole();
+  const { wallet } = useProgram();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [hasRedirected, setHasRedirected] = useState(false);
+  const prevWalletRef = useRef<string | null>(null);
+
+  // Reset redirect flag if the connected wallet changes
+  useEffect(() => {
+    const currentWallet = wallet?.publicKey?.toBase58() || null;
+    if (currentWallet !== prevWalletRef.current) {
+      setHasRedirected(false);
+      prevWalletRef.current = currentWallet;
+    }
+  }, [wallet?.publicKey]);
+
+  // Post-connect routing logic
+  useEffect(() => {
+    if (isLoading) return;
+    
+    // Only redirect if on the home page '/'
+    if (pathname === "/" && !hasRedirected) {
+      if (role === "admin") {
+        setHasRedirected(true);
+        router.push("/admin");
+      } else if (role === "user") {
+        setHasRedirected(true);
+        router.push("/dashboard");
+      }
+    }
+  }, [role, isLoading, pathname, router, hasRedirected]);
+
+  return (
+    <>
+      {/* Mechanical Navigation Header */}
+      <header className="sticky top-0 z-50 w-full border-b-2 border-[#2D3142] bg-[#0C0D12]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          {/* Brand Logo */}
+          <div className="flex items-center space-x-3">
+            <Link href="/" className="flex items-center space-x-2">
+              <span className="text-xl font-bold tracking-wider font-display text-[#FFA500]">
+                [■] SOLPREDICT
+              </span>
+            </Link>
+            <div className="hidden sm:flex items-center space-x-1 pl-6 border-l border-[#2D3142]">
+              <Link href="/" className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors hover:text-[#FFA500] ${pathname === "/" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+                Explorer
+              </Link>
+              <Link href="/dashboard" className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors hover:text-[#FFA500] ${pathname === "/dashboard" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+                Dashboard
+              </Link>
+              <Link href="/leaderboard" className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors hover:text-[#FFA500] ${pathname === "/leaderboard" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+                Leaderboard
+              </Link>
+              {role === "admin" && (
+                <Link href="/admin" className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors hover:text-[#FFA500] ${pathname === "/admin" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+                  Admin
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {/* Wallet Integration Button & Ticker */}
+          <div className="flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-2 bg-[#050608] border border-[#2D3142] px-3 py-1.5 rounded">
+              <span className="w-2 h-2 rounded-full bg-[#FFA500] animate-pulse"></span>
+              <span className="text-xs font-mono font-medium text-[#808495]">SOL/USD: $267.12</span>
+            </div>
+            
+            {/* Mobile Nav */}
+            <MobileNav />
+
+            {/* Client-only Wallet Button wrapper */}
+            <ClientWalletButton />
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile bottom navigation bar for one-handed reach */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0C0D12] border-t-2 border-[#2D3142] h-16 flex items-center justify-around px-4">
+        <Link href="/" className={`flex flex-col items-center justify-center space-y-0.5 hover:text-[#FFA500] ${pathname === "/" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+          <Activity className="w-5 h-5" />
+          <span className="text-[9px] uppercase font-display font-semibold">Explorer</span>
+        </Link>
+        <Link href="/dashboard" className={`flex flex-col items-center justify-center space-y-0.5 hover:text-[#FFA500] ${pathname === "/dashboard" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+          <Briefcase className="w-5 h-5" />
+          <span className="text-[9px] uppercase font-display font-semibold">Dashboard</span>
+        </Link>
+        <Link href="/leaderboard" className={`flex flex-col items-center justify-center space-y-0.5 hover:text-[#FFA500] ${pathname === "/leaderboard" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+          <Trophy className="w-5 h-5" />
+          <span className="text-[9px] uppercase font-display font-semibold">Rankings</span>
+        </Link>
+        {role === "admin" && (
+          <Link href="/admin" className={`flex flex-col items-center justify-center space-y-0.5 hover:text-[#FFA500] ${pathname === "/admin" ? "text-[#FFA500]" : "text-[#808495]"}`}>
+            <Settings className="w-5 h-5" />
+            <span className="text-[9px] uppercase font-display font-semibold">Admin</span>
+          </Link>
+        )}
+      </div>
+    </>
+  );
+}

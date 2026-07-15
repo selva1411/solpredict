@@ -4,16 +4,18 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
-
-const navLinks = [
-  { href: "/", label: "Explorer" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/admin", label: "Admin" },
-];
+import { useUserRole } from "@/hooks/useUserRole";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
+  const { role } = useUserRole();
+
+  const navLinks = [
+    { href: "/", label: "Explorer" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/leaderboard", label: "Leaderboard" },
+    ...(role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
+  ];
 
   return (
     <div className="sm:hidden">
@@ -40,7 +42,7 @@ export function MobileNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-3 text-sm font-medium text-text-muted hover:text-text-primary hover:bg-white/5 rounded-lg transition-colors"
+                  className="px-4 py-3 text-sm font-medium text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5 rounded-lg transition-colors"
                 >
                   {link.label}
                 </Link>

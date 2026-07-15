@@ -324,7 +324,7 @@ export default function MarketDetailPage() {
           <div className="space-y-1">
             <h4 className="text-sm font-bold text-[#F4F4F9]">TRADING TERMINATED</h4>
             <p className="text-xs text-[#808495]">
-              This board has been settled. Navigate to <Link href="/portfolio" className="text-[#FFA500] hover:underline">Portfolio</Link> to withdraw payout.
+              This board has been settled. Navigate to <Link href="/dashboard" className="text-[#FFA500] hover:underline">Dashboard</Link> to withdraw payout.
             </p>
           </div>
         </div>

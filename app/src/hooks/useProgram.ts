@@ -17,7 +17,8 @@ export function useProgram() {
       AnchorProvider.defaultOptions()
     );
 
-    return new Program(idl as any, provider) as any;
+    const idlCopy = { ...idl, address: ENV.programId.toBase58() };
+    return new Program(idlCopy as any, provider) as any;
   }, [connection, wallet]);
 
   return { program, connection, wallet };
