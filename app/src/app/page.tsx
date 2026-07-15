@@ -7,27 +7,23 @@ import { PublicKey } from "@solana/web3.js";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { 
-  TrendingUp, 
   Search, 
-  Layers, 
   Clock, 
   Coins, 
-  Activity, 
-  ShieldAlert, 
   HelpCircle,
-  Database,
   Star,
-  Zap
+  Activity,
+  Calendar,
+  Filter
 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
 import * as anchor from "@coral-xyz/anchor";
-import { CountUp } from "@/components/CountUp";
+import { SplitFlapText } from "@/components/SplitFlapText";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { HowItWorks } from "@/components/HowItWorks";
 
-// 3D Hero — client-only, no SSR
-const HeroScene = dynamic(() => import("@/components/HeroScene"), { ssr: false });
+const SplitFlapBoard = dynamic(() => import("@/components/SplitFlapBoard"), { ssr: false });
 
 interface Market {
   publicKey: PublicKey;
@@ -43,8 +39,8 @@ interface Market {
     comparison: number;
     endTs: anchor.BN;
     resolveTs: anchor.BN;
-    status: any; // { open: {} } | { settled: {} } | { cancelled: {} }
-    winningOutcome: any; // { unset: {} } | { yes: {} } | { no: {} }
+    status: any;
+    winningOutcome: any;
     yesMint: PublicKey;
     noMint: PublicKey;
     yesPoolLamports: anchor.BN;
@@ -58,20 +54,19 @@ interface Market {
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
-// Motion variants
 const staggerContainer = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
+  visible: { transition: { staggerChildren: 0.05 } },
 };
 
 const fadeInUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } },
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" as const } },
 };
 
 const scaleIn = {
-  hidden: { opacity: 0, scale: 0.92 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.4, ease: "easeOut" as const } },
+  hidden: { opacity: 0, scale: 0.98 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" as const } },
 };
 
 function HomePage() {
@@ -83,7 +78,7 @@ function HomePage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("Open");
   const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
 
-  // Load watchlist from localStorage
+  // Load watchlist
   useEffect(() => {
     try {
       const saved = localStorage.getItem("solpredict-watchlist");
@@ -117,7 +112,6 @@ function HomePage() {
 
   useEffect(() => {
     fetchMarkets();
-    // Setup ws refresh on block change or log change
     const subscription = connection.onLogs(program.programId, () => {
       fetchMarkets();
     }, "confirmed");
@@ -127,15 +121,33 @@ function HomePage() {
     };
   }, [program, connection]);
 
-  // Helper to format BN target price based on exponent
-  const formatTargetPrice = (price: anchor.BN, expo: number): string => {
-    const raw = price.toNumber();
-    const divider = Math.pow(10, Math.abs(expo));
-    const normalized = raw / divider;
-    return `$${normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
-  };
+  // Watchlist expiration check (Trigger Alert Toast if < 1 Hour left)
+  useEffect(() => {
+    if (markets.length === 0 || watchlist.size === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    const alertedKeys = new Set<string>(JSON.parse(sessionStorage.getItem("expiring-alerts") || "[]"));
+    let updated = false;
 
-  // Helper to get status string from program representation
+    markets.forEach((m) => {
+      const key = m.publicKey.toBase58();
+      const status = getStatusString(m.account.status);
+      if (watchlist.has(key) && status === "Open") {
+        const timeDiff = m.account.endTs.toNumber() - now;
+        if (timeDiff > 0 && timeDiff < 3600 && !alertedKeys.has(key)) {
+          toast.warning(`Expiring Prediction Market Alert: "${m.account.question}" closes in ${Math.round(timeDiff / 60)} minutes!`, {
+            duration: 12000,
+          });
+          alertedKeys.add(key);
+          updated = true;
+        }
+      }
+    });
+
+    if (updated) {
+      sessionStorage.setItem("expiring-alerts", JSON.stringify([...alertedKeys]));
+    }
+  }, [markets, watchlist]);
+
   const getStatusString = (status: any): "Open" | "Settled" | "Cancelled" => {
     if (status.open) return "Open";
     if (status.settled) return "Settled";
@@ -143,12 +155,10 @@ function HomePage() {
     return "Open";
   };
 
-  // Helper to get category string
   const getCategoryString = (categoryIndex: number): string => {
     return CATEGORIES[categoryIndex] || "Other";
   };
 
-  // Implied probability calculation
   const getImpliedProbability = (yesPool: anchor.BN, noPool: anchor.BN) => {
     const yes = yesPool.toNumber();
     const no = noPool.toNumber();
@@ -158,23 +168,21 @@ function HomePage() {
     return { yes: yesProb, no: 100 - yesProb };
   };
 
-  // Time remaining string helper
   const getTimeRemaining = (endTs: anchor.BN): string => {
     const now = Math.floor(Date.now() / 1000);
     const end = endTs.toNumber();
     const diff = end - now;
-    if (diff <= 0) return "Trading ended";
+    if (diff <= 0) return "RESOLVED";
     
     const days = Math.floor(diff / 86400);
     const hours = Math.floor((diff % 86400) / 3600);
     const minutes = Math.floor((diff % 3600) / 60);
 
-    if (days > 0) return `${days}d ${hours}h left`;
-    if (hours > 0) return `${hours}h ${minutes}m left`;
-    return `${minutes}m left`;
+    if (days > 0) return `${days}D ${hours}H LEFT`;
+    if (hours > 0) return `${hours}H ${minutes}M LEFT`;
+    return `${minutes}M LEFT`;
   };
 
-  // Filters logic
   const filteredMarkets = markets.filter((m) => {
     const matchesSearch = 
       m.account.question.toLowerCase().includes(search.toLowerCase()) ||
@@ -189,7 +197,6 @@ function HomePage() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  // Calculate platform statistics
   const stats = (() => {
     let totalVolumeLamports = 0;
     let openCount = 0;
@@ -210,7 +217,6 @@ function HomePage() {
     };
   })();
 
-  // Featured market — highest volume open market
   const featuredMarket = markets
     .filter((m) => getStatusString(m.account.status) === "Open")
     .sort((a, b) => {
@@ -220,68 +226,57 @@ function HomePage() {
     })[0];
 
   return (
-    <div className="space-y-10">
-      {/* 3D Hero Banner with Text Overlay */}
-      <section className="relative overflow-hidden glass-panel premium-card text-center">
-        {/* 3D Background Layer */}
-        <div className="absolute inset-0 -z-10 opacity-70">
-          <HeroScene />
+    <div className="space-y-10 font-sans">
+      {/* 1. 3D Departure Board Hero Header */}
+      <section className="board-panel overflow-hidden bg-[#0C0D12] border-2 border-[#2D3142] space-y-2">
+        <div className="p-4 flex items-center justify-between border-b border-[#2D3142]">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-[#FFA500] animate-pulse" />
+            <span className="text-[10px] font-mono tracking-widest text-[#FFA500] uppercase font-bold">
+              SOLPREDICT MECHANICAL HUD // CYCLING ON-CHAIN CONTRACTS
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-[#808495] hidden sm:inline">BOARD COMPILER ONLINE //</span>
         </div>
-        <div className="absolute inset-0 bg-radial-gradient from-violet-500/10 to-transparent -z-5" />
-
-        <div className="relative px-6 py-12 sm:px-12 sm:py-16 space-y-6">
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-4xl sm:text-5xl font-extrabold tracking-tight font-display bg-gradient-to-r from-violet-400 via-indigo-200 to-cyan-400 bg-clip-text text-transparent"
-          >
-            Predict the Future. Own the Outcome.
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-            className="max-w-2xl mx-auto text-sm sm:text-base text-text-muted"
-          >
-            Welcome to the future of forecasting. Own fractional positions on YES/NO contracts, backed by the speed of Solana and secured by real-time Pyth price oracles.
-          </motion.p>
+        
+        {/* Suspense boundary for 3D R3F canvas loading */}
+        <SplitFlapBoard marketsList={markets.filter(m => getStatusString(m.account.status) === "Open").map(m => m.account.question)} />
+        
+        <div className="p-4 bg-[#050608]/50 border-t border-[#2D3142]">
+          <p className="text-xs text-[#808495] leading-relaxed font-sans max-w-3xl">
+            Mechanical split-flap terminal cycling active devnet prediction contracts. Settle positions using decentralized oracle validation backed by Pyth Network real-time price feeds.
+          </p>
         </div>
       </section>
 
-      {/* Featured Market Spotlight */}
+      {/* 2. Featured Market board row */}
       {featuredMarket && (
         <motion.section
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
         >
           <Link href={`/market/${featuredMarket.publicKey.toBase58()}`} className="block">
-            <div className="glass-panel glass-panel-hover premium-card p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 border-violet-500/20">
-              <div className="flex items-center space-x-3 flex-shrink-0">
-                <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
-                  <Zap className="w-7 h-7" />
-                </div>
-              </div>
+            <div className="board-panel board-panel-interactive p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6">
               <div className="flex-1 space-y-2 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start space-x-2">
-                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-violet-500/15 border border-violet-500/30 text-violet-400">
-                    Featured
+                  <span className="px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest rounded bg-[#FFA500]/10 border border-[#FFA500]/30 text-[#FFA500] font-bold">
+                    FEATURED CONTRACT
                   </span>
-                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-white/5 border border-white/8 text-text-muted">
+                  <span className="px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest rounded bg-[#2D3142]/40 border border-[#2D3142] text-[#808495]">
                     {getCategoryString(featuredMarket.account.category)}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold font-display text-text-primary">
+                <h3 className="text-xl font-bold font-display text-[#F4F4F9]">
                   {featuredMarket.account.question}
                 </h3>
-                <div className="flex items-center justify-center sm:justify-start space-x-4 text-xs text-text-muted font-mono">
-                  <span className="text-[#10E58C] font-semibold">
-                    YES {getImpliedProbability(featuredMarket.account.yesPoolLamports, featuredMarket.account.noPoolLamports).yes}%
+                <div className="flex items-center justify-center sm:justify-start space-x-4 text-xs font-mono text-[#808495]">
+                  <span className="text-[#235A34] font-bold">
+                    YES: {getImpliedProbability(featuredMarket.account.yesPoolLamports, featuredMarket.account.noPoolLamports).yes}%
                   </span>
                   <span>•</span>
                   <span>
-                    {((featuredMarket.account.yesPoolLamports.toNumber() + featuredMarket.account.noPoolLamports.toNumber()) / 1e9).toFixed(2)} SOL Volume
+                    {((featuredMarket.account.yesPoolLamports.toNumber() + featuredMarket.account.noPoolLamports.toNumber()) / 1e9).toFixed(2)} SOL VOLUME
                   </span>
                 </div>
               </div>
@@ -293,90 +288,79 @@ function HomePage() {
         </motion.section>
       )}
 
-      {/* Platform Statistics */}
+      {/* 3. Platform Statistics with Split-Flap numbers */}
       <motion.section
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
       >
-        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
-            <Coins className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Total Volume</div>
-            <div className="text-xl font-mono font-bold">
-              <CountUp value={stats.volume} decimals={2} suffix=" SOL" />
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495] font-bold">Total Volume</div>
+          <div className="flex items-end justify-between">
+            <SplitFlapText text={loading ? " --- " : `${stats.volume.toFixed(1)} SOL`} charClassName="w-[20px] h-[30px] text-xs font-bold" />
           </div>
         </motion.div>
 
-        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-[#10E58C]/10 rounded-xl text-[#10E58C]">
-            <Activity className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Open Markets</div>
-            <div className="text-xl font-mono font-bold">
-              <CountUp value={stats.open} />
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495] font-bold">Open Markets</div>
+          <div className="flex items-end justify-between">
+            <SplitFlapText text={loading ? " -- " : `${stats.open} OPEN`} charClassName="w-[20px] h-[30px] text-xs font-bold" />
           </div>
         </motion.div>
 
-        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
-            <Layers className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Settled Markets</div>
-            <div className="text-xl font-mono font-bold">
-              <CountUp value={stats.settled} />
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495] font-bold">Settled Board</div>
+          <div className="flex items-end justify-between">
+            <SplitFlapText text={loading ? " -- " : `${stats.settled} DONE`} charClassName="w-[20px] h-[30px] text-xs font-bold" />
           </div>
         </motion.div>
 
-        <motion.div variants={fadeInUp} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
-            <Database className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Total Scaffolded</div>
-            <div className="text-xl font-mono font-bold">
-              <CountUp value={stats.total} />
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495] font-bold">Total Deployments</div>
+          <div className="flex items-end justify-between">
+            <SplitFlapText text={loading ? " -- " : `${stats.total} TOTAL`} charClassName="w-[20px] h-[30px] text-xs font-bold" />
           </div>
         </motion.div>
       </motion.section>
 
-      {/* Markets Explorer Toolbar */}
+      {/* 4. Explorer Toolbar */}
       <motion.section
-        className="space-y-4"
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.4, delay: 0.15 }}
+        className="space-y-6"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold font-display text-[#F4F4F9] uppercase tracking-wide">
+            [■] EXPLORER DEPARTURES
+          </h2>
+          <p className="text-xs text-[#808495] font-medium leading-relaxed">
+            Active prediction boards currently tracking on-chain pool configurations.
+          </p>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#2D3142] pb-4">
           {/* Category Tabs */}
           <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             <button
               onClick={() => setSelectedCategory("All")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded transition-all active:scale-95 ${
                 selectedCategory === "All"
-                  ? "bg-white/10 text-text-primary border border-white/20"
-                  : "text-text-muted hover:text-text-primary"
+                  ? "mechanical-switch-active"
+                  : "mechanical-switch-inactive"
               }`}
             >
-              All Categories
+              All
             </button>
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded transition-all active:scale-95 ${
                   selectedCategory === cat
-                    ? "bg-white/10 text-text-primary border border-white/20"
-                    : "text-text-muted hover:text-text-primary"
+                    ? "mechanical-switch-active"
+                    : "mechanical-switch-inactive"
                 }`}
               >
                 {cat}
@@ -384,16 +368,17 @@ function HomePage() {
             ))}
           </div>
 
-          {/* Status Selectors */}
+          {/* Status filter selection */}
           <div className="flex items-center space-x-2">
+            <Filter className="w-3.5 h-3.5 text-[#808495]" />
             {["Open", "Settled", "Cancelled", "All"].map((status) => (
               <button
                 key={status}
                 onClick={() => setSelectedStatus(status)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded transition-all active:scale-95 ${
                   selectedStatus === status
-                    ? "bg-violet-500/20 text-violet-400 border border-violet-500/30"
-                    : "text-text-muted hover:text-text-primary hover:bg-white/5"
+                    ? "mechanical-switch-active"
+                    : "mechanical-switch-inactive"
                 }`}
               >
                 {status}
@@ -402,32 +387,32 @@ function HomePage() {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Search */}
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#808495]" />
           <input
             type="text"
-            placeholder="Search markets by keyword..."
+            placeholder="FILTER DEPARTURES / QUESTIONS..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white/3 border border-white/8 rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:border-violet-500/50 transition-all font-sans text-sm"
+            className="w-full pl-12 pr-4 py-3 board-input text-xs tracking-wider"
           />
         </div>
       </motion.section>
 
-      {/* Markets Grid */}
+      {/* 5. Flight Board Grid */}
       {loading ? (
         <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="glass-panel p-6 h-64 skeleton-shimmer" />
+            <div key={i} className="board-panel p-6 h-64 skeleton-shimmer bg-[#0C0D12]/50" />
           ))}
         </section>
       ) : filteredMarkets.length === 0 ? (
-        <div className="glass-panel py-16 text-center text-text-muted flex flex-col items-center justify-center space-y-4">
-          <HelpCircle className="w-12 h-12 opacity-50" />
+        <div className="board-panel py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
+          <HelpCircle className="w-10 h-10 opacity-30" />
           <div>
-            <h3 className="text-lg font-bold text-text-primary">No Markets Found</h3>
-            <p className="text-xs">Try selecting a different category or refining your search query.</p>
+            <h3 className="text-base font-bold font-display text-[#F4F4F9]">NO CONTRACTS RECORDED</h3>
+            <p className="text-xs">Adjust filters or check connection parameters.</p>
           </div>
         </div>
       ) : (
@@ -453,71 +438,67 @@ function HomePage() {
               <motion.div
                 key={key}
                 variants={scaleIn}
-                className="glass-panel glass-panel-hover premium-card p-6 flex flex-col h-full justify-between gap-6"
+                className="board-panel board-panel-interactive p-5 flex flex-col h-full justify-between gap-5"
               >
-                {/* Card Top */}
-                <div className="space-y-4">
+                {/* Top Metas */}
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md bg-white/5 border border-white/8 text-violet-400">
+                    <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-[#2D3142]/40 border border-[#2D3142] text-[#808495]">
                       {category}
                     </span>
                     
                     <div className="flex items-center space-x-2">
-                      {/* Watchlist Star */}
                       <button
                         onClick={(e) => { e.preventDefault(); toggleWatchlist(key); }}
-                        className="cursor-pointer p-1 hover:bg-white/5 rounded transition-colors"
-                        aria-label={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+                        className="cursor-pointer p-0.5 hover:bg-white/5 rounded text-[#808495] hover:text-[#FFA500]"
                       >
                         <Star
-                          className={`w-4 h-4 transition-colors ${isWatched ? "text-yellow-400 fill-yellow-400 star-pop" : "text-text-muted"}`}
+                          className={`w-3.5 h-3.5 ${isWatched ? "text-[#FFA500] fill-[#FFA500] star-pop" : ""}`}
                         />
                       </button>
                       <span className={`w-2.5 h-2.5 rounded-full ${
-                        status === "Open" ? "bg-[#10E58C] animate-pulse" : status === "Settled" ? "bg-text-muted" : "bg-[#FF4D6D]"
+                        status === "Open" ? "bg-[#235A34]" : status === "Settled" ? "bg-[#808495]" : "bg-[#8E2424]"
                       }`}></span>
-                      <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
+                      <span className="text-[9px] font-mono text-[#808495] uppercase font-bold">
                         {status}
                       </span>
                     </div>
                   </div>
 
                   <Link href={`/market/${key}`}>
-                    <h3 className="text-base font-bold font-display hover:text-violet-400 transition-colors line-clamp-3">
+                    <h3 className="text-sm font-bold font-display hover:text-[#FFA500] transition-colors leading-snug line-clamp-3">
                       {market.account.question}
                     </h3>
                   </Link>
                 </div>
 
-                {/* Card Probability Bar */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-[#10E58C] font-semibold">YES: {prob.yes}%</span>
-                    <span className="text-[#FF4D6D] font-semibold">NO: {prob.no}%</span>
+                {/* Segmented Weight display */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-mono font-bold">
+                    <span className="text-[#235A34]">YES: {prob.yes}%</span>
+                    <span className="text-[#8E2424]">NO: {prob.no}%</span>
                   </div>
-                  <div className="w-full h-2 rounded-full overflow-hidden bg-[#FF4D6D]/20 flex">
-                    <div className="h-full bg-[#10E58C] transition-all duration-500" style={{ width: `${prob.yes}%` }}></div>
+                  <div className="w-full h-2.5 bg-[#8E2424] rounded overflow-hidden flex border border-[#050608]">
+                    <div className="h-full bg-[#235A34]" style={{ width: `${prob.yes}%` }}></div>
                   </div>
                 </div>
 
-                {/* Card Bottom Meta */}
-                <div className="pt-4 border-t border-white/5 flex items-center justify-between gap-2">
-                  <div className="flex items-center space-x-1.5 text-xs text-text-muted">
-                    <Clock className="w-4 h-4" />
-                    <span className="font-mono text-[11px]">{timeRemaining}</span>
+                {/* Meta details footer */}
+                <div className="pt-3 border-t border-[#2D3142] flex items-center justify-between gap-2 text-[10px] font-mono text-[#808495]">
+                  <div className="flex items-center space-x-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#808495]" />
+                    <span>{timeRemaining}</span>
                   </div>
 
-                  <div className="flex items-center space-x-1 text-xs text-text-muted">
-                    <Coins className="w-4 h-4 text-cyan-400" />
-                    <span className="font-bold text-text-primary font-mono text-[11px]">
-                      {volumeSol.toFixed(2)} SOL
-                    </span>
+                  <div className="flex items-center space-x-1">
+                    <Coins className="w-3.5 h-3.5 text-[#FFA500]" />
+                    <span className="font-bold text-[#F4F4F9]">{volumeSol.toFixed(1)} SOL</span>
                   </div>
                 </div>
 
                 <Link href={`/market/${key}`} className="w-full">
-                  <button className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/8 text-xs font-bold transition-all cursor-pointer text-center text-text-primary">
-                    View Market Specs
+                  <button className="w-full py-2 bg-[#050608] hover:bg-[#0C0D12] border border-[#2D3142] text-[10px] font-bold uppercase tracking-wider font-display rounded text-[#F4F4F9] hover:border-[#FFA500] transition-all cursor-pointer">
+                    Inspect Specs
                   </button>
                 </Link>
               </motion.div>
@@ -526,7 +507,7 @@ function HomePage() {
         </motion.section>
       )}
 
-      {/* How It Works Section */}
+      {/* 6. Static How It Works section */}
       <HowItWorks />
     </div>
   );

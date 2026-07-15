@@ -13,7 +13,7 @@ export const ENV = {
     return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
   },
   get programId(): PublicKey {
-    const pubkeyStr = process.env.NEXT_PUBLIC_PROGRAM_ID || "DNV6CfgycfyW2C1TgQfqMkWPkr7YmreEKizxFhef3GEC";
+    const pubkeyStr = process.env.NEXT_PUBLIC_PROGRAM_ID || "DQGcvdEaQRiGdaVJs1vAcujh5csZv4iSr6azjD9DLHqm";
     return new PublicKey(pubkeyStr);
   },
   get pythProgramId(): PublicKey {

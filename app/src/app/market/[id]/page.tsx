@@ -1,12 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
-import { useProgram } from "@/hooks/useProgram";
-import { PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { getFriendlyErrorMessage } from "@/lib/error-map";
-import { toast } from "sonner";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,18 +11,24 @@ import {
   TrendingUp, 
   Activity, 
   AlertCircle,
-  HelpCircle,
   Award,
-  Share2
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
+import { EventParser } from "@coral-xyz/anchor";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+
+import { useProgram } from "@/hooks/useProgram";
+import { PublicKey } from "@solana/web3.js";
+import { getFriendlyErrorMessage } from "@/lib/error-map";
+import { toast } from "sonner";
 import { getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
-import confetti from "canvas-confetti";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { Sparkline } from "@/components/Sparkline";
-
-// 3D Probability Orb — client-only, no SSR
-const ProbabilityOrb3D = dynamic(() => import("@/components/ProbabilityOrb3D"), { ssr: false });
+import ProbabilityOrb3D from "@/components/ProbabilityOrb3D";
+import { OrderBookDepth } from "@/components/OrderBookDepth";
+import { SplitFlapText } from "@/components/SplitFlapText";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -60,13 +60,13 @@ interface ActivityItem {
   signature: string;
   slot: number;
   buyer: string;
-  side: "YES" | "NO";
+  side: "YES" | "NO" | "SETTLE" | "CLAIM";
   quantity: number;
   cost: number;
   time: string;
 }
 
-function MarketDetailPage() {
+export default function MarketDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { program, wallet, connection } = useProgram();
@@ -78,6 +78,7 @@ function MarketDetailPage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [successFlip, setSuccessFlip] = useState<boolean>(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
 
   // Sparkline history — stores probability snapshots
   const probHistory = useRef<number[]>([50]);
@@ -96,7 +97,11 @@ function MarketDetailPage() {
       const noP = acc.noPoolLamports.toNumber();
       const total = yesP + noP;
       const yesProbVal = total > 0 ? Math.round((yesP / total) * 100) : 50;
-      probHistory.current = [...probHistory.current, yesProbVal].slice(-30);
+      
+      // If we don't have enough parsed history items, seed with current
+      if (probHistory.current.length <= 1) {
+        probHistory.current = [50, yesProbVal];
+      }
     } catch (err: any) {
       console.error("Error fetching market:", err);
       toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
@@ -108,28 +113,93 @@ function MarketDetailPage() {
 
   const fetchActivity = async () => {
     try {
-      // Fetch transaction signatures for this market account
-      const sigs = await connection.getSignaturesForAddress(marketPda, { limit: 10 });
+      // Fetch signatures
+      const sigs = await connection.getSignaturesForAddress(marketPda, { limit: 15 });
       const items: ActivityItem[] = [];
-      
-      for (const sig of sigs) {
-        // Parse basic details from the transaction
+      const tempHistory: number[] = [];
+
+      const eventParser = new EventParser(program.programId, program.coder);
+
+      // Fetch transaction parse content in parallel
+      const txs = await Promise.all(
+        sigs.map(async (sig) => {
+          try {
+            return await connection.getParsedTransaction(sig.signature, {
+              maxSupportedTransactionVersion: 0,
+              commitment: "confirmed"
+            });
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      // Map details sequentially, oldest to newest (to build chronological history)
+      const pairs = sigs.map((sig, idx) => ({ sig, tx: txs[idx] })).reverse();
+
+      for (const pair of pairs) {
+        const { sig, tx } = pair;
+        if (!tx || !tx.meta || !tx.meta.logMessages) continue;
+
         const date = sig.blockTime ? new Date(sig.blockTime * 1000) : new Date();
-        
-        // Push a simulated activity row based on signatures
-        items.push({
-          signature: sig.signature,
-          slot: sig.slot,
-          buyer: "Trader (On-Chain)",
-          side: Math.random() > 0.5 ? "YES" : "NO",
-          quantity: Math.floor(Math.random() * 50) + 10,
-          cost: 0,
-          time: date.toLocaleTimeString(),
-        });
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        const events = eventParser.parseLogs(tx.meta.logMessages);
+        for (const event of events) {
+          if (event.name === "SharesPurchased") {
+            const { side, quantity, cost, buyer, newYesPool, newNoPool } = event.data as any;
+            const sideStr = side.yes ? "YES" : "NO";
+            
+            const yesP = newYesPool.toNumber();
+            const noP = newNoPool.toNumber();
+            const total = yesP + noP;
+            const yesProbVal = total > 0 ? Math.round((yesP / total) * 100) : 50;
+            
+            tempHistory.push(yesProbVal);
+
+            items.push({
+              signature: sig.signature,
+              slot: sig.slot,
+              buyer: buyer.toBase58(),
+              side: sideStr,
+              quantity: quantity.toNumber(),
+              cost: cost.toNumber() / 1e9,
+              time: timeStr,
+            });
+          } else if (event.name === "MarketSettled") {
+            const { winningOutcome, settledPrice } = event.data as any;
+            items.push({
+              signature: sig.signature,
+              slot: sig.slot,
+              buyer: "BOARD SETTLEMENT",
+              side: "SETTLE",
+              quantity: winningOutcome, // store winning outcome index in quantity
+              cost: settledPrice.toNumber() / 1e9,
+              time: timeStr,
+            });
+          } else if (event.name === "RewardsClaimed") {
+            const { claimer, payout } = event.data as any;
+            items.push({
+              signature: sig.signature,
+              slot: sig.slot,
+              buyer: claimer.toBase58(),
+              side: "CLAIM",
+              quantity: 0,
+              cost: payout.toNumber() / 1e9,
+              time: timeStr,
+            });
+          }
+        }
       }
-      setActivity(items);
+
+      // Display newest first
+      setActivity(items.reverse());
+
+      if (tempHistory.length > 0) {
+        probHistory.current = [50, ...tempHistory].slice(-30);
+      }
     } catch (e) {
-      console.log("Error loading transaction activity:", e);
+      console.log("Error loading transaction activity logs:", e);
     }
   };
 
@@ -137,7 +207,7 @@ function MarketDetailPage() {
     fetchMarket();
     fetchActivity();
 
-    // WS reload on contract modifications
+    // WS subscription to refresh
     const subscription = connection.onLogs(marketPda, () => {
       fetchMarket();
       fetchActivity();
@@ -149,7 +219,7 @@ function MarketDetailPage() {
   }, [id, program, connection]);
 
   if (loading) {
-    return <div className="glass-panel p-10 h-96 skeleton-shimmer" />;
+    return <div className="board-panel p-10 h-96 skeleton-shimmer bg-[#0C0D12]/50" />;
   }
 
   if (!market) return null;
@@ -179,11 +249,11 @@ function MarketDetailPage() {
     if (tradeSide === "YES") {
       const simulatedYesSupply = yesSupply + quantity;
       const simulatedTotalPool = totalPoolLamports + costLamports;
-      return (simulatedTotalPool * quantity) / (simulatedYesSupply * 1e9);
+      return simulatedYesSupply > 0 ? (simulatedTotalPool * quantity) / (simulatedYesSupply * 1e9) : 0;
     } else {
       const simulatedNoSupply = noSupply + quantity;
       const simulatedTotalPool = totalPoolLamports + costLamports;
-      return (simulatedTotalPool * quantity) / (simulatedNoSupply * 1e9);
+      return simulatedNoSupply > 0 ? (simulatedTotalPool * quantity) / (simulatedNoSupply * 1e9) : 0;
     }
   };
 
@@ -208,7 +278,7 @@ function MarketDetailPage() {
       const buyerNoAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
       const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
 
-      const tx = await program.methods
+      await program.methods
         .buyShares(sideParam as any, new anchor.BN(quantity))
         .accounts({
           buyer: wallet.publicKey,
@@ -222,17 +292,13 @@ function MarketDetailPage() {
         } as any)
         .rpc();
 
-      // Trigger Confetti and Success Animation
       setSuccessFlip(true);
-      setTimeout(() => setSuccessFlip(false), 1200);
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
+      setTimeout(() => setSuccessFlip(false), 800);
 
-      toast.success(`Success! Bought ${quantity} ${tradeSide} shares!`);
+      toast.success(`Position acquired: ${quantity} ${tradeSide} shares!`);
+      setIsMobileDrawerOpen(false);
       fetchMarket();
+      fetchActivity();
     } catch (err: any) {
       console.error("Buy shares error:", err);
       toast.error(`Purchase failed: ${getFriendlyErrorMessage(err)}`);
@@ -241,7 +307,6 @@ function MarketDetailPage() {
     }
   };
 
-  // Helper to format BN target price based on exponent
   const formatTargetPrice = (price: anchor.BN, expo: number): string => {
     const raw = price.toNumber();
     const divider = Math.pow(10, Math.abs(expo));
@@ -249,54 +314,166 @@ function MarketDetailPage() {
     return `$${normalized.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   };
 
+  const renderTradingDashboard = () => (
+    <div className="space-y-6">
+      {status !== "Open" ? (
+        <div className="py-8 text-center space-y-4">
+          <div className="mx-auto w-12 h-12 bg-[#FFA500]/10 text-[#FFA500] rounded flex items-center justify-center border border-[#FFA500]/25">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-[#F4F4F9]">TRADING TERMINATED</h4>
+            <p className="text-xs text-[#808495]">
+              This board has been settled. Navigate to <Link href="/portfolio" className="text-[#FFA500] hover:underline">Portfolio</Link> to withdraw payout.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* YES/NO buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setTradeSide("YES")}
+              className={`py-3 text-xs font-bold uppercase tracking-wider font-display rounded transition-all cursor-pointer border ${
+                tradeSide === "YES"
+                  ? "bg-[#235A34] border-[#1B4527] text-[#F4F4F9] shadow-lg"
+                  : "bg-[#050608] border-[#2D3142] text-[#808495] hover:text-[#F4F4F9]"
+              }`}
+            >
+              Predict YES
+            </button>
+            <button
+              onClick={() => setTradeSide("NO")}
+              className={`py-3 text-xs font-bold uppercase tracking-wider font-display rounded transition-all cursor-pointer border ${
+                tradeSide === "NO"
+                  ? "bg-[#8E2424] border-[#6E1B1B] text-[#F4F4F9] shadow-lg"
+                  : "bg-[#050608] border-[#2D3142] text-[#808495] hover:text-[#F4F4F9]"
+              }`}
+            >
+              Predict NO
+            </button>
+          </div>
+
+          {/* Stepper qty */}
+          <div className="space-y-2">
+            <label className="text-xs text-[#808495] uppercase font-display font-semibold">Share Quantity</label>
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => setQuantity(Math.max(1, quantity - 5))}
+                className="w-10 h-10 rounded bg-[#050608] border border-[#2D3142] hover:bg-[#0C0D12] text-[#F4F4F9] flex items-center justify-center font-mono font-bold text-lg cursor-pointer"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                className="flex-1 board-input text-center text-sm"
+              />
+              <button 
+                onClick={() => setQuantity(quantity + 5)}
+                className="w-10 h-10 rounded bg-[#050608] border border-[#2D3142] hover:bg-[#0C0D12] text-[#F4F4F9] flex items-center justify-center font-mono font-bold text-lg cursor-pointer"
+              >
+                +
+              </button>
+            </div>
+            
+            {/* Quick chips */}
+            <div className="grid grid-cols-4 gap-2 pt-1 font-mono">
+              {[10, 50, 100, 250].map((val) => (
+                <button
+                  key={val}
+                  onClick={() => setQuantity(val)}
+                  className="py-1 bg-[#050608] hover:bg-[#0C0D12] border border-[#2D3142] rounded text-[10px] text-[#808495] hover:text-[#F4F4F9] cursor-pointer transition-all"
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cost layout */}
+          <div className="space-y-2 pt-4 border-t border-[#2D3142] font-mono text-[11px] text-[#808495]">
+            <div className="flex justify-between">
+              <span>Price per share:</span>
+              <span className="text-[#F4F4F9]">{sharePriceSol.toFixed(2)} SOL</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Transaction cost:</span>
+              <span className="text-[#F4F4F9]">{tradeCost.toFixed(2)} SOL</span>
+            </div>
+            <div className="flex justify-between font-sans font-bold text-xs pt-1 text-[#235A34]">
+              <span>Win Payout:</span>
+              <span className="font-mono">{potentialPayout.toFixed(2)} SOL</span>
+            </div>
+          </div>
+
+          <button
+            disabled={submitting}
+            onClick={handleBuy}
+            className={`w-full py-3.5 mt-2 rounded text-xs font-bold uppercase tracking-widest font-display cursor-pointer transition-all ${
+              tradeSide === "YES" ? "btn-yes-mechanical" : "btn-no-mechanical"
+            }`}
+          >
+            {submitting ? (
+              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin inline-block mr-2 align-middle"></span>
+            ) : null}
+            Confirm Prediction
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="space-y-8 animate-fade-in">
-      <Link href="/" className="inline-flex items-center space-x-2 text-xs text-text-muted hover:text-text-primary transition-colors">
+    <div className="space-y-8">
+      <Link href="/" className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider font-display text-[#808495] hover:text-[#F4F4F9] transition-colors">
         <ArrowLeft className="w-4 h-4" />
-        <span>Back to Explorer</span>
+        <span>Explorer Board</span>
       </Link>
 
       <div className="grid md:grid-cols-3 gap-8 items-start">
-        {/* Left Column: Contract Details & Visual indicators */}
+        {/* Left Column: Contract specs & visuals */}
         <section className="md:col-span-2 space-y-8">
+          {/* Main info panel */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="glass-panel premium-card p-8 space-y-6"
+            transition={{ duration: 0.3 }}
+            className="board-panel p-6 sm:p-8 space-y-6"
           >
             <div className="flex items-center space-x-3">
-              <span className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md bg-white/5 border border-white/8 text-violet-400">
+              <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-[#2D3142]/40 border border-[#2D3142] text-[#FFA500]">
                 {categoryStr}
               </span>
-              <span className="text-xs font-mono text-text-muted">Market ID #{market.marketId?.toString()}</span>
+              <span className="text-xs font-mono text-[#808495]">BOARD ID #{market.marketId?.toString()}</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-text-primary">
+            <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#F4F4F9] uppercase leading-tight">
               {market.question}
             </h1>
 
-            <p className="text-sm text-text-muted leading-relaxed">
+            <p className="text-sm text-[#808495] leading-relaxed font-medium">
               {market.description}
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-white/5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-[#2D3142]">
               <div className="space-y-1">
-                <div className="text-[10px] text-text-muted uppercase tracking-wider">Target Price</div>
-                <div className="text-lg font-bold font-mono text-text-primary">
+                <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display">Target Price</div>
+                <div className="text-lg font-bold font-mono text-[#F4F4F9]">
                   {formatTargetPrice(market.targetPrice, market.targetExpo)}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <div className="text-[10px] text-text-muted uppercase tracking-wider">Comparison Rule</div>
-                <div className="text-lg font-bold text-text-primary">
+                <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display">Comparison Rule</div>
+                <div className="text-lg font-bold text-[#F4F4F9] font-display uppercase tracking-wide">
                   {market.comparison === 0 ? "Greater Than" : "Less Than"}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <div className="text-[10px] text-text-muted uppercase tracking-wider">Ending Clock</div>
+                <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display">Ending clock</div>
                 <div className="pt-1">
                   <FlipCountdown endTs={market.endTs.toNumber()} compact />
                 </div>
@@ -304,235 +481,198 @@ function MarketDetailPage() {
             </div>
           </motion.div>
 
-          {/* Liquid Odds visual display */}
+          {/* Semicircle Probability Dial and Sparkline Trend */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="glass-panel premium-card p-8 space-y-6"
+            transition={{ duration: 0.3, delay: 0.05 }}
+            className="board-panel p-6 sm:p-8 space-y-6"
           >
-            <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center space-x-2">
-              <TrendingUp className="w-4 h-4 text-violet-400" />
-              <span>Implied Odds / Probability split</span>
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#808495] flex items-center space-x-2">
+              <TrendingUp className="w-4 h-4 text-[#FFA500]" />
+              <span>Implied Odds & Trend Dial</span>
             </h3>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-8 py-2">
               <div className="flex-1 w-full space-y-4">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-[#10E58C] font-semibold text-sm">YES: {yesProb}%</span>
-                  <span className="text-[#FF4D6D] font-semibold text-sm">NO: {noProb}%</span>
+                <div className="flex items-center justify-between text-xs font-mono font-bold">
+                  <span className="text-[#235A34] text-sm">YES: {yesProb}%</span>
+                  <span className="text-[#8E2424] text-sm">NO: {noProb}%</span>
                 </div>
                 
-                {/* Horizontal probability meter */}
-                <div className="w-full h-4 rounded-full overflow-hidden bg-[#FF4D6D]/20 flex">
+                {/* Horizontal probability strip */}
+                <div className="w-full h-3 bg-[#8E2424] rounded overflow-hidden flex border border-[#050608]">
                   <motion.div
-                    className="h-full bg-[#10E58C]"
+                    className="h-full bg-[#235A34]"
                     initial={{ width: "50%" }}
                     animate={{ width: `${yesProb}%` }}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-2">
-                  <div className="p-3 bg-white/3 rounded-xl border border-white/5">
-                    <div className="text-text-muted text-[10px]">YES Pool Size</div>
-                    <div className="font-bold text-[#10E58C] text-sm pt-1">{yesPool.toFixed(2)} SOL</div>
+                  <div className="p-3 bg-[#050608] rounded border border-[#2D3142]">
+                    <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display">YES Pool Weight</div>
+                    <div className="font-bold text-[#235A34] text-sm pt-1">{yesPool.toFixed(2)} SOL</div>
                   </div>
-                  <div className="p-3 bg-white/3 rounded-xl border border-white/5">
-                    <div className="text-text-muted text-[10px]">NO Pool Size</div>
-                    <div className="font-bold text-[#FF4D6D] text-sm pt-1">{noPool.toFixed(2)} SOL</div>
+                  <div className="p-3 bg-[#050608] rounded border border-[#2D3142]">
+                    <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display">NO Pool Weight</div>
+                    <div className="font-bold text-[#8E2424] text-sm pt-1">{noPool.toFixed(2)} SOL</div>
                   </div>
                 </div>
 
-                {/* Sparkline Price History */}
+                {/* Probability trend Sparkline */}
                 {probHistory.current.length > 2 && (
-                  <div className="pt-2">
-                    <div className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Probability Trend</div>
-                    <Sparkline
-                      data={probHistory.current}
-                      width={320}
-                      height={40}
-                      color="#8B5CF6"
-                      fillColor="#8B5CF6"
-                      className="w-full"
-                    />
+                  <div className="pt-2 border-t border-[#2D3142]">
+                    <div className="text-[9px] text-[#808495] uppercase tracking-wider font-display mb-2">Real-Time Probability Trend</div>
+                    <div className="w-full bg-[#050608] border border-[#2D3142] p-2 rounded">
+                      <Sparkline
+                        data={probHistory.current}
+                        width={380}
+                        height={50}
+                        color="#FFA500"
+                        fillColor="#FFA500"
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* 3D probability orb */}
-              <ProbabilityOrb3D yesProb={yesProb} size={140} />
+              {/* Semicircle dial indicator */}
+              <ProbabilityOrb3D yesProb={yesProb} size={150} />
             </div>
           </motion.div>
 
-          {/* Activity Feed */}
+          {/* YES vs NO Pool Liquidity Depth */}
+          <OrderBookDepth yesPoolLamports={market.yesPoolLamports.toNumber()} noPoolLamports={market.noPoolLamports.toNumber()} />
+
+          {/* Decoded On-chain Activity logs */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="glass-panel premium-card p-6 space-y-4"
+            transition={{ duration: 0.3, delay: 0.15 }}
+            className="board-panel p-6 space-y-4"
           >
-            <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-cyan-400" />
-              <span>On-Chain Activity Logs</span>
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#808495] flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-[#FFA500]" />
+              <span>Decoded On-Chain Transactions</span>
             </h3>
             
-            <div className="space-y-3 font-mono text-xs">
+            <div className="space-y-2 font-mono text-xs max-h-96 overflow-y-auto scrollbar-none">
               {activity.length === 0 ? (
-                <p className="text-text-muted text-center py-6">No recent transactions indexed.</p>
+                <p className="text-[#808495] text-center py-8">No matching transaction logs decoded.</p>
               ) : (
                 <AnimatePresence>
-                  {activity.map((item, index) => (
-                    <motion.div
-                      key={item.signature}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="flex justify-between items-center py-2 border-b border-white/3"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          item.side === "YES" ? "bg-[#10E58C]/15 text-[#10E58C]" : "bg-[#FF4D6D]/15 text-[#FF4D6D]"
-                        }`}>
-                          {item.side}
-                        </span>
-                        <span className="text-text-primary font-semibold">{item.quantity} shares</span>
-                      </div>
-                      <div className="text-text-muted text-[10px]">{item.time}</div>
-                    </motion.div>
-                  ))}
+                  {activity.map((item, index) => {
+                    const isSettle = item.side === "SETTLE";
+                    const isClaim = item.side === "CLAIM";
+                    const isYes = item.side === "YES";
+                    const isNo = item.side === "NO";
+
+                    let badgeColor = "bg-white/5 text-[#F4F4F9]";
+                    if (isYes) badgeColor = "bg-[#235A34]/15 text-[#235A34] border border-[#235A34]/30";
+                    if (isNo) badgeColor = "bg-[#8E2424]/15 text-[#8E2424] border border-[#8E2424]/30";
+                    if (isSettle) badgeColor = "bg-[#FFA500]/15 text-[#FFA500] border border-[#FFA500]/30";
+
+                    return (
+                      <motion.div
+                        key={item.signature + "-" + index}
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                        className="flex justify-between items-center py-2.5 border-b border-[#2D3142]/40 hover:bg-white/1 px-2 rounded"
+                      >
+                        <div className="flex items-center space-x-2.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${badgeColor}`}>
+                            {item.side}
+                          </span>
+                          <span className="text-[#F4F4F9] text-[11px]">
+                            {isSettle ? (
+                              <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
+                            ) : isClaim ? (
+                              <span>REWARD WITHDRAWAL: {item.cost.toFixed(2)} SOL</span>
+                            ) : (
+                              <span>{item.quantity} SHARES AT {item.cost.toFixed(2)} SOL</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-[#808495] text-[10px] flex items-center space-x-2">
+                          <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
+                          <span>{item.time}</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </AnimatePresence>
               )}
             </div>
           </motion.div>
         </section>
 
-        {/* Right Column: Trading Panel card */}
-        <motion.section
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.15 }}
-          className={`md:col-span-1 glass-panel premium-card p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
-        >
-          <h3 className="text-base font-bold font-display border-b border-white/5 pb-3">
-            Prediction Dashboard
-          </h3>
-
-          {status !== "Open" ? (
-            <div className="py-8 text-center space-y-4">
-              <div className="mx-auto w-12 h-12 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold text-text-primary">Trading Closed</h4>
-                <p className="text-xs text-text-muted">
-                  This market has been finalized. Go to <Link href="/portfolio" className="text-violet-400 hover:underline">Portfolio</Link> to claim rewards.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* YES / NO toggles with motion */}
-              <div className="grid grid-cols-2 gap-3 relative">
-                <motion.button
-                  onClick={() => setTradeSide("YES")}
-                  whileTap={{ scale: 0.97 }}
-                  className={`py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                    tradeSide === "YES"
-                      ? "bg-[#10E58C]/20 border border-[#10E58C] text-[#10E58C] shadow-[0_0_24px_rgba(16,229,140,0.15)]"
-                      : "bg-white/3 border border-white/5 text-text-muted"
-                  }`}
-                >
-                  Predict YES
-                </motion.button>
-                <motion.button
-                  onClick={() => setTradeSide("NO")}
-                  whileTap={{ scale: 0.97 }}
-                  className={`py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                    tradeSide === "NO"
-                      ? "bg-[#FF4D6D]/20 border border-[#FF4D6D] text-[#FF4D6D] shadow-[0_0_24px_rgba(255,77,109,0.15)]"
-                      : "bg-white/3 border border-white/5 text-text-muted"
-                  }`}
-                >
-                  Predict NO
-                </motion.button>
-              </div>
-
-              {/* Quantity stepper */}
-              <div className="space-y-2">
-                <label className="text-xs text-text-muted font-semibold">Quantity of shares</label>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={() => setQuantity(Math.max(1, quantity - 5))}
-                    className="w-10 h-10 rounded-lg bg-white/5 border border-white/8 hover:bg-white/10 flex items-center justify-center font-bold text-lg cursor-pointer"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 glass-input py-2 text-center font-mono font-bold"
-                  />
-                  <button 
-                    onClick={() => setQuantity(quantity + 5)}
-                    className="w-10 h-10 rounded-lg bg-white/5 border border-white/8 hover:bg-white/10 flex items-center justify-center font-bold text-lg cursor-pointer"
-                  >
-                    +
-                  </button>
-                </div>
-                
-                {/* Preselect chips */}
-                <div className="grid grid-cols-4 gap-2 pt-1">
-                  {[10, 50, 100, 250].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => setQuantity(val)}
-                      className="py-1 bg-white/5 hover:bg-white/8 border border-white/5 rounded text-[10px] font-mono text-text-muted hover:text-text-primary cursor-pointer transition-all"
-                    >
-                      {val}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Cost calculations */}
-              <div className="space-y-3 pt-4 border-t border-white/5 font-mono text-xs text-text-muted">
-                <div className="flex justify-between">
-                  <span>Price per share:</span>
-                  <span className="text-text-primary">{sharePriceSol.toFixed(2)} SOL</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Est. Transaction Cost:</span>
-                  <span className="text-text-primary">{tradeCost.toFixed(2)} SOL</span>
-                </div>
-                <div className="flex justify-between font-sans font-bold text-xs pt-1 text-[#10E58C]">
-                  <span>Potential Win Payout:</span>
-                  <span className="font-mono">{potentialPayout.toFixed(2)} SOL</span>
-                </div>
-              </div>
-
-              {/* BUY button */}
-              <motion.button
-                disabled={submitting}
-                onClick={handleBuy}
-                whileTap={{ scale: 0.97 }}
-                className={`w-full py-3.5 mt-2 rounded-xl text-xs font-bold transition-all ${
-                  tradeSide === "YES" ? "btn-yes bg-[#10E58C]/15 border-[#10E58C]/30 text-[#10E58C]" : "btn-no bg-[#FF4D6D]/15 border-[#FF4D6D]/30 text-[#FF4D6D]"
-                }`}
-              >
-                {submitting ? (
-                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin inline-block mr-2 align-middle"></span>
-                ) : null}
-                <span>Sign & Confirm Trade</span>
-              </motion.button>
-            </div>
-          )}
-        </motion.section>
+        {/* Right Column: Desktop Trading dashboard */}
+        <section className="hidden md:block">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className={`board-panel p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
+          >
+            <h3 className="text-sm font-bold uppercase tracking-wider font-display border-b border-[#2D3142] pb-3 text-[#FFA500]">
+              [■] Prediction Desk
+            </h3>
+            {renderTradingDashboard()}
+          </motion.div>
+        </section>
       </div>
+
+      {/* Mobile Sticky floating trade button for thumb-reach */}
+      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-[#0C0D12] border-t-2 border-[#2D3142] p-4 flex items-center justify-between shadow-2xl">
+        <div className="text-left font-mono">
+          <div className="text-[8px] uppercase tracking-wider text-[#808495]">Current Odds</div>
+          <div className="text-xs font-bold text-[#FFA500]">YES: {yesProb}% | NO: {noProb}%</div>
+        </div>
+        <button
+          onClick={() => setIsMobileDrawerOpen(true)}
+          className="btn-amber px-6 py-2.5 text-xs font-bold"
+        >
+          Predict Outcome
+        </button>
+      </div>
+
+      {/* Mobile trading sheet drawer overlay */}
+      <AnimatePresence>
+        {isMobileDrawerOpen && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black/75 z-40" 
+              onClick={() => setIsMobileDrawerOpen(false)}
+            />
+            {/* Bottom Drawer */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="fixed bottom-16 left-0 right-0 z-50 bg-[#0C0D12] border-t-2 border-[#2D3142] rounded-t-xl p-6 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b border-[#2D3142] pb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider font-display text-[#FFA500]">
+                  [■] Mobile Prediction Desk
+                </h4>
+                <button 
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="text-xs text-[#808495] hover:text-[#F4F4F9] font-mono px-2 py-1 rounded border border-[#2D3142]"
+                >
+                  CLOSE
+                </button>
+              </div>
+              {renderTradingDashboard()}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
-const MarketDetail = dynamic(() => Promise.resolve(MarketDetailPage), { ssr: false });
-export default MarketDetail;

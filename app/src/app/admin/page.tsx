@@ -347,10 +347,10 @@ function AdminPage() {
         animate={{ opacity: 1, y: 0 }}
         className="border-b border-white/5 pb-4"
       >
-        <h1 className="text-3xl font-extrabold font-display bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
-          Admin Observatory Console
+        <h1 className="text-3xl font-bold font-display text-[#F4F4F9]">
+          [■] ADMIN OBSERVATORY CONSOLE
         </h1>
-        <p className="text-text-muted text-sm">Initialize config singleton, create contracts, settle outputs, and withdraw protocol fees.</p>
+        <p className="text-[#808495] text-sm">Initialize config singleton, create contracts, settle outputs, and withdraw protocol fees.</p>
       </motion.div>
 
       {/* 1. INITIALIZE CONFIG SECTION (Shown only if not initialized) */}
@@ -359,26 +359,26 @@ function AdminPage() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          className="glass-panel premium-card p-8 space-y-6 border border-amber-500/25 bg-amber-500/3"
+          className="board-panel p-8 space-y-6 border-[#FFA500]/20 bg-[#0C0D12]"
         >
-          <div className="flex items-center space-x-3 text-amber-400">
+          <div className="flex items-center space-x-3 text-[#FFA500]">
             <AlertTriangle className="w-6 h-6" />
             <h2 className="text-lg font-bold font-display">Config PDA Not Found</h2>
           </div>
-          <p className="text-xs text-text-muted">
+          <p className="text-xs text-[#808495]">
             The platform-wide config singleton must be initialized once before markets can be created. The key initialized here will serve as the master Administrator authority.
           </p>
           <div className="grid sm:grid-cols-2 gap-4 items-end max-w-md">
             <div className="space-y-2">
-              <label className="text-xs font-mono text-text-muted">Fee Basis Points (100 = 1%)</label>
+              <label className="text-xs font-mono text-[#808495]">Fee Basis Points (100 = 1%)</label>
               <input
                 type="number"
                 value={feeBps}
                 onChange={(e) => setFeeBps(Number(e.target.value))}
-                className="w-full glass-input text-sm py-2 px-3"
+                className="w-full board-input text-sm py-2 px-3"
               />
             </div>
-            <button onClick={handleInitializeConfig} className="btn-primary py-2.5 text-xs">
+            <button onClick={handleInitializeConfig} className="btn-amber py-2 text-xs">
               Initialize Config PDA
             </button>
           </div>
@@ -390,19 +390,19 @@ function AdminPage() {
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={cardVariants} className="glass-panel premium-card p-6 space-y-1">
-            <div className="text-xs text-text-muted">Fee Percentage</div>
-            <div className="text-xl font-mono font-bold text-violet-400">
+          <motion.div variants={cardVariants} className="board-panel p-6 space-y-1 bg-[#0C0D12]">
+            <div className="text-xs text-[#808495]">Fee Percentage</div>
+            <div className="text-xl font-mono font-bold text-[#FFA500]">
               {(config.feeBps / 100).toFixed(1)}% ({config.feeBps} bps)
             </div>
           </motion.div>
-          <motion.div variants={cardVariants} className="glass-panel premium-card p-6 space-y-1">
-            <div className="text-xs text-text-muted">Total Markets Formed</div>
-            <div className="text-xl font-mono font-bold text-cyan-400">{config.marketCount}</div>
+          <motion.div variants={cardVariants} className="board-panel p-6 space-y-1 bg-[#0C0D12]">
+            <div className="text-xs text-[#808495]">Total Markets Formed</div>
+            <div className="text-xl font-mono font-bold text-[#FFA500]">{config.marketCount}</div>
           </motion.div>
-          <motion.div variants={cardVariants} className="glass-panel premium-card p-6 space-y-1 overflow-hidden">
-            <div className="text-xs text-text-muted">Admin Account</div>
-            <div className="text-xs font-mono font-semibold truncate text-text-primary pt-1">
+          <motion.div variants={cardVariants} className="board-panel p-6 space-y-1 overflow-hidden bg-[#0C0D12]">
+            <div className="text-xs text-[#808495]">Admin Account</div>
+            <div className="text-xs font-mono font-semibold truncate text-[#F4F4F9] pt-1">
               {config.admin.toBase58()}
             </div>
           </motion.div>
@@ -418,44 +418,44 @@ function AdminPage() {
             transition={{ duration: 0.4, delay: 0.1 }}
             className="md:col-span-2 space-y-6"
           >
-            <div className="glass-panel premium-card p-6 space-y-6">
-              <div className="flex items-center space-x-2 border-b border-white/5 pb-3">
-                <Plus className="w-5 h-5 text-violet-400" />
-                <h2 className="text-base font-bold font-display">Create Prediction Contract</h2>
+            <div className="board-panel p-6 space-y-6 bg-[#0C0D12]">
+              <div className="flex items-center space-x-2 border-b border-[#2D3142] pb-3">
+                <Plus className="w-5 h-5 text-[#FFA500]" />
+                <h2 className="text-base font-bold font-display text-[#F4F4F9]">Create Prediction Contract</h2>
               </div>
 
               <form onSubmit={handleCreateMarket} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-text-muted">Question Text</label>
+                  <label className="text-xs font-semibold text-[#808495]">Question Text</label>
                   <input
                     type="text"
                     required
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="e.g. Will SOL exceed $280 by tomorrow?"
-                    className="w-full glass-input text-xs py-2 px-3"
+                    className="w-full board-input text-xs"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-text-muted">Rules & Settlement Description</label>
+                  <label className="text-xs font-semibold text-[#808495]">Rules & Settlement Description</label>
                   <textarea
                     required
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="e.g. Settle using Pyth feed SOL/USD. Price must match condition..."
                     rows={3}
-                    className="w-full glass-input text-xs py-2 px-3"
+                    className="w-full board-input text-xs"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-text-muted">Category</label>
+                    <label className="text-xs font-semibold text-[#808495]">Category</label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(Number(e.target.value))}
-                      className="w-full glass-input text-xs py-2 px-3 bg-[#0B0B1E]"
+                      className="w-full board-input text-xs bg-[#050608]"
                     >
                       {CATEGORIES.map((cat, i) => (
                         <option key={i} value={i}>{cat}</option>
@@ -464,11 +464,11 @@ function AdminPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-text-muted">Comparison</label>
+                    <label className="text-xs font-semibold text-[#808495]">Comparison</label>
                     <select
                       value={comparison}
                       onChange={(e) => setComparison(Number(e.target.value))}
-                      className="w-full glass-input text-xs py-2 px-3 bg-[#0B0B1E]"
+                      className="w-full board-input text-xs bg-[#050608]"
                     >
                       <option value={0}>Greater Than</option>
                       <option value={1}>Less Than</option>
@@ -478,30 +478,30 @@ function AdminPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-text-muted">Target Price ($)</label>
+                    <label className="text-xs font-semibold text-[#808495]">Target Price ($)</label>
                     <input
                       type="number"
                       step="0.01"
                       required
                       value={targetPriceVal}
                       onChange={(e) => setTargetPriceVal(Number(e.target.value))}
-                      className="w-full glass-input text-xs py-2 px-3 font-mono"
+                      className="w-full board-input text-xs"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-text-muted">Duration (Seconds)</label>
+                    <label className="text-xs font-semibold text-[#808495]">Duration (Seconds)</label>
                     <input
                       type="number"
                       required
                       value={durationSecs}
                       onChange={(e) => setDurationSecs(Number(e.target.value))}
-                      className="w-full glass-input text-xs py-2 px-3 font-mono"
+                      className="w-full board-input text-xs"
                     />
                   </div>
                 </div>
 
-                <button type="submit" className="w-full btn-primary text-xs py-3 mt-4">
+                <button type="submit" className="w-full btn-amber text-xs py-2.5 mt-4">
                   Deploy Market PDA
                 </button>
               </form>

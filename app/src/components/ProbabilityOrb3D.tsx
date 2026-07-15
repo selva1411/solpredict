@@ -1,103 +1,75 @@
 "use client";
 
-import React, { useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import * as THREE from "three";
-
-interface OrbMeshProps {
-  yesProb: number; // 0–100
-}
-
-function OrbMesh({ yesProb }: OrbMeshProps) {
-  const groupRef = useRef<THREE.Group>(null!);
-  const dividerRef = useRef<THREE.Mesh>(null!);
-
-  useFrame((_, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.45;
-      groupRef.current.rotation.x += delta * 0.1;
-    }
-  });
-
-  const dividerY = (yesProb / 100) * 2 - 1; // Map 0-100 to -1..1
-  // Calculate angle for divider placement
-  const theta = Math.acos(dividerY);
-
-  return (
-    <group ref={groupRef}>
-      {/* YES hemisphere (neon cyan/green) — top to divider */}
-      <mesh>
-        <sphereGeometry args={[1, 64, 64, 0, Math.PI * 2, 0, theta]} />
-        <meshStandardMaterial
-          color="#0DF5E3"
-          emissive="#0DF5E3"
-          emissiveIntensity={0.25}
-          roughness={0.1}
-          metalness={0.9}
-          transparent
-          opacity={0.9}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* NO hemisphere (coral red) — divider to bottom */}
-      <mesh>
-        <sphereGeometry args={[1, 64, 64, 0, Math.PI * 2, theta, Math.PI - theta]} />
-        <meshStandardMaterial
-          color="#FF4D6D"
-          emissive="#FF4D6D"
-          emissiveIntensity={0.25}
-          roughness={0.1}
-          metalness={0.9}
-          transparent
-          opacity={0.9}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* Glowing divider ring */}
-      <mesh ref={dividerRef} position={[0, Math.cos(theta), 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[Math.sin(theta) + 0.01, 0.03, 16, 100]} />
-        <meshBasicMaterial color="#ffffff" />
-      </mesh>
-
-      {/* Glossy outer ring accent */}
-      <mesh rotation={[0, 0, Math.PI / 2]}>
-        <torusGeometry args={[1.08, 0.015, 8, 64]} />
-        <meshStandardMaterial color="#8B5CF6" roughness={0.1} metalness={0.9} />
-      </mesh>
-    </group>
-  );
-}
-
-function OrbScene({ yesProb }: OrbMeshProps) {
-  return (
-    <>
-      <ambientLight intensity={0.4} />
-      <pointLight position={[3, 3, 3]} intensity={1.2} color="#0DF5E3" />
-      <pointLight position={[-3, -3, -3]} intensity={0.8} color="#8B5CF6" />
-      <directionalLight position={[0, 5, 2]} intensity={1.0} color="#ffffff" />
-      <OrbMesh yesProb={yesProb} />
-    </>
-  );
-}
+import React from "react";
 
 interface ProbabilityOrb3DProps {
   yesProb: number;
   size?: number; // px
 }
 
-export default function ProbabilityOrb3D({ yesProb, size = 128 }: ProbabilityOrb3DProps) {
+export default function ProbabilityOrb3D({ yesProb, size = 120 }: ProbabilityOrb3DProps) {
+  // Translate 0-100 probability to rotation angle (-90 to +90 degrees)
+  const rotationAngle = (yesProb / 100) * 180 - 90;
+
   return (
-    <div style={{ width: size, height: size }} className="flex-shrink-0">
-      <Canvas
-        camera={{ position: [0, 0, 2.8], fov: 45 }}
-        style={{ background: "transparent" }}
-        gl={{ alpha: true, antialias: true }}
-        dpr={[1, 1.5]}
+    <div 
+      style={{ width: size, height: size / 2 + 20 }} 
+      className="flex flex-col items-center justify-end relative select-none"
+    >
+      {/* Semicircle Gauge Frame */}
+      <div 
+        style={{ width: size, height: size / 2 }} 
+        className="relative overflow-hidden rounded-t-full border-t-2 border-l-2 border-r-2 border-[#2D3142] bg-[#050608]"
       >
-        <OrbScene yesProb={yesProb} />
-      </Canvas>
+        {/* Split Outcome Color Semicircle */}
+        <div className="absolute inset-0 flex">
+          {/* YES segment (Verdant Green) */}
+          <div 
+            style={{ transform: `rotate(${yesProb - 100}deg)`, transformOrigin: "bottom right" }} 
+            className="w-1/2 h-full bg-[#235A34] transition-transform duration-500 ease-out"
+          />
+          {/* NO segment (Rust Red) */}
+          <div 
+            style={{ transform: `rotate(${yesProb}deg)`, transformOrigin: "bottom left" }} 
+            className="w-1/2 h-full bg-[#8E2424] transition-transform duration-500 ease-out ml-auto"
+          />
+        </div>
+
+        {/* Inner Hub Mask */}
+        <div 
+          style={{ 
+            width: size - 32, 
+            height: (size - 32) / 2, 
+            bottom: 0, 
+            left: 16 
+          }} 
+          className="absolute rounded-t-full bg-[#0C0D12] border-t-2 border-l-2 border-r-2 border-[#2D3142] flex items-end justify-center pb-1"
+        >
+          {/* Numeric Readout */}
+          <span className="text-xs font-mono font-bold text-[#FFA500] tracking-wider">
+            {yesProb}% YES
+          </span>
+        </div>
+      </div>
+
+      {/* Mechanical Needle Hub */}
+      <div className="absolute bottom-0 w-4 h-4 rounded-full bg-[#FFA500] border-2 border-[#050608] z-10 flex items-center justify-center">
+        {/* Pointer Needle */}
+        <div 
+          style={{ 
+            transform: `rotate(${rotationAngle}deg)`, 
+            transformOrigin: "bottom center",
+            height: size / 2 - 10,
+            bottom: 6
+          }} 
+          className="absolute w-1 bg-[#FFA500] transition-transform duration-500 ease-out rounded-t shadow-lg"
+        />
+      </div>
+
+      {/* Under Label */}
+      <span className="text-[10px] uppercase font-display tracking-widest text-[#808495] mt-1.5">
+        PROBABILITY
+      </span>
     </div>
   );
 }

@@ -27,7 +27,7 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
   return (
     <div className="flex flex-col items-center">
       <div
-        className={`relative overflow-hidden rounded-lg bg-white/5 border border-white/10 font-mono font-bold text-text-primary flex items-center justify-center ${
+        className={`relative overflow-hidden rounded bg-[#0C0D12] border border-[#2D3142] font-mono font-bold text-[#FFA500] flex items-center justify-center ${
           compact ? "w-8 h-8 text-xs" : "w-12 h-12 text-lg"
         }`}
         style={{ perspective: "200px" }}
@@ -39,7 +39,7 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
         </span>
       </div>
       {!compact && (
-        <span className="text-[9px] uppercase tracking-wider text-text-muted mt-1">{label}</span>
+        <span className="text-[9px] uppercase tracking-wider text-[#808495] mt-1">{label}</span>
       )}
     </div>
   );

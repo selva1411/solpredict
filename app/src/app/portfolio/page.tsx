@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { Sparkline } from "@/components/Sparkline";
-import { CountUp } from "@/components/CountUp";
+import { SplitFlapText } from "@/components/SplitFlapText";
 
 interface PositionWithMarket {
   publicKey: PublicKey;
@@ -52,13 +53,20 @@ interface PositionWithMarket {
 }
 
 type FilterTab = "All" | "Open" | "Settled" | "Claimed";
+const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" as const } },
+};
 
 function PortfolioPage() {
-  const { program, wallet, connection } = useProgram();
+  const { program, wallet } = useProgram();
   const [positions, setPositions] = useState<PositionWithMarket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("All");
 
   const fetchPortfolio = async () => {
     if (!wallet || !wallet.publicKey) {
@@ -68,11 +76,10 @@ function PortfolioPage() {
 
     try {
       setLoading(true);
-      // Fetch all position accounts belonging to this user
       const allPositions = await program.account.userPosition.all([
         {
           memcmp: {
-            offset: 8, // Offset 8 after discriminator
+            offset: 8,
             bytes: wallet.publicKey.toBase58(),
           },
         },
@@ -82,7 +89,6 @@ function PortfolioPage() {
 
       for (const pos of allPositions) {
         try {
-          // Fetch corresponding market details
           const marketAccount = await program.account.market.fetch(pos.account.market);
           positionData.push({
             publicKey: pos.publicKey,
@@ -107,7 +113,6 @@ function PortfolioPage() {
     fetchPortfolio();
   }, [wallet, program]);
 
-  // Settle outcomes parsing
   const getStatusString = (status: any): "Open" | "Settled" | "Cancelled" => {
     if (status.open) return "Open";
     if (status.settled) return "Settled";
@@ -115,7 +120,10 @@ function PortfolioPage() {
     return "Open";
   };
 
-  // P&L calculation helper
+  const getCategoryString = (categoryIndex: number): string => {
+    return CATEGORIES[categoryIndex] || "Other";
+  };
+
   const calculatePnL = (pos: PositionWithMarket): { pnl: number; pnlPercent: number } | null => {
     const status = getStatusString(pos.marketAccount.status);
     if (status !== "Settled") return null;
@@ -131,7 +139,6 @@ function PortfolioPage() {
       return { pnl: -spent, pnlPercent: -100 };
     }
 
-    // Calculate payout: (winning shares / total winning supply) * total payout pool
     const totalPayoutPool = pos.marketAccount.totalPayoutPool.toNumber() / 1e9;
     const winningShares = winningOutcome.yes ? yesShares : noShares;
     const totalWinningSupply = winningOutcome.yes
@@ -145,7 +152,6 @@ function PortfolioPage() {
     return { pnl, pnlPercent };
   };
 
-  // Claim Rewards implementation
   const handleClaimRewards = async (pos: PositionWithMarket) => {
     if (!wallet || !wallet.publicKey) return;
     try {
@@ -165,7 +171,7 @@ function PortfolioPage() {
 
       const claimerAta = getAssociatedTokenAddressSync(winningMint, wallet.publicKey);
 
-      const tx = await program.methods
+      await program.methods
         .claimRewards()
         .accounts({
           claimer: wallet.publicKey,
@@ -187,7 +193,6 @@ function PortfolioPage() {
     }
   };
 
-  // Claim Refund implementation
   const handleClaimRefund = async (pos: PositionWithMarket) => {
     if (!wallet || !wallet.publicKey) return;
     try {
@@ -196,7 +201,7 @@ function PortfolioPage() {
       const claimerYesAta = getAssociatedTokenAddressSync(pos.marketAccount.yesMint, wallet.publicKey);
       const claimerNoAta = getAssociatedTokenAddressSync(pos.marketAccount.noMint, wallet.publicKey);
 
-      const tx = await program.methods
+      await program.methods
         .claimRefund()
         .accounts({
           claimer: wallet.publicKey,
@@ -220,19 +225,25 @@ function PortfolioPage() {
     }
   };
 
-  // Filtered positions
+  // Filtered positions by Lifecycle status and Market category
   const filteredPositions = useMemo(() => {
     return positions.filter((pos) => {
       const status = getStatusString(pos.marketAccount.status);
-      if (activeFilter === "All") return true;
-      if (activeFilter === "Open") return status === "Open";
-      if (activeFilter === "Settled") return status === "Settled" && !pos.account.claimed;
-      if (activeFilter === "Claimed") return pos.account.claimed;
-      return true;
-    });
-  }, [positions, activeFilter]);
+      const matchesLifecycle = 
+        activeFilter === "All" ||
+        (activeFilter === "Open" && status === "Open") ||
+        (activeFilter === "Settled" && status === "Settled" && !pos.account.claimed) ||
+        (activeFilter === "Claimed" && pos.account.claimed);
 
-  // Calculate statistics
+      const categoryName = getCategoryString(pos.marketAccount.category);
+      const matchesCategory = 
+        selectedCategoryFilter === "All" || categoryName === selectedCategoryFilter;
+
+      return matchesLifecycle && matchesCategory;
+    });
+  }, [positions, activeFilter, selectedCategoryFilter]);
+
+  // Calculate statistics for the CURRENT filtered category
   const portfolioStats = useMemo(() => {
     let totalInvested = 0;
     let activePositionsCount = 0;
@@ -240,15 +251,20 @@ function PortfolioPage() {
     let winCount = 0;
     let settledCount = 0;
 
-    positions.forEach((p) => {
+    // We compute statistics based on category filter
+    const targetPositions = positions.filter((p) => 
+      selectedCategoryFilter === "All" || getCategoryString(p.marketAccount.category) === selectedCategoryFilter
+    );
+
+    targetPositions.forEach((p) => {
       totalInvested += p.account.totalSpentLamports.toNumber();
       if (!p.account.claimed) {
         activePositionsCount++;
       }
       const pnlResult = calculatePnL(p);
       if (pnlResult) {
-        totalPnL += pnlResult.pnl;
         settledCount++;
+        totalPnL += pnlResult.pnl;
         if (pnlResult.pnl > 0) winCount++;
       }
     });
@@ -259,27 +275,31 @@ function PortfolioPage() {
       pnl: totalPnL,
       winRate: settledCount > 0 ? Math.round((winCount / settledCount) * 100) : null,
     };
-  }, [positions]);
+  }, [positions, selectedCategoryFilter]);
 
-  // Sparkline data — cumulative invested over positions
   const investmentHistory = useMemo(() => {
-    let cumulative = 0;
-    return positions.map((p) => {
-      cumulative += p.account.totalSpentLamports.toNumber() / 1e9;
-      return cumulative;
-    });
-  }, [positions]);
+    const targetPositions = positions.filter((p) => 
+      selectedCategoryFilter === "All" || getCategoryString(p.marketAccount.category) === selectedCategoryFilter
+    );
+    let sum = 0;
+    const history: number[] = [];
+    for (const p of targetPositions) {
+      sum += p.account.totalSpentLamports.toNumber() / 1e9;
+      history.push(sum);
+    }
+    return history;
+  }, [positions, selectedCategoryFilter]);
 
   if (!wallet || !wallet.publicKey) {
     return (
-      <div className="glass-panel py-20 text-center space-y-6 max-w-xl mx-auto my-12">
-        <div className="mx-auto w-16 h-16 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-text-muted">
+      <div className="board-panel py-20 text-center space-y-6 max-w-xl mx-auto my-12">
+        <div className="mx-auto w-16 h-16 bg-[#050608] border border-[#2D3142] rounded flex items-center justify-center text-[#808495]">
           <Wallet className="w-8 h-8" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold font-display text-text-primary">Wallet Not Connected</h2>
-          <p className="text-text-muted text-sm max-w-sm mx-auto">
-            Connect your Phantom wallet or any supported wallet to view your active predictions, claims, and refunds.
+          <h2 className="text-2xl font-bold font-display text-[#F4F4F9]">WALLET NOT RECORDED</h2>
+          <p className="text-[#808495] text-sm max-w-sm mx-auto">
+            Please connect your wallet at the top terminal header to read positions and claim settlement payouts.
           </p>
         </div>
       </div>
@@ -287,12 +307,47 @@ function PortfolioPage() {
   }
 
   return (
-    <div className="space-y-10 animate-fade-in">
-      <div className="border-b border-white/5 pb-4">
-        <h1 className="text-3xl font-extrabold font-display bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
-          My Predictions Portfolio
+    <div className="space-y-10 font-sans">
+      <div className="border-b border-[#2D3142] pb-4">
+        <h1 className="text-3xl font-bold font-display text-[#F4F4F9]">
+          [■] PORTFOLIO LEDGER
         </h1>
-        <p className="text-text-muted text-sm">Track your open positions, settle claims, and request refunds.</p>
+        <p className="text-[#808495] text-sm font-medium">Track your positions, settle payouts, and audit refund specifications.</p>
+      </div>
+
+      {/* Category Performance Filter/Compare view */}
+      <div className="space-y-3">
+        <div className="text-[10px] uppercase font-display tracking-widest text-[#808495] font-semibold">
+          Compare Performance by Category
+        </div>
+        <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => setSelectedCategoryFilter("All")}
+            className={`px-3 py-1.5 text-xs font-semibold rounded transition-all active:scale-95 ${
+              selectedCategoryFilter === "All"
+                ? "mechanical-switch-active"
+                : "mechanical-switch-inactive"
+            }`}
+          >
+            All Categories
+          </button>
+          {CATEGORIES.map((cat) => {
+            const countInCategory = positions.filter((p) => getCategoryString(p.marketAccount.category) === cat).length;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategoryFilter(cat)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded transition-all active:scale-95 ${
+                  selectedCategoryFilter === cat
+                    ? "mechanical-switch-active"
+                    : "mechanical-switch-inactive"
+                }`}
+              >
+                {cat} ({countInCategory})
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Portfolio Overview */}
@@ -300,87 +355,77 @@ function PortfolioPage() {
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
         initial="hidden"
         animate="visible"
-        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
       >
-        <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
-            <Coins className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Total Spent</div>
-            <div className="text-xl font-mono font-bold">
-              <CountUp value={portfolioStats.invested} decimals={2} suffix=" SOL" />
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Total Spent ({selectedCategoryFilter})</div>
+          <div className="flex items-end justify-between">
+            <span className="text-xs font-mono text-[#808495]">SOL</span>
+            <SplitFlapText text={`${portfolioStats.invested.toFixed(1)}`} charClassName="w-[20px] h-[30px] text-sm" />
           </div>
         </motion.div>
 
-        <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Active Predictions</div>
-            <div className="text-xl font-mono font-bold">
-              <CountUp value={portfolioStats.count} />
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Active POS ({selectedCategoryFilter})</div>
+          <div className="flex items-end justify-between">
+            <span className="text-xs font-mono text-[#808495]">QTY</span>
+            <SplitFlapText text={`${portfolioStats.count}`} charClassName="w-[20px] h-[30px] text-sm" />
           </div>
         </motion.div>
 
-        <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className={`p-3 rounded-xl ${portfolioStats.pnl >= 0 ? "bg-[#10E58C]/10 text-[#10E58C]" : "bg-[#FF4D6D]/10 text-[#FF4D6D]"}`}>
-            {portfolioStats.pnl >= 0 ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Total P&L</div>
-            <div className={`text-xl font-mono font-bold ${portfolioStats.pnl >= 0 ? "text-[#10E58C]" : "text-[#FF4D6D]"}`}>
-              {portfolioStats.pnl >= 0 ? "+" : ""}{portfolioStats.pnl.toFixed(2)} SOL
-            </div>
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Total P&L ({selectedCategoryFilter})</div>
+          <div className="flex items-end justify-between">
+            <span className="text-xs font-mono text-[#808495]">SOL</span>
+            <span className={`text-xl font-mono font-bold ${portfolioStats.pnl >= 0 ? "text-[#235A34]" : "text-[#8E2424]"}`}>
+              {portfolioStats.pnl >= 0 ? "+" : ""}{portfolioStats.pnl.toFixed(2)}
+            </span>
           </div>
         </motion.div>
 
-        <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }} className="glass-panel premium-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
-            <Gift className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-muted">Win Rate</div>
-            <div className="text-xl font-mono font-bold">
+        <motion.div variants={fadeInUp} className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
+          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Win Rate ({selectedCategoryFilter})</div>
+          <div className="flex items-end justify-between">
+            <span className="text-xs font-mono text-[#808495]">%</span>
+            <span className="text-xl font-mono font-bold text-[#F4F4F9]">
               {portfolioStats.winRate !== null ? `${portfolioStats.winRate}%` : "—"}
-            </div>
+            </span>
           </div>
         </motion.div>
       </motion.section>
 
-      {/* Performance Sparkline */}
+      {/* Performance Trend Sparkline */}
       {investmentHistory.length > 1 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="glass-panel premium-card p-6 space-y-3"
+          className="board-panel p-6 space-y-3 bg-[#0C0D12]"
         >
-          <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">Cumulative Investment</h3>
-          <Sparkline
-            data={investmentHistory}
-            width={600}
-            height={60}
-            color="#8B5CF6"
-            fillColor="#8B5CF6"
-            className="w-full"
-          />
+          <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#808495]">Investment Scaling Trend</h3>
+          <div className="w-full bg-[#050608] border border-[#2D3142] p-2 rounded">
+            <Sparkline
+              data={investmentHistory}
+              width={600}
+              height={50}
+              color="#FFA500"
+              fillColor="#FFA500"
+              className="w-full"
+            />
+          </div>
         </motion.div>
       )}
 
       {/* Filter Tabs */}
-      <div className="flex items-center space-x-2">
-        <Filter className="w-4 h-4 text-text-muted" />
+      <div className="flex items-center space-x-2 border-b border-[#2D3142] pb-3">
+        <Filter className="w-4 h-4 text-[#808495]" />
         {(["All", "Open", "Settled", "Claimed"] as FilterTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveFilter(tab)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+            className={`px-3 py-1 text-xs font-semibold rounded transition-all active:scale-95 ${
               activeFilter === tab
-                ? "bg-violet-500/20 text-violet-400 border border-violet-500/30"
-                : "text-text-muted hover:text-text-primary hover:bg-white/5 border border-transparent"
+                ? "mechanical-switch-active"
+                : "mechanical-switch-inactive"
             }`}
           >
             {tab}
@@ -388,35 +433,34 @@ function PortfolioPage() {
         ))}
       </div>
 
-      {/* Positions List */}
+      {/* Positions Ledger List */}
       {loading ? (
         <section className="space-y-4">
           {[1, 2].map((i) => (
-            <div key={i} className="glass-panel p-6 h-40 skeleton-shimmer" />
+            <div key={i} className="board-panel p-6 h-36 skeleton-shimmer bg-[#0C0D12]/50" />
           ))}
         </section>
       ) : filteredPositions.length === 0 ? (
-        <div className="glass-panel py-20 text-center text-text-muted flex flex-col items-center justify-center space-y-4">
-          <FolderOpen className="w-12 h-12 opacity-50" />
+        <div className="board-panel py-20 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
+          <FolderOpen className="w-10 h-10 opacity-30" />
           <div>
-            <h3 className="text-lg font-bold text-text-primary">No Positions Found</h3>
-            <p className="text-xs">
+            <h3 className="text-sm font-bold font-display text-[#F4F4F9]">LEDGER IS EMPTY</h3>
+            <p className="text-xs mt-1">
               {activeFilter === "All"
-                ? "You haven't bought shares in any prediction markets yet."
-                : `No ${activeFilter.toLowerCase()} positions to display.`}
+                ? `You do not hold positions under the ${selectedCategoryFilter} category.`
+                : `No positions fit the ${activeFilter.toLowerCase()} status criteria.`}
             </p>
           </div>
         </div>
       ) : (
         <AnimatePresence mode="popLayout">
-          <section className="space-y-6">
+          <section className="space-y-4">
             {filteredPositions.map((pos) => {
               const status = getStatusString(pos.marketAccount.status);
               const spentSol = pos.account.totalSpentLamports.toNumber() / 1e9;
               const yesShares = pos.account.yesAmount.toNumber() / 1e6;
               const noShares = pos.account.noAmount.toNumber() / 1e6;
               
-              // Settle details
               const isSettled = status === "Settled";
               const isCancelled = status === "Cancelled";
               
@@ -432,35 +476,39 @@ function PortfolioPage() {
                 <motion.div
                   key={pos.publicKey.toBase58()}
                   layout
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}
-                  className="glass-panel premium-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-6"
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.25 }}
+                  className="board-panel p-6 flex flex-col md:flex-row md:items-center justify-between gap-6"
                 >
-                  {/* Left Side: Market Details */}
                   <div className="space-y-2 flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-white/5 border border-white/8 text-violet-400">
-                        Market ID #{pos.marketAccount.marketId?.toString()}
+                      <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-[#2D3142]/40 border border-[#2D3142] text-[#808495]">
+                        BOARD ID #{pos.marketAccount.marketId?.toString()}
+                      </span>
+                      <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-[#2D3142]/40 border border-[#2D3142] text-[#FFA500]">
+                        {getCategoryString(pos.marketAccount.category)}
                       </span>
                       <span className={`w-2 h-2 rounded-full ${
-                        status === "Open" ? "bg-[#10E58C]" : isSettled ? "bg-text-muted" : "bg-[#FF4D6D]"
+                        status === "Open" ? "bg-[#235A34]" : isSettled ? "bg-[#808495]" : "bg-[#8E2424]"
                       }`}></span>
-                      <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
+                      <span className="text-[10px] font-mono text-[#808495] uppercase font-bold">
                         {status}
                       </span>
                     </div>
-                    <h3 className="text-base font-bold font-display text-text-primary">
-                      {pos.marketAccount.question}
-                    </h3>
-                    <div className="flex items-center space-x-6 text-xs text-text-muted font-mono">
-                      <div>Bought: <span className="text-[#10E58C] font-semibold">{yesShares} YES</span> / <span className="text-[#FF4D6D] font-semibold">{noShares} NO</span></div>
-                      <div>Spent: <span className="text-text-primary font-semibold">{spentSol.toFixed(2)} SOL</span></div>
+                    <Link href={`/market/${pos.account.market.toBase58()}`}>
+                      <h3 className="text-sm font-bold font-display hover:text-[#FFA500] transition-colors">
+                        {pos.marketAccount.question}
+                      </h3>
+                    </Link>
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-[#808495] font-mono">
+                      <div>HELD: <span className="text-[#235A34] font-bold">{yesShares} YES</span> / <span className="text-[#8E2424] font-bold">{noShares} NO</span></div>
+                      <div>COST: <span className="text-[#F4F4F9] font-bold">{spentSol.toFixed(2)} SOL</span></div>
                       {pnlResult && (
                         <div>
-                          P&L:{" "}
-                          <span className={`font-semibold ${pnlResult.pnl >= 0 ? "text-[#10E58C]" : "text-[#FF4D6D]"}`}>
+                          RESULT:{" "}
+                          <span className={`font-bold ${pnlResult.pnl >= 0 ? "text-[#235A34]" : "text-[#8E2424]"}`}>
                             {pnlResult.pnl >= 0 ? "+" : ""}{pnlResult.pnl.toFixed(2)} SOL
                             ({pnlResult.pnl >= 0 ? "+" : ""}{pnlResult.pnlPercent.toFixed(0)}%)
                           </span>
@@ -469,48 +517,47 @@ function PortfolioPage() {
                     </div>
                   </div>
 
-                  {/* Right Side: Action Trigger Panels */}
                   <div className="flex items-center justify-end">
                     {pos.account.claimed ? (
-                      <div className="flex items-center space-x-2 bg-[#10E58C]/10 border border-[#10E58C]/20 px-4 py-2.5 rounded-xl text-[#10E58C]">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="text-xs font-semibold">Claimed & Finalized</span>
+                      <div className="flex items-center space-x-2 bg-[#235A34]/10 border border-[#235A34]/20 px-4 py-2 rounded text-[#235A34] text-xs font-bold uppercase tracking-wider font-display">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>WITHDRAWN</span>
                       </div>
                     ) : isCancelled ? (
                       <button
                         disabled={claimingId !== null}
                         onClick={() => handleClaimRefund(pos)}
-                        className="btn-primary py-2.5 px-6 flex items-center space-x-2 text-xs"
+                        className="btn-amber py-2 px-5 flex items-center space-x-2 text-xs"
                       >
                         {claimingId === pos.publicKey.toBase58() ? (
-                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
                         ) : (
                           <ShieldAlert className="w-4 h-4" />
                         )}
-                        <span>Claim Full Refund</span>
+                        <span>Claim Refund</span>
                       </button>
                     ) : isSettled ? (
                       userWon ? (
                         <button
                           disabled={claimingId !== null}
                           onClick={() => handleClaimRewards(pos)}
-                          className="btn-primary py-2.5 px-6 flex items-center space-x-2 text-xs"
+                          className="btn-amber py-2 px-5 flex items-center space-x-2 text-xs"
                         >
                           {claimingId === pos.publicKey.toBase58() ? (
-                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
                           ) : (
                             <Gift className="w-4 h-4" />
                           )}
-                          <span>Claim Winning Payout</span>
+                          <span>Withdraw Payout</span>
                         </button>
                       ) : (
-                        <div className="px-4 py-2 border border-white/10 rounded-xl text-text-muted text-xs font-semibold">
-                          Unsuccessful Prediction
+                        <div className="px-4 py-2 border border-[#2D3142] rounded text-[#808495] text-[10px] font-bold uppercase tracking-wider font-display">
+                          UNSUCCESSFUL
                         </div>
                       )
                     ) : (
-                      <div className="px-4 py-2 border border-[#10E58C]/20 bg-[#10E58C]/5 rounded-xl text-[#10E58C] text-xs font-semibold">
-                        Prediction Open (Trading Active)
+                      <div className="px-4 py-2 border border-[#2D3142] rounded text-[#808495] text-[10px] font-bold uppercase tracking-wider font-display">
+                        ACTIVE TRADING
                       </div>
                     )}
                   </div>
