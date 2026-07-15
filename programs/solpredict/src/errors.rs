@@ -67,4 +67,13 @@ pub enum SolPredictError {
 
     #[msg("Protocol fee has already been withdrawn")]
     FeeAlreadyWithdrawn,         // 6020
+
+    #[msg("Crypto markets must use settle_market with oracle price feed")]
+    UseOracleSettlement,
+
+    #[msg("Invalid outcome: must be 1 (Yes) or 2 (No)")]
+    InvalidOutcome,
+
+    #[msg("Non-crypto markets must use settle_market_manual")]
+    UseManualSettlement,
 }

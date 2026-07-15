@@ -12,6 +12,47 @@ import * as anchor from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { StatTile3D } from "@/components/dashboard/StatTile3D";
 
+interface MarketItem {
+  publicKey: PublicKey;
+  account: {
+    marketId: anchor.BN;
+    authority: PublicKey;
+    question: string;
+    description: string;
+    category: number;
+    oracleFeedId: number[];
+    targetPrice: anchor.BN;
+    targetExpo: number;
+    comparison: number;
+    endTs: anchor.BN;
+    resolveTs: anchor.BN;
+    status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
+    winningOutcome: { unset?: Record<string, never>; yes?: Record<string, never>; no?: Record<string, never> };
+    yesMint: PublicKey;
+    noMint: PublicKey;
+    yesPoolLamports: anchor.BN;
+    noPoolLamports: anchor.BN;
+    yesSupply: anchor.BN;
+    noSupply: anchor.BN;
+    totalPayoutPool: anchor.BN;
+    sharePriceLamports: anchor.BN;
+    feeCollected: anchor.BN;
+    feeWithdrawn: boolean;
+  };
+}
+
+interface UserPositionItem {
+  publicKey: PublicKey;
+  account: {
+    owner: PublicKey;
+    market: PublicKey;
+    yesAmount: anchor.BN;
+    noAmount: anchor.BN;
+    totalSpentLamports: anchor.BN;
+    claimed: boolean;
+  };
+}
+
 interface TraderStats {
   owner: string;
   totalVolumeSol: number;
@@ -56,8 +97,8 @@ function RankBadge({ rank }: { rank: number }) {
 function LeaderboardPage() {
   const { program } = useProgram();
   const wallet = useWallet();
-  const [positions, setPositions] = useState<any[]>([]);
-  const [markets, setMarkets] = useState<any[]>([]);
+  const [positions, setPositions] = useState<UserPositionItem[]>([]);
+  const [markets, setMarkets] = useState<MarketItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<"volume" | "wins" | "positions">("volume");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -66,12 +107,12 @@ function LeaderboardPage() {
     try {
       setLoading(true);
       const [allPositions, allMarkets] = await Promise.all([
-        program.account.userPosition.all() as Promise<any[]>,
-        program.account.market.all() as Promise<any[]>,
+        program.account.userPosition.all(),
+        program.account.market.all(),
       ]);
       setPositions(allPositions);
       setMarkets(allMarkets);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching leaderboard:", err);
       toast.error(`Failed to load leaderboard: ${getFriendlyErrorMessage(err)}`);
     } finally {
@@ -85,7 +126,7 @@ function LeaderboardPage() {
 
   // Compute category-filtered rankings
   const leaderboardStats = useMemo(() => {
-    const marketByKey = new Map<string, any>();
+    const marketByKey = new Map<string, MarketItem["account"]>();
     markets.forEach((m) => marketByKey.set(m.publicKey.toBase58(), m.account));
 
     const statsByOwner = new Map<string, TraderStats>();
@@ -274,7 +315,7 @@ function LeaderboardPage() {
         ].map((opt) => (
           <button
             key={opt.key}
-            onClick={() => setSortBy(opt.key as any)}
+            onClick={() => setSortBy(opt.key as "volume" | "wins" | "positions")}
             className={`px-2.5 py-1 text-xs font-semibold rounded transition-all active:scale-95 ${
               sortBy === opt.key
                 ? "mechanical-switch-active"

@@ -30,6 +30,25 @@ import ProbabilityOrb3D from "@/components/ProbabilityOrb3D";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
+interface SharesPurchasedEvent {
+  side: { yes?: Record<string, never>; no?: Record<string, never> };
+  quantity: anchor.BN;
+  cost: anchor.BN;
+  buyer: PublicKey;
+  newYesPool: anchor.BN;
+  newNoPool: anchor.BN;
+}
+
+interface MarketSettledEvent {
+  winningOutcome: number;
+  settledPrice: anchor.BN;
+}
+
+interface RewardsClaimedEvent {
+  claimer: PublicKey;
+  payout: anchor.BN;
+}
+
 interface MarketDetails {
   marketId: anchor.BN;
   authority: PublicKey;
@@ -42,8 +61,8 @@ interface MarketDetails {
   comparison: number;
   endTs: anchor.BN;
   resolveTs: anchor.BN;
-  status: any;
-  winningOutcome: any;
+  status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
+  winningOutcome: { unset?: Record<string, never>; yes?: Record<string, never>; no?: Record<string, never> };
   yesMint: PublicKey;
   noMint: PublicKey;
   yesPoolLamports: anchor.BN;
@@ -162,10 +181,10 @@ export default function MarketDetailPage() {
   const fetchMarket = async () => {
     try {
       const marketAcc = await program.account.market.fetch(marketPda);
-      setMarket(marketAcc as any);
+      setMarket(marketAcc as unknown as MarketDetails);
 
       // Record probability snapshot for sparkline
-      const acc = marketAcc as any;
+      const acc = marketAcc as unknown as MarketDetails;
       const yesP = acc.yesPoolLamports.toNumber();
       const noP = acc.noPoolLamports.toNumber();
       const total = yesP + noP;
@@ -175,7 +194,7 @@ export default function MarketDetailPage() {
       if (probHistory.current.length <= 1) {
         probHistory.current = [50, yesProbVal];
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching market:", err);
       toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
       router.push("/markets");
@@ -217,7 +236,7 @@ export default function MarketDetailPage() {
         const events = eventParser.parseLogs(tx.meta.logMessages);
         for (const event of events) {
           if (event.name === "SharesPurchased") {
-            const { side, quantity: q, cost, buyer, newYesPool, newNoPool } = event.data as any;
+            const { side, quantity: q, cost, buyer, newYesPool, newNoPool } = event.data as unknown as SharesPurchasedEvent;
             const sideStr = side.yes ? "YES" : "NO";
             
             const yesP = newYesPool.toNumber();
@@ -237,7 +256,7 @@ export default function MarketDetailPage() {
               time: timeStr,
             });
           } else if (event.name === "MarketSettled") {
-            const { winningOutcome, settledPrice } = event.data as any;
+            const { winningOutcome, settledPrice } = event.data as unknown as MarketSettledEvent;
             items.push({
               signature: sig.signature,
               slot: sig.slot,
@@ -248,7 +267,7 @@ export default function MarketDetailPage() {
               time: timeStr,
             });
           } else if (event.name === "RewardsClaimed") {
-            const { claimer, payout } = event.data as any;
+            const { claimer, payout } = event.data as unknown as RewardsClaimedEvent;
             items.push({
               signature: sig.signature,
               slot: sig.slot,
@@ -292,6 +311,11 @@ export default function MarketDetailPage() {
 
   if (!market) return null;
 
+  const getFeedIdHexString = (feedId: number[] | Uint8Array | Buffer): string => {
+    const arr = Array.from(feedId);
+    return "0x" + arr.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   const status = market.status.open ? "Open" : market.status.settled ? "Settled" : "Cancelled";
   const categoryStr = CATEGORIES[market.category] || "Other";
   
@@ -333,7 +357,7 @@ export default function MarketDetailPage() {
     try {
       setSubmitting(true);
       
-      const sideParam = tradeSide === "YES" ? { yes: {} } : { no: {} };
+      const sideParam: { yes?: Record<string, never>; no?: Record<string, never> } = tradeSide === "YES" ? { yes: {} } : { no: {} };
       const yesMintPda = getYesMintPda(marketPda, program.programId);
       const noMintPda = getNoMintPda(marketPda, program.programId);
       const treasuryPda = getTreasuryPda(marketPda, program.programId);
@@ -343,7 +367,7 @@ export default function MarketDetailPage() {
       const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
 
       await program.methods
-        .buyShares(sideParam as any, new anchor.BN(quantity))
+        .buyShares(sideParam, new anchor.BN(quantity))
         .accounts({
           buyer: wallet.publicKey,
           market: marketPda,
@@ -353,7 +377,7 @@ export default function MarketDetailPage() {
           buyerYesAta: buyerYesAta,
           buyerNoAta: buyerNoAta,
           userPosition: userPositionPda,
-        } as any)
+        } as Record<string, unknown>)
         .rpc();
 
       setSuccessFlip(true);
@@ -363,7 +387,7 @@ export default function MarketDetailPage() {
       setIsMobileDrawerOpen(false);
       fetchMarket();
       fetchActivity();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Buy shares error:", err);
       toast.error(`Purchase failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
@@ -522,19 +546,30 @@ export default function MarketDetailPage() {
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-[#9e8e78]/30">
-              <div className="space-y-1 font-mono">
-                <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Target Price</div>
-                <div className="text-lg font-bold text-[#e5e2e1]">
-                  {formatTargetPrice(market.targetPrice, market.targetExpo)}
-                </div>
-              </div>
+              {market.category === 0 ? (
+                <>
+                  <div className="space-y-1 font-mono">
+                    <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Target Price</div>
+                    <div className="text-lg font-bold text-[#e5e2e1]">
+                      {formatTargetPrice(market.targetPrice, market.targetExpo)}
+                    </div>
+                  </div>
 
-              <div className="space-y-1">
-                <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
-                <div className="text-lg font-bold text-[#e5e2e1] font-display uppercase tracking-wide">
-                  {market.comparison === 0 ? "Greater Than" : "Less Than"}
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
+                    <div className="text-lg font-bold text-[#e5e2e1] font-display uppercase tracking-wide">
+                      {market.comparison === 0 ? "Greater Than" : "Less Than"}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="sm:col-span-2 space-y-1">
+                  <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Settlement Mode</div>
+                  <div className="text-sm font-bold text-[#ffd89c] font-display uppercase tracking-wide flex items-center gap-1.5 pt-0.5">
+                    ⚖️ Manual Settle (via Admin signature)
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-1">
                 <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Ending clock</div>
@@ -543,6 +578,19 @@ export default function MarketDetailPage() {
                 </div>
               </div>
             </div>
+
+            {market.category === 0 && (
+              <div className="pt-4 border-t border-[#9e8e78]/30 text-xs font-mono text-[#d6c4ac] flex flex-col gap-1 text-left">
+                <div className="text-[10px] uppercase font-bold tracking-wider font-display text-[#d6c4ac]">Settlement Method</div>
+                <div className="text-[#ffd89c]">
+                  🔮 Oracle Settle (via Pyth Network feed{" "}
+                  <span className="text-[#e5e2e1] select-all">
+                    {getFeedIdHexString(market.oracleFeedId)}
+                  </span>
+                  )
+                </div>
+              </div>
+            )}
           </motion.div>
 
           {/* Semicircle Probability Dial and Sparkline Trend */}

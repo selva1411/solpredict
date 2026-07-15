@@ -328,7 +328,7 @@ describe("SOLPredict Integration Suite", () => {
       const slot = await connection.getSlot();
       const blockTime = await connection.getBlockTime(slot);
       const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-      resolveTsVal = now + 2;
+      resolveTsVal = now + 10;
       
       const result = await bootstrapMarket(
         configPda,
@@ -339,8 +339,8 @@ describe("SOLPredict Integration Suite", () => {
         new anchor.BN(200_00000), // Target price $200.00 (5 decimals)
         -5, // Exponent -5 (matching 5 decimals)
         0, // GreaterThan comparison
-        new anchor.BN(now + 2), // endTs (expires in 2 seconds)
-        new anchor.BN(now + 2)  // resolveTs
+        new anchor.BN(now + 10), // endTs (expires in 10 seconds)
+        new anchor.BN(now + 10)  // resolveTs
       );
       marketPda = result.marketPda;
       yesMintPda = result.yesMintPda;
@@ -574,6 +574,145 @@ describe("SOLPredict Integration Suite", () => {
       // total_payout_pool = total pool (150_000_000) - fee (2_000_000) = 148_000_000 lamports
       expect(marketAccount.feeCollected.toNumber()).to.equal(2_000_000);
       expect(marketAccount.totalPayoutPool.toNumber()).to.equal(148_000_000);
+    });
+
+    it("settle_market_manual correctly settles a Sports market with outcome=1 (YES wins)", async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const manualResolveTsVal = now + 10;
+
+      const sportsFeedId = Array(32).fill(0);
+      const result = await bootstrapMarket(
+        configPda,
+        "Will Team Giants win the game?",
+        "Sports prediction",
+        1,
+        sportsFeedId,
+        new anchor.BN(0),
+        0,
+        0,
+        new anchor.BN(manualResolveTsVal),
+        new anchor.BN(manualResolveTsVal)
+      );
+
+      const sportsMarketPda = result.marketPda;
+      const sportsYesMint = result.yesMintPda;
+      const sportsNoMint = result.noMintPda;
+
+      const buyer1YesAta = getAssociatedTokenAddressSync(sportsYesMint, buyer1.publicKey);
+      const buyer1NoAta = getAssociatedTokenAddressSync(sportsNoMint, buyer1.publicKey);
+      const buyer2YesAta = getAssociatedTokenAddressSync(sportsYesMint, buyer2.publicKey);
+      const buyer2NoAta = getAssociatedTokenAddressSync(sportsNoMint, buyer2.publicKey);
+      const positionPda1 = getUserPositionPda(sportsMarketPda, buyer1.publicKey, program.programId);
+      const positionPda2 = getUserPositionPda(sportsMarketPda, buyer2.publicKey, program.programId);
+
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(5))
+        .accounts({
+          buyer: buyer1.publicKey,
+          market: sportsMarketPda,
+          treasury: result.treasuryPda,
+          yesMint: sportsYesMint,
+          noMint: sportsNoMint,
+          buyerYesAta: buyer1YesAta,
+          buyerNoAta: buyer1NoAta,
+          userPosition: positionPda1,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      await program.methods
+        .buyShares({ no: {} } as any, new anchor.BN(10))
+        .accounts({
+          buyer: buyer2.publicKey,
+          market: sportsMarketPda,
+          treasury: result.treasuryPda,
+          yesMint: sportsYesMint,
+          noMint: sportsNoMint,
+          buyerYesAta: buyer2YesAta,
+          buyerNoAta: buyer2NoAta,
+          userPosition: positionPda2,
+        } as any)
+        .signers([buyer2])
+        .rpc();
+
+      await ensureTimePassed(manualResolveTsVal);
+
+      await program.methods
+        .settleMarketManual(1)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          market: sportsMarketPda,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const marketAccount = await program.account.market.fetch(sportsMarketPda);
+      expect(marketAccount.status).to.deep.equal({ settled: {} });
+      expect(marketAccount.winningOutcome).to.deep.equal({ yes: {} });
+      expect(marketAccount.settledPrice.toNumber()).to.equal(0);
+    });
+
+    it("settle_market (oracle path) correctly rejects a Sports market with UseManualSettlement error", async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const manualResolveTsVal = now + 10;
+
+      const sportsFeedId = Array(32).fill(0);
+      const result = await bootstrapMarket(
+        configPda,
+        "Will Team Giants win the game? (reject test)",
+        "Sports prediction",
+        1,
+        sportsFeedId,
+        new anchor.BN(0),
+        0,
+        0,
+        new anchor.BN(manualResolveTsVal),
+        new anchor.BN(manualResolveTsVal)
+      );
+
+      const sportsMarketPda = result.marketPda;
+      
+      await ensureTimePassed(manualResolveTsVal);
+
+      const mockPayer = Keypair.generate();
+      await fundAccount(mockPayer.publicKey, 1);
+      const currentMockPda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
+
+      await program.methods
+        .mockCreatePriceUpdate(
+          sportsFeedId,
+          new anchor.BN(215_00000000),
+          new anchor.BN(1),
+          -8,
+          new anchor.BN(now)
+        )
+        .accounts({
+          payer: mockPayer.publicKey,
+          priceUpdate: currentMockPda,
+        } as any)
+        .signers([mockPayer])
+        .rpc();
+
+      try {
+        await program.methods
+          .settleMarket()
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            market: sportsMarketPda,
+            priceUpdate: currentMockPda,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with UseManualSettlement");
+      } catch (err: any) {
+        expect(err.message).to.include("UseManualSettlement");
+      }
     });
   });
 

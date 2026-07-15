@@ -22,10 +22,17 @@ export const ERROR_MAP: Record<string, string> = {
   "FeeAlreadyWithdrawn": "Protocol fee has already been withdrawn",
 };
 
-export function getFriendlyErrorMessage(err: any): string {
+export function getFriendlyErrorMessage(err: unknown): string {
   if (!err) return "Unknown error occurred";
   
-  const msg = err.message || String(err);
+  let msg = "Unknown error occurred";
+  if (err instanceof Error) {
+    msg = err.message;
+  } else if (typeof err === "object" && err !== null && "message" in err) {
+    msg = String((err as { message: unknown }).message);
+  } else {
+    msg = String(err);
+  }
   
   // Try to find matching error key in ERROR_MAP
   for (const key of Object.keys(ERROR_MAP)) {

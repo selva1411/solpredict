@@ -35,12 +35,11 @@ function CategoryRing({ segments }: RingProps) {
   });
 
   const arcs = useMemo(() => {
-    let cursor = 0;
-    return active.map((seg) => {
-      const start = cursor;
-      cursor += (seg.percentage / 100) * Math.PI * 2;
-      return { ...seg, startAngle: start, endAngle: cursor };
-    });
+    return active.reduce<Array<Segment & { startAngle: number; endAngle: number }>>((acc, seg) => {
+      const start = acc.length > 0 ? acc[acc.length - 1].endAngle : 0;
+      const end = start + (seg.percentage / 100) * Math.PI * 2;
+      return [...acc, { ...seg, startAngle: start, endAngle: end }];
+    }, []);
   }, [active]);
 
   if (active.length === 0) return null;

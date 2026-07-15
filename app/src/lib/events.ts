@@ -75,7 +75,14 @@ export function findMarketQuestion(
 
 export type MarketStatus = "Open" | "Settled" | "Cancelled";
 
-export function getMarketStatusString(status: any): MarketStatus {
+export interface AnchorMarketStatus {
+  open?: Record<string, never>;
+  settled?: Record<string, never>;
+  cancelled?: Record<string, never>;
+}
+
+export function getMarketStatusString(status: AnchorMarketStatus | null | undefined): MarketStatus {
+  if (!status) return "Open";
   if (status.open) return "Open";
   if (status.settled) return "Settled";
   if (status.cancelled) return "Cancelled";

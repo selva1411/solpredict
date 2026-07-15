@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("76LE5u1KhdhwFVy7y7hTEcnab1BkKYCTsmcecdymJFun");
+declare_id!("DEvuACCqmWuRh119ZSKgwW2CgEJk8itK8RxfZvJWG2kG");
 
 #[program]
 pub mod solpredict {
@@ -59,6 +59,11 @@ pub mod solpredict {
     /// Settle a market using a Pyth oracle price (admin-only).
     pub fn settle_market(ctx: Context<SettleMarket>) -> Result<()> {
         instructions::settle_market::handler(ctx)
+    }
+
+    /// Settle a market manually (admin-only).
+    pub fn settle_market_manual(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
+        instructions::settle_market_manual::handler(ctx, outcome)
     }
 
     /// Claim pro-rata SOL rewards on a settled market (winners only).

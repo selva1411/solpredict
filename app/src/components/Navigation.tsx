@@ -1,45 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useProgram } from "@/hooks/useProgram";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { MobileNav } from "@/components/MobileNav";
 import { Activity, Briefcase, Trophy, Settings } from "lucide-react";
 
 export function Navigation() {
-  const { role, isLoading } = useUserRole();
-  const { wallet } = useProgram();
-  const router = useRouter();
+  const { role } = useUserRole();
   const pathname = usePathname();
-  const [hasRedirected, setHasRedirected] = useState(false);
-  const prevWalletRef = useRef<string | null>(null);
-
-  // Reset redirect flag if the connected wallet changes
-  useEffect(() => {
-    const currentWallet = wallet?.publicKey?.toBase58() || null;
-    if (currentWallet !== prevWalletRef.current) {
-      setHasRedirected(false);
-      prevWalletRef.current = currentWallet;
-    }
-  }, [wallet?.publicKey]);
-
-  // Post-connect routing logic (Only if on root landing page)
-  useEffect(() => {
-    if (isLoading) return;
-    
-    if (pathname === "/" && !hasRedirected) {
-      if (role === "admin") {
-        setHasRedirected(true);
-        router.push("/admin");
-      } else if (role === "user") {
-        setHasRedirected(true);
-        router.push("/dashboard");
-      }
-    }
-  }, [role, isLoading, pathname, router, hasRedirected]);
 
   return (
     <>

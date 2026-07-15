@@ -9,6 +9,37 @@ import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
 import { getMarketStatusString } from "@/lib/events";
 import { useUserRole } from "@/hooks/useUserRole";
+import { PublicKey } from "@solana/web3.js";
+import * as anchor from "@coral-xyz/anchor";
+
+interface MarketItem {
+  publicKey: PublicKey;
+  account: {
+    marketId: anchor.BN;
+    authority: PublicKey;
+    question: string;
+    description: string;
+    category: number;
+    oracleFeedId: number[];
+    targetPrice: anchor.BN;
+    targetExpo: number;
+    comparison: number;
+    endTs: anchor.BN;
+    resolveTs: anchor.BN;
+    status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
+    winningOutcome: { unset?: Record<string, never>; yes?: Record<string, never>; no?: Record<string, never> };
+    yesMint: PublicKey;
+    noMint: PublicKey;
+    yesPoolLamports: anchor.BN;
+    noPoolLamports: anchor.BN;
+    yesSupply: anchor.BN;
+    noSupply: anchor.BN;
+    totalPayoutPool: anchor.BN;
+    sharePriceLamports: anchor.BN;
+    feeCollected: anchor.BN;
+    feeWithdrawn: boolean;
+  };
+}
 
 function SplitFlapHero() {
   const line1 = "PREDICT THE FUTURE.";
@@ -71,7 +102,7 @@ export default function LandingPage() {
   const { program, connection } = useProgram();
   const { role } = useUserRole();
   const [stats, setStats] = useState({ volume: 0, open: 0, settled: 0, traders: 0 });
-  const [tickerMarkets, setTickerMarkets] = useState<any[]>([]);
+  const [tickerMarkets, setTickerMarkets] = useState<MarketItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchLandingData = async () => {
@@ -87,14 +118,14 @@ export default function LandingPage() {
       let openCount = 0;
       let settledCount = 0;
 
-      allMarkets.forEach((m: any) => {
+      allMarkets.forEach((m) => {
         const status = getMarketStatusString(m.account.status);
         totalVolumeLamports += m.account.yesPoolLamports.toNumber() + m.account.noPoolLamports.toNumber();
         if (status === "Open") openCount++;
         if (status === "Settled") settledCount++;
       });
 
-      const uniqueTraders = new Set(allPositions.map((p: any) => p.account.owner.toBase58())).size;
+      const uniqueTraders = new Set(allPositions.map((p) => p.account.owner.toBase58())).size;
 
       setStats({
         volume: totalVolumeLamports / 1e9,
@@ -104,9 +135,9 @@ export default function LandingPage() {
       });
 
       // Filter open markets for the ticker
-      const openMarkets = allMarkets.filter((m: any) => getMarketStatusString(m.account.status) === "Open");
+      const openMarkets = allMarkets.filter((m) => getMarketStatusString(m.account.status) === "Open");
       setTickerMarkets(openMarkets);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error loading landing data:", err);
       toast.error(`Failed to sync stats: ${getFriendlyErrorMessage(err)}`);
     } finally {

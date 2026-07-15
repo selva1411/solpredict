@@ -22,7 +22,7 @@ interface Market {
     category: number;
     endTs: anchor.BN;
     resolveTs: anchor.BN;
-    status: any;
+    status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
     yesPoolLamports: anchor.BN;
     noPoolLamports: anchor.BN;
   };
@@ -60,7 +60,7 @@ export default function MarketExplorer() {
       setLoading(true);
       const allMarkets = (await program.account.market.all()) as Market[];
       setMarkets(allMarkets);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       toast.error(`Failed to load Explorer: ${getFriendlyErrorMessage(err)}`);
     } finally {
@@ -133,7 +133,7 @@ export default function MarketExplorer() {
           <label className="text-[10px] uppercase font-mono font-bold text-[#d6c4ac]">Sort By</label>
           <select
             value={sortBy}
-            onChange={(e: any) => setSortBy(e.target.value)}
+            onChange={(e) => setSortBy(e.target.value as "trending" | "volume" | "ends" | "newest")}
             className="w-full board-input text-xs bg-[#131313] border-[#9e8e78] h-[38px]"
           >
             <option value="trending">Trending Volume</option>
@@ -227,9 +227,16 @@ export default function MarketExplorer() {
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-[#9e8e78]/30 text-[#d6c4ac]">
-                      {CATEGORIES[market.account.category] || "Other"}
-                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-[#9e8e78]/30 text-[#d6c4ac]">
+                        {CATEGORIES[market.account.category] || "Other"}
+                      </span>
+                      {market.account.category === 0 ? (
+                        <span className="text-[9px] font-mono text-[#06b6d4] font-bold" title="Settled automatically via Pyth Network oracle feed">🔮 Oracle</span>
+                      ) : (
+                        <span className="text-[9px] font-mono text-[#ffd89c] font-bold" title="Settled manually by the platform admin signature">⚖️ Manual</span>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2">
                       <button onClick={() => handleToggleWatch(key)} className="text-[#d6c4ac] hover:text-[#ffd89c] cursor-pointer">
                         <Star className={`w-4 h-4 ${isWatched ? "text-[#ffd89c] fill-[#ffd89c]" : ""}`} />

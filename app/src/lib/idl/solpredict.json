@@ -1,5 +1,5 @@
 {
-  "address": "DQGcvdEaQRiGdaVJs1vAcujh5csZv4iSr6azjD9DLHqm",
+  "address": "DEvuACCqmWuRh119ZSKgwW2CgEJk8itK8RxfZvJWG2kG",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -1455,6 +1455,76 @@
       "args": []
     },
     {
+      "name": "settle_market_manual",
+      "docs": [
+        "Settle a market manually (admin-only)."
+      ],
+      "discriminator": [
+        164,
+        135,
+        165,
+        159,
+        9,
+        65,
+        193,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "withdraw_fees",
       "docs": [
         "Withdraw collected protocol fees from a settled market (admin-only)."
@@ -1801,6 +1871,21 @@
       "code": 6020,
       "name": "FeeAlreadyWithdrawn",
       "msg": "Protocol fee has already been withdrawn"
+    },
+    {
+      "code": 6021,
+      "name": "UseOracleSettlement",
+      "msg": "Crypto markets must use settle_market with oracle price feed"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidOutcome",
+      "msg": "Invalid outcome: must be 1 (Yes) or 2 (No)"
+    },
+    {
+      "code": 6023,
+      "name": "UseManualSettlement",
+      "msg": "Non-crypto markets must use settle_market_manual"
     }
   ],
   "types": [

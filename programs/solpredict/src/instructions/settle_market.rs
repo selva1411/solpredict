@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::MarketSettled;
-use crate::state::{Config, Market, MarketStatus, WinningOutcome};
+use crate::state::{Category, Config, Market, MarketStatus, WinningOutcome};
 use crate::utils::{oracle, payout_math};
 
 /// Accounts for the `settle_market` instruction.
@@ -51,6 +51,12 @@ pub struct SettleMarket<'info> {
 pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
+
+    // Only Crypto markets can be settled via oracle
+    require!(
+        market.category == Category::Crypto,
+        SolPredictError::UseManualSettlement
+    );
 
     // 1. Market must be Open (blocks double-settlement)
     require!(
