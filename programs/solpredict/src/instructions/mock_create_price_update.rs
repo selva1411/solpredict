@@ -10,7 +10,7 @@ pub struct MockCreatePriceUpdate<'info> {
 
     /// CHECK: This is a raw AccountInfo that we manually initialize and populate.
     #[account(
-        init,
+        init_if_needed,
         payer = payer,
         space = 134,
         seeds = [b"mock_price_feed", payer.key().as_ref()],
