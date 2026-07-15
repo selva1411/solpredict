@@ -31,13 +31,13 @@ export function DashboardSection({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.45, delay }}
-      className={`space-y-4 ${isAlert ? "board-panel p-6 border-[#FFA500]/30 bg-[#0F0E0A]/90" : ""}`}
+      className={`space-y-4 ${isAlert ? "board-panel p-6 border-[#ffd89c]/40 bg-[#131313]" : ""}`}
     >
       <div className="flex items-center space-x-2">
         <motion.div
           animate={isAlert ? { rotate: [0, -4, 4, 0] } : {}}
           transition={{ repeat: isAlert ? Infinity : 0, duration: 2.5, repeatDelay: 3 }}
-          className={isAlert ? "text-[#FFA500]" : "text-[#FFA500]"}
+          className="text-[#ffd89c]"
         >
           <Icon className="w-5 h-5" />
         </motion.div>
@@ -46,7 +46,7 @@ export function DashboardSection({
           {count !== undefined && count > 0 ? ` (${count})` : ""}
         </h2>
       </div>
-      {subtitle && <p className="text-[#808495] text-xs -mt-2">{subtitle}</p>}
+      {subtitle && <p className="text-[#d6c4ac] text-xs -mt-2 font-bold">{subtitle}</p>}
       {children}
     </motion.section>
   );
@@ -69,24 +69,24 @@ export function DashboardHero({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="border-b border-[#2D3142] pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 relative"
+      className="border-b border-[#9e8e78]/30 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 relative"
     >
-      <div className="absolute -top-4 -left-4 w-24 h-24 bg-[#FFA500]/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-4 -left-4 w-24 h-24 bg-[#ffd89c]/5 rounded-full blur-3xl pointer-events-none" />
       <div className="space-y-1 relative">
-        <h1 className="text-3xl font-bold font-display text-[#F4F4F9]">{title}</h1>
-        <p className="text-[#808495] text-sm">{subtitle}</p>
+        <h1 className="text-3xl font-bold font-display text-[#e5e2e1] uppercase tracking-wide">{title}</h1>
+        <p className="text-[#d6c4ac] text-sm">{subtitle}</p>
       </div>
       {badge && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15 }}
-          className="flex items-center space-x-2 bg-[#050608] border border-[#2D3142] px-3 py-1.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+          className="flex items-center space-x-2 bg-[#0d0d0d] border border-[#9e8e78]/30 px-3 py-1.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
         >
           {badgeLabel && (
-            <span className="text-xs font-mono text-[#808495]">{badgeLabel}</span>
+            <span className="text-xs font-mono text-[#d6c4ac] font-bold">{badgeLabel}</span>
           )}
-          <span className="text-xs font-mono font-semibold text-[#FFA500]">{badge}</span>
+          <span className="text-xs font-mono font-bold text-[#ffd89c]">{badge}</span>
         </motion.div>
       )}
     </motion.div>

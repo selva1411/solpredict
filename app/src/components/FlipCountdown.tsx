@@ -27,19 +27,17 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
   return (
     <div className="flex flex-col items-center">
       <div
-        className={`relative overflow-hidden rounded bg-[#0C0D12] border border-[#2D3142] font-mono font-bold text-[#FFA500] flex items-center justify-center ${
+        className={`relative overflow-hidden rounded bg-[#131313] border border-[#9e8e78]/40 font-mono font-bold text-[#ffd89c] flex items-center justify-center ${
           compact ? "w-8 h-8 text-xs" : "w-12 h-12 text-lg"
         }`}
         style={{ perspective: "200px" }}
       >
-        {/* Remounting the span on every value change re-triggers the CSS
-            animation without needing setState inside an effect. */}
         <span key={value} className="flip-digit">
           {pad(value)}
         </span>
       </div>
       {!compact && (
-        <span className="text-[9px] uppercase tracking-wider text-[#808495] mt-1">{label}</span>
+        <span className="text-[9px] uppercase tracking-wider text-[#d6c4ac] mt-1">{label}</span>
       )}
     </div>
   );
@@ -55,7 +53,7 @@ export function FlipCountdown({ endTs, compact = false }: FlipCountdownProps) {
 
   if (parts.ended) {
     return (
-      <span className="text-xs font-mono font-semibold text-text-muted">Trading ended</span>
+      <span className="text-xs font-mono font-semibold text-[#d6c4ac]">Trading ended</span>
     );
   }
 
@@ -64,7 +62,7 @@ export function FlipCountdown({ endTs, compact = false }: FlipCountdownProps) {
       {parts.days > 0 && <FlipUnit value={parts.days} label="Days" compact={compact} />}
       <FlipUnit value={parts.hours} label="Hrs" compact={compact} />
       <FlipUnit value={parts.minutes} label="Min" compact={compact} />
-      {!compact && <FlipUnit value={parts.seconds} label="Sec" compact={compact} />}
+      <FlipUnit value={parts.seconds} label="Sec" compact={compact} />
     </div>
   );
 }

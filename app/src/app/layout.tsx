@@ -1,28 +1,26 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, Share_Tech, Space_Mono } from "next/font/google";
+import { Archivo_Narrow, Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
-import Link from "next/link";
 import "./globals.css";
 import { WalletContextProvider } from "@/components/WalletContextProvider";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { Navigation } from "@/components/Navigation";
 
-const ibmLangSans = IBM_Plex_Sans({
-  variable: "--font-ibm-plex-sans",
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const archivoNarrow = Archivo_Narrow({
+  variable: "--font-archivo-narrow",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
-const shareTech = Share_Tech({
-  variable: "--font-share-tech",
-  subsets: ["latin"],
-  weight: ["400"],
-  display: "swap",
-});
-
-const spaceMono = Space_Mono({
-  variable: "--font-space-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   weight: ["400", "700"],
   display: "swap",
@@ -41,9 +39,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${ibmLangSans.variable} ${shareTech.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${archivoNarrow.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#15171E] text-[#F4F4F9]">
+      <body className="min-h-full flex flex-col font-sans bg-[#131313] text-[#e5e2e1]">
         <WalletContextProvider>
           {/* Scroll Progress Bar */}
           <ScrollProgress />
@@ -54,22 +52,25 @@ export default function RootLayout({
           {/* Cinematic Film Grain Overlay */}
           <div className="noise-overlay" />
 
+          {/* Scanline CRT Overlay */}
+          <div className="scanline-overlay" />
+
           {/* Mechanical Navigation & Routing */}
           <Navigation />
 
-          {/* Page Content Container (with extra bottom padding for mobile bottom bar) */}
+          {/* Page Content Container */}
           <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 sm:pb-8 flex flex-col">
             {children}
           </main>
 
           {/* Departure Board Footer */}
-          <footer className="w-full border-t-2 border-[#2D3142] bg-[#0C0D12] py-6 mt-auto text-xs text-[#808495] hidden sm:block">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="font-mono">
-                &copy; 2026 SOLPREDICT // SOLANA Devnet // PYTH NETWORK ORACLES
+          <footer className="w-full border-t border-[#9e8e78]/30 bg-[#131313] py-6 mt-auto text-xs text-[#d6c4ac] hidden sm:block">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono">
+              <p>
+                &copy; 2026 SOLPREDICT // SOLANA Localnet/Devnet // PYTH NETWORK ORACLES
               </p>
-              <div className="flex items-center space-x-4 font-mono">
-                <span>FEED: rec5EK...5LtFJ</span>
+              <div className="flex items-center space-x-4">
+                <span>FEED ID: rec5EK...5LtFJ</span>
               </div>
             </div>
           </footer>

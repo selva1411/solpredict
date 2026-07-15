@@ -33,9 +33,9 @@ export function StatTile3D({
   const glowOpacity = useTransform(rotateX, [-8, 0, 8], [0.35, 0.15, 0.35]);
 
   const accentColors = {
-    amber: "from-[#FFA500]/20 via-transparent to-transparent border-[#FFA500]/25",
-    green: "from-[#235A34]/25 via-transparent to-transparent border-[#235A34]/30",
-    neutral: "from-white/5 via-transparent to-transparent border-[#2D3142]",
+    amber: "from-[#ffd89c]/15 via-transparent to-transparent border-[#ffd89c]/35",
+    green: "from-[#a1d494]/15 via-transparent to-transparent border-[#a1d494]/30",
+    neutral: "from-white/5 via-transparent to-transparent border-[#9e8e78]/40",
   };
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -68,37 +68,37 @@ export function StatTile3D({
         transformStyle: "preserve-3d",
         perspective: 900,
       }}
-      className={`board-panel p-5 flex flex-col justify-between h-32 bg-[#0C0D12] board-panel-3d relative overflow-hidden group ${accentColors[accent]}`}
+      className={`board-panel p-5 flex flex-col justify-between h-32 bg-[#131313] board-panel-3d relative overflow-hidden group ${accentColors[accent]}`}
     >
       <motion.div
         style={{ opacity: glowOpacity }}
-        className="absolute inset-0 bg-gradient-radial from-[#FFA500]/10 to-transparent pointer-events-none"
+        className="absolute inset-0 bg-gradient-radial from-[#ffd89c]/5 to-transparent pointer-events-none"
       />
 
       <div className="flex items-start justify-between relative z-10" style={{ transform: "translateZ(12px)" }}>
-        <div className="text-[10px] uppercase font-display tracking-widest text-[#808495] font-semibold">
+        <div className="text-[10px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">
           {label}
         </div>
         {Icon && (
           <Icon
             className={`w-4 h-4 transition-colors duration-300 ${
-              hovering ? "text-[#FFA500]" : "text-[#808495]"
+              hovering ? "text-[#ffd89c]" : "text-[#d6c4ac]"
             }`}
           />
         )}
       </div>
 
       <div className="flex items-end justify-between relative z-10" style={{ transform: "translateZ(18px)" }}>
-        <span className="text-xs font-mono text-[#808495]">{unit}</span>
+        <span className="text-xs font-mono text-[#d6c4ac]">{unit}</span>
         {useSplitFlap ? (
-          <SplitFlapText text={value} charClassName="w-[18px] h-[28px] text-xs" />
+          <SplitFlapText text={value} charClassName="w-[18px] h-[28px] text-xs text-[#ffd89c]" />
         ) : (
-          <span className="text-xl font-mono font-bold text-[#FFA500]">{value}</span>
+          <span className="text-xl font-mono font-bold text-[#ffd89c]">{value}</span>
         )}
       </div>
 
       <div
-        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#FFA500]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#ffd89c]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         style={{ transform: "translateZ(8px)" }}
       />
     </motion.div>

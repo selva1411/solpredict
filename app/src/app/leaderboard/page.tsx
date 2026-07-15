@@ -7,10 +7,10 @@ import { PublicKey } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Medal, Crown, Filter } from "lucide-react";
+import { Trophy, Medal, Crown, Filter, Coins, Users, Briefcase } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { SplitFlapText } from "@/components/SplitFlapText";
+import { StatTile3D } from "@/components/dashboard/StatTile3D";
 
 interface TraderStats {
   owner: string;
@@ -24,30 +24,30 @@ interface TraderStats {
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
 function shortAddr(addr: string): string {
-  return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+  return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
 }
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1)
     return (
-      <div className="w-9 h-9 rounded bg-[#FFA500]/20 border border-[#FFA500]/40 flex items-center justify-center text-[#FFA500]">
+      <div className="w-9 h-9 rounded bg-[#ffd89c]/10 border border-[#ffd89c]/40 flex items-center justify-center text-[#ffd89c] shadow-[0_0_12px_rgba(255,216,156,0.15)]">
         <Crown className="w-4 h-4" />
       </div>
     );
   if (rank === 2)
     return (
-      <div className="w-9 h-9 rounded bg-slate-300/10 border border-slate-300/30 flex items-center justify-center text-slate-300">
+      <div className="w-9 h-9 rounded bg-white/5 border border-slate-300/30 flex items-center justify-center text-slate-300">
         <Medal className="w-4 h-4" />
       </div>
     );
   if (rank === 3)
     return (
-      <div className="w-9 h-9 rounded bg-amber-700/15 border border-amber-700/30 flex items-center justify-center text-amber-500">
+      <div className="w-9 h-9 rounded bg-[#9e8e78]/10 border border-[#9e8e78]/30 flex items-center justify-center text-[#ffd89c]/80">
         <Medal className="w-4 h-4" />
       </div>
     );
   return (
-    <div className="w-9 h-9 rounded bg-[#050608] border border-[#2D3142] flex items-center justify-center text-[#808495] text-xs font-mono font-bold">
+    <div className="w-9 h-9 rounded bg-[#0d0d0d] border border-[#9e8e78]/30 flex items-center justify-center text-[#d6c4ac] text-xs font-mono font-bold">
       {rank}
     </div>
   );
@@ -155,28 +155,28 @@ function LeaderboardPage() {
 
   return (
     <div className="space-y-10 font-sans">
-      <div className="border-b border-[#2D3142] pb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="border-b border-[#9e8e78]/30 pb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold font-display text-[#F4F4F9] flex items-center gap-3">
-            <Trophy className="w-7 h-7 text-[#FFA500]" />
+          <h1 className="text-3xl font-bold font-display text-[#e5e2e1] flex items-center gap-3">
+            <Trophy className="w-7 h-7 text-[#ffd89c]" />
             [■] TRADER RANKINGS
           </h1>
-          <p className="text-[#808495] text-sm mt-1">
+          <p className="text-[#d6c4ac] text-sm mt-1">
             Rankings compiled from confirmed on-chain activity logs across devnet.
           </p>
         </div>
 
         {myAddress && myRank > 0 && (
-          <div className="board-panel px-4 py-2 flex items-center gap-3 bg-[#0C0D12]">
-            <span className="text-xs text-[#808495] uppercase font-display font-semibold">Your Rank</span>
-            <span className="text-lg font-mono font-bold text-[#FFA500]">#{myRank}</span>
+          <div className="board-panel px-4 py-2 flex items-center gap-3 bg-[#131313] border-[#9e8e78]/40">
+            <span className="text-xs text-[#d6c4ac] uppercase font-display font-semibold">Your Rank</span>
+            <span className="text-lg font-mono font-bold text-[#ffd89c]">#{myRank}</span>
           </div>
         )}
       </div>
 
       {/* Category Leaderboard Filter */}
       <div className="space-y-3">
-        <div className="text-[10px] uppercase font-display tracking-widest text-[#808495] font-semibold">
+        <div className="text-[10px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">
           Compare Rankings by Category
         </div>
         <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-none">
@@ -211,62 +211,62 @@ function LeaderboardPage() {
         <motion.section
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="board-panel p-6 bg-[#0C0D12] border-2 border-[#2D3142]"
+          className="board-panel p-6 bg-[#131313] border-2 border-[#9e8e78]/60"
         >
-          <h3 className="text-[10px] uppercase font-display tracking-wider text-[#808495] mb-4 font-semibold">Your Profile Stats ({selectedCategory})</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <h3 className="text-[10px] uppercase font-display tracking-wider text-[#d6c4ac] mb-4 font-bold">Your Profile Stats ({selectedCategory})</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
             <div>
-              <div className="text-[9px] text-[#808495] uppercase tracking-wider font-display">Rank</div>
-              <div className="text-xl font-mono font-bold text-[#FFA500]">#{myRank}</div>
+              <div className="text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Rank</div>
+              <div className="text-xl font-bold text-[#ffd89c]">#{myRank}</div>
             </div>
             <div>
-              <div className="text-[9px] text-[#808495] uppercase tracking-wider font-display">Volume</div>
-              <div className="text-xl font-mono font-bold">{myStats.totalVolumeSol.toFixed(2)} SOL</div>
+              <div className="text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Volume</div>
+              <div className="text-xl font-bold">{myStats.totalVolumeSol.toFixed(2)} SOL</div>
             </div>
             <div>
-              <div className="text-[9px] text-[#808495] uppercase tracking-wider font-display">Win Rate</div>
-              <div className="text-xl font-mono font-bold text-[#235A34]">
+              <div className="text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Win Rate</div>
+              <div className="text-xl font-bold text-[#a1d494]">
                 {myStats.settledCount > 0 ? `${Math.round((myStats.winsCount / myStats.settledCount) * 100)}%` : "—"}
               </div>
             </div>
             <div>
-              <div className="text-[9px] text-[#808495] uppercase tracking-wider font-display">Positions</div>
-              <div className="text-xl font-mono font-bold">{myStats.positionsCount}</div>
+              <div className="text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Positions</div>
+              <div className="text-xl font-bold">{myStats.positionsCount}</div>
             </div>
           </div>
         </motion.section>
       )}
 
       {/* Aggregate stats summary row */}
-      <section className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
-          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Total Volume ({selectedCategory})</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#808495]">SOL</span>
-            <SplitFlapText text={`${leaderboardStats.totals.volume.toFixed(1)}`} charClassName="w-[20px] h-[30px] text-sm" />
-          </div>
-        </div>
-
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12]">
-          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Traders Count ({selectedCategory})</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#808495]">QTY</span>
-            <SplitFlapText text={`${leaderboardStats.traders.length}`} charClassName="w-[20px] h-[30px] text-sm" />
-          </div>
-        </div>
-
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#0C0D12] col-span-2 md:col-span-1">
-          <div className="text-[10px] uppercase font-display tracking-wider text-[#808495]">Positions Opened ({selectedCategory})</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#808495]">QTY</span>
-            <SplitFlapText text={`${leaderboardStats.totals.positions}`} charClassName="w-[20px] h-[30px] text-sm" />
-          </div>
-        </div>
+      <section className="grid grid-cols-2 md:grid-cols-3 gap-6">
+        <StatTile3D
+          label={`Total Volume (${selectedCategory})`}
+          value={leaderboardStats.totals.volume.toFixed(1)}
+          unit="SOL"
+          icon={Coins}
+          delay={0}
+        />
+        <StatTile3D
+          label={`Traders Count (${selectedCategory})`}
+          value={String(leaderboardStats.traders.length)}
+          unit="QTY"
+          icon={Users}
+          accent="green"
+          delay={0.05}
+        />
+        <StatTile3D
+          label={`Positions Opened (${selectedCategory})`}
+          value={String(leaderboardStats.totals.positions)}
+          unit="QTY"
+          icon={Briefcase}
+          accent="neutral"
+          delay={0.1}
+        />
       </section>
 
       {/* Sort controls */}
-      <div className="flex items-center space-x-2 border-b border-[#2D3142] pb-3">
-        <Filter className="w-3.5 h-3.5 text-[#808495]" />
+      <div className="flex items-center space-x-2 border-b border-[#9e8e78]/20 pb-3">
+        <Filter className="w-3.5 h-3.5 text-[#d6c4ac]" />
         {[
           { key: "volume", label: "By Volume" },
           { key: "wins", label: "By Wins" },
@@ -290,14 +290,14 @@ function LeaderboardPage() {
       {loading ? (
         <section className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="board-panel p-5 h-16 skeleton-shimmer bg-[#0C0D12]/50" />
+            <div key={i} className="board-panel p-5 h-16 skeleton-shimmer bg-[#131313]" />
           ))}
         </section>
       ) : leaderboardStats.traders.length === 0 ? (
-        <div className="board-panel py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
-          <Trophy className="w-10 h-10 opacity-30" />
+        <div className="board-panel py-16 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4">
+          <Trophy className="w-10 h-10 opacity-30 text-[#ffd89c]" />
           <div>
-            <h3 className="text-base font-bold font-display text-[#F4F4F9]">BOARD IS VACANT</h3>
+            <h3 className="text-base font-bold font-display text-[#e5e2e1]">BOARD IS VACANT</h3>
             <p className="text-xs mt-1">Be the first to trade and claim the lead position.</p>
           </div>
         </div>
@@ -318,22 +318,22 @@ function LeaderboardPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                   transition={{ duration: 0.25, delay: Math.min(index * 0.02, 0.2) }}
-                  className={`board-panel p-4 flex items-center justify-between gap-4 ${
-                    isMe ? "border-[#FFA500] bg-[#FFA500]/2" : ""
+                  className={`board-panel p-4 flex items-center justify-between gap-4 border-[#9e8e78]/40 ${
+                    isMe ? "border-[#ffd89c] bg-[#ffd89c]/2" : "bg-[#131313]"
                   }`}
                 >
                   <div className="flex items-center gap-4 min-w-0">
                     <RankBadge rank={rank} />
                     <div className="min-w-0">
-                      <div className="font-mono text-sm font-bold text-[#F4F4F9] truncate flex items-center gap-2">
+                      <div className="font-mono text-sm font-bold text-[#e5e2e1] truncate flex items-center gap-2">
                         {shortAddr(trader.owner)}
                         {isMe && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#FFA500]/10 border border-[#FFA500]/30 text-[#FFA500]">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#ffd89c]/10 border border-[#ffd89c]/30 text-[#ffd89c] font-bold">
                             YOU
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-[#808495] font-mono">
+                      <div className="text-[11px] text-[#d6c4ac] font-mono">
                         {trader.positionsCount} POSITION{trader.positionsCount !== 1 ? "S" : ""}
                         {winRate !== null && <span> &middot; {winRate}% WIN RATE</span>}
                       </div>
@@ -341,10 +341,10 @@ function LeaderboardPage() {
                   </div>
 
                   <div className="text-right flex-shrink-0 font-mono">
-                    <div className="font-bold text-[#F4F4F9] text-sm">
+                    <div className="font-bold text-[#e5e2e1] text-sm">
                       {trader.totalVolumeSol.toFixed(2)} SOL
                     </div>
-                    <div className="text-[9px] text-[#808495] uppercase tracking-wider font-display">Volume</div>
+                    <div className="text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Volume</div>
                   </div>
                 </motion.div>
               );

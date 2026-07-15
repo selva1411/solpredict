@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { EventParser } from "@coral-xyz/anchor";
-import { getConfigPda, getMarketPda, getMockPriceUpdatePda } from "@/lib/pda";
+import { getConfigPda, getMarketPda, getMockPriceUpdatePda, getYesMintPda, getNoMintPda, getTreasuryPda } from "@/lib/pda";
 import { formatEventTime, findMarketQuestion, getMarketStatusString } from "@/lib/events";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConnectWalletGate } from "@/components/dashboard/ConnectWalletGate";
@@ -41,6 +41,7 @@ interface Market {
     question: string;
     description: string;
     category: number;
+    oracleFeedId: number[];
     targetPrice: anchor.BN;
     targetExpo: number;
     endTs: anchor.BN;
@@ -61,7 +62,6 @@ interface AdminActivity {
   details: string;
 }
 
-// Motion variants
 const cardVariants = {
   hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
@@ -84,26 +84,22 @@ function AdminPage() {
   const [adminActivity, setAdminActivity] = useState<AdminActivity[]>([]);
   const [activityLoading, setActivityLoading] = useState<boolean>(false);
   
-  // Form states
-  const [feeBps, setFeeBps] = useState<number>(200); // 2%
+  const [feeBps, setFeeBps] = useState<number>(200); 
   const [question, setQuestion] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [category, setCategory] = useState<number>(0);
   const [targetPriceVal, setTargetPriceVal] = useState<number>(250.00);
-  const [comparison, setComparison] = useState<number>(0); // 0 = GreaterThan, 1 = LessThan
-  const [durationSecs, setDurationSecs] = useState<number>(300); // 5 mins for quick test
+  const [comparison, setComparison] = useState<number>(0); 
+  const [durationSecs, setDurationSecs] = useState<number>(300); 
   
-  // Settlement states — per-market settle prices
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [settlePrices, setSettlePrices] = useState<Map<string, number>>(new Map());
 
-  // Confirmation modal state
   const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; marketPda: PublicKey | null }>({
     isOpen: false,
     marketPda: null,
   });
 
-  // Protect Admin route from non-admins
   useEffect(() => {
     if (!roleLoading && role === "user") {
       toast.error("This area is admin-only. Redirecting to user dashboard...");
@@ -135,16 +131,13 @@ function AdminPage() {
         marketCount: configAcc.marketCount.toNumber(),
       });
 
-      // Fetch all markets
       const allMarkets = (await program.account.market.all()) as Market[];
       setMarkets(allMarkets);
 
-      // Fetch all unique traders (owners in userPosition accounts)
       const userPositions = await program.account.userPosition.all();
       const distinctTraders = new Set(userPositions.map((pos: any) => pos.account.owner.toBase58()));
       setUniqueTradersCount(distinctTraders.size);
 
-      // Fetch admin activity feed
       fetchAdminActivity(allMarkets);
     } catch (err) {
       console.log("Config PDA not initialized yet:", err);
@@ -155,9 +148,10 @@ function AdminPage() {
   };
 
   const fetchAdminActivity = async (currentMarkets: Market[]) => {
+    if (!wallet?.publicKey) return;
     try {
       setActivityLoading(true);
-      const sigs = await connection.getSignaturesForAddress(program.programId, { limit: 30 });
+      const sigs = await connection.getSignaturesForAddress(wallet.publicKey, { limit: 40 });
       const items: AdminActivity[] = [];
       const eventParser = new EventParser(program.programId, program.coder);
 
@@ -166,7 +160,7 @@ function AdminPage() {
           try {
             return await connection.getParsedTransaction(sig.signature, {
               maxSupportedTransactionVersion: 0,
-              commitment: "confirmed",
+              commitment: "confirmed"
             });
           } catch {
             return null;
@@ -174,51 +168,51 @@ function AdminPage() {
         })
       );
 
+      const getStatusString = getMarketStatusString;
+
       sigs.forEach((sig, idx) => {
         const tx = txs[idx];
         if (!tx || !tx.meta || !tx.meta.logMessages) return;
 
         const timeStr = formatEventTime(sig.blockTime);
-
         const events = eventParser.parseLogs(tx.meta.logMessages);
+
         for (const event of events) {
           const marketId = event.data.marketId as anchor.BN;
-          const question = findMarketQuestion(marketId, currentMarkets);
+          const questionText = findMarketQuestion(marketId, currentMarkets);
 
           if (event.name === "MarketCreated") {
             items.push({
               signature: sig.signature,
               type: "CREATE",
-              question: event.data.question || question,
+              question: questionText || `ID #${marketId.toString()}`,
               timeStr,
-              details: `Market created with ID #${marketId.toString()}`
+              details: `Category: ${getCategoryString(event.data.category)}. Target: $${(event.data.targetPrice.toNumber() / 100).toFixed(2)}`
             });
           } else if (event.name === "MarketSettled") {
-            const outcome = event.data.winningOutcome === 0 ? "YES" : "NO";
-            const price = (event.data.settledPrice as anchor.BN).toNumber() / 100;
+            const outcome = event.data.winningOutcome.yes ? "YES" : "NO";
             items.push({
               signature: sig.signature,
               type: "SETTLE",
-              question,
+              question: questionText || `ID #${marketId.toString()}`,
               timeStr,
-              details: `Settled ${outcome} at price $${price.toFixed(2)}`
+              details: `Outcome: ${outcome}. Settled Price: $${(event.data.settledPrice.toNumber() / 100).toFixed(2)}`
             });
           } else if (event.name === "MarketCancelled") {
             items.push({
               signature: sig.signature,
               type: "CANCEL",
-              question,
+              question: questionText || `ID #${marketId.toString()}`,
               timeStr,
-              details: `Market cancelled`
+              details: "Market cancelled by admin. All buy orders are fully refundable."
             });
           } else if (event.name === "FeesWithdrawn") {
-            const amount = (event.data.amount as anchor.BN).toNumber() / 1e9;
             items.push({
               signature: sig.signature,
               type: "WITHDRAW",
-              question,
+              question: questionText || `ID #${marketId.toString()}`,
               timeStr,
-              details: `Withdrew ${amount.toFixed(4)} SOL in platform fees`
+              details: `Withdrawn ${ (event.data.amount.toNumber() / 1e9).toFixed(4) } SOL to admin`
             });
           }
         }
@@ -226,7 +220,7 @@ function AdminPage() {
 
       setAdminActivity(items);
     } catch (err) {
-      console.error("Error fetching admin activity:", err);
+      console.log("Error loading admin activity logs:", err);
     } finally {
       setActivityLoading(false);
     }
@@ -234,11 +228,12 @@ function AdminPage() {
 
   useEffect(() => {
     fetchConfigAndMarkets();
-  }, [program]);
+    const sub = connection.onLogs(program.programId, () => fetchConfigAndMarkets(), "confirmed");
+    return () => { connection.removeOnLogsListener(sub); };
+  }, [wallet, program]);
 
-  // 1. Initialize Config PDA
   const handleInitializeConfig = async () => {
-    if (!wallet || !wallet.publicKey) return;
+    if (!wallet?.publicKey) return;
     try {
       const configPda = getConfigPda(program.programId);
       await program.methods
@@ -249,35 +244,33 @@ function AdminPage() {
         } as any)
         .rpc();
 
-      toast.success("Platform Config initialized successfully!");
+      toast.success("Platform Config PDA successfully initialized!");
       fetchConfigAndMarkets();
     } catch (err: any) {
-      console.error("Initialize Config error:", err);
       toast.error(`Initialization failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
 
-  // 2. Create Prediction Market
   const handleCreateMarket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!wallet || !wallet.publicKey || !config) return;
+    if (!wallet?.publicKey || !config) return;
 
     try {
-      const targetPriceBn = new anchor.BN(Math.round(targetPriceVal * 100)); // Store with 2 decimals
-      const targetExpo = -2;
-      const now = Math.floor(Date.now() / 1000);
-      const endTs = new anchor.BN(now + durationSecs);
-      const resolveTs = new anchor.BN(now + durationSecs + 1);
-
-      // Derive market ID and keys
-      const marketId = new anchor.BN(config.marketCount);
-      const marketPda = getMarketPda(marketId, program.programId);
-      const [yesMintPda] = PublicKey.findProgramAddressSync([Buffer.from("yes_mint"), marketPda.toBuffer()], program.programId);
-      const [noMintPda] = PublicKey.findProgramAddressSync([Buffer.from("no_mint"), marketPda.toBuffer()], program.programId);
-      const [treasuryPda] = PublicKey.findProgramAddressSync([Buffer.from("treasury"), marketPda.toBuffer()], program.programId);
+      const nextMarketId = config.marketCount;
+      const marketPda = getMarketPda(new anchor.BN(nextMarketId), program.programId);
+      const yesMintPda = getYesMintPda(marketPda, program.programId);
+      const noMintPda = getNoMintPda(marketPda, program.programId);
+      const treasuryPda = getTreasuryPda(marketPda, program.programId);
 
       const feedId = Array(32).fill(0);
       feedId[0] = 55; // SOL/USD mock feed ID
+
+      const targetPriceBn = new anchor.BN(Math.round(targetPriceVal * 100));
+      const targetExpo = -2;
+      const endTs = new anchor.BN(Math.floor(Date.now() / 1000) + durationSecs);
+      const resolveTs = endTs.add(new anchor.BN(2)); // +2 seconds for immediate local testing settle!
+
+      const configPda = getConfigPda(program.programId);
 
       await program.methods
         .initializeMarket(
@@ -294,7 +287,7 @@ function AdminPage() {
         )
         .accounts({
           admin: wallet.publicKey,
-          config: config.publicKey,
+          config: configPda,
           market: marketPda,
           yesMint: yesMintPda,
           noMint: noMintPda,
@@ -302,201 +295,178 @@ function AdminPage() {
         } as any)
         .rpc();
 
-      toast.success("Prediction market initialized!");
+      toast.success(`Market ID #${nextMarketId} deployed successfully!`);
+      
       setQuestion("");
       setDescription("");
+      setTargetPriceVal(250.00);
+      setDurationSecs(300);
+      
       fetchConfigAndMarkets();
     } catch (err: any) {
-      console.error("Create Market error:", err);
-      toast.error(`Market creation failed: ${getFriendlyErrorMessage(err)}`);
+      toast.error(`Deploy failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
 
-  // 3. Settle Market using a Mock Price Feed update
   const handleMockSettle = async (market: Market) => {
-    if (!wallet || !wallet.publicKey) return;
+    if (!wallet?.publicKey) return;
     const marketKey = market.publicKey.toBase58();
-    const price = getSettlePrice(marketKey);
-
     try {
       setSettlingId(marketKey);
-      const mockPayer = Keypair.generate();
+
+      const configPda = getConfigPda(program.programId);
+      const settlePrice = getSettlePrice(marketKey);
       
-      // Send SOL to mockPayer to cover price update transaction fees
-      const fundTx = new anchor.web3.Transaction().add(
-        anchor.web3.SystemProgram.transfer({
-          fromPubkey: wallet.publicKey,
-          toPubkey: mockPayer.publicKey,
-          lamports: 0.1 * anchor.web3.LAMPORTS_PER_SOL,
-        })
-      );
-      await program.provider.sendAndConfirm!(fundTx);
+      const mockPriceUpdatePda = getMockPriceUpdatePda(wallet.publicKey, program.programId);
 
-      const mockPriceUpdatePda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
-      const priceVal = new anchor.BN(Math.round(price * 100)); // Store with 2 decimals
+      const scaleMultiplier = Math.pow(10, Math.abs(market.account.targetExpo));
+      const settlePriceScaled = new anchor.BN(Math.round(settlePrice * scaleMultiplier));
+      const conf = new anchor.BN(0);
+      const exponent = market.account.targetExpo;
+      const publishTime = new anchor.BN(Math.floor(Date.now() / 1000));
 
-      // 1. Create the Pyth Mock Price Update Account
       await program.methods
         .mockCreatePriceUpdate(
-          [55, ...Array(31).fill(0)], // Matching SOL/USD mock feed id
-          priceVal,
-          new anchor.BN(1), // Tight confidence interval
-          -2, // Exponent -2
-          new anchor.BN(Math.floor(Date.now() / 1000))
+          market.account.oracleFeedId,
+          settlePriceScaled,
+          conf,
+          exponent,
+          publishTime
         )
         .accounts({
-          payer: mockPayer.publicKey,
+          payer: wallet.publicKey,
           priceUpdate: mockPriceUpdatePda,
         } as any)
-        .signers([mockPayer])
         .rpc();
 
-      // 2. Trigger on-chain settleMarket call
       await program.methods
         .settleMarket()
         .accounts({
           admin: wallet.publicKey,
-          config: config.publicKey,
+          config: configPda,
           market: market.publicKey,
           priceUpdate: mockPriceUpdatePda,
         } as any)
         .rpc();
 
-      toast.success("Market settled successfully!");
+      toast.success(`Market resolved successfully!`);
       fetchConfigAndMarkets();
     } catch (err: any) {
-      console.error("Settlement error:", err);
-      toast.error(`Settlement failed: ${getFriendlyErrorMessage(err)}`);
+      console.error(err);
+      toast.error(`Resolution failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
       setSettlingId(null);
     }
   };
 
-  // 4. Cancel Market
   const handleCancelMarket = async (marketPda: PublicKey) => {
-    if (!wallet || !wallet.publicKey) return;
+    if (!wallet?.publicKey) return;
     try {
+      const configPda = getConfigPda(program.programId);
       await program.methods
         .cancelMarket()
         .accounts({
-          admin: wallet.publicKey,
+          authority: wallet.publicKey,
+          config: configPda,
           market: marketPda,
         } as any)
         .rpc();
 
-      toast.success("Market cancelled!");
+      toast.success("Market cancelled. Traders may claim full refunds.");
+      setCancelModal({ isOpen: false, marketPda: null });
       fetchConfigAndMarkets();
     } catch (err: any) {
-      console.error("Cancel Market error:", err);
-      toast.error(`Cancellation failed: ${getFriendlyErrorMessage(err)}`);
+      toast.error(`Cancel failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
 
-  // 5. Withdraw Protocol Fees
   const handleWithdrawFees = async (market: Market) => {
-    if (!wallet || !wallet.publicKey) return;
+    if (!wallet?.publicKey) return;
     try {
-      const treasuryPda = PublicKey.findProgramAddressSync([Buffer.from("treasury"), market.publicKey.toBuffer()], program.programId)[0];
+      const configPda = getConfigPda(program.programId);
+      const treasuryPda = getTreasuryPda(market.publicKey, program.programId);
+
       await program.methods
         .withdrawFees()
         .accounts({
-          admin: wallet.publicKey,
-          config: config.publicKey,
+          authority: wallet.publicKey,
+          config: configPda,
           market: market.publicKey,
           treasury: treasuryPda,
         } as any)
         .rpc();
 
-      toast.success(`Withdrew ${(market.account.feeCollected.toNumber() / 1e9).toFixed(4)} SOL!`);
+      toast.success("Platform protocol fees successfully withdrawn!");
       fetchConfigAndMarkets();
     } catch (err: any) {
-      console.error("Fee withdrawal error:", err);
       toast.error(`Withdrawal failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
 
-  const getStatusString = getMarketStatusString;
-
-  // derived stats
   const platformStats = useMemo(() => {
-    let totalVol = 0;
+    let totalVolumeLamports = 0;
+    let totalFeesCollectedLamports = 0;
     let openCount = 0;
     let settledCount = 0;
-    let totalFees = 0;
 
     markets.forEach((m) => {
-      const yesPool = m.account.yesPoolLamports.toNumber() / 1e9;
-      const noPool = m.account.noPoolLamports.toNumber() / 1e9;
-      totalVol += yesPool + noPool;
-
-      const status = getStatusString(m.account.status);
+      const status = getMarketStatusString(m.account.status);
+      totalVolumeLamports += m.account.yesPoolLamports.toNumber() + m.account.noPoolLamports.toNumber();
+      totalFeesCollectedLamports += m.account.feeCollected.toNumber();
       if (status === "Open") openCount++;
       if (status === "Settled") settledCount++;
-
-      totalFees += m.account.feeCollected.toNumber() / 1e9;
     });
 
     return {
-      totalVolume: totalVol,
+      totalVolume: totalVolumeLamports / 1e9,
+      totalFeesCollected: totalFeesCollectedLamports / 1e9,
       openMarketsCount: openCount,
       settledMarketsCount: settledCount,
-      totalFeesCollected: totalFees
     };
   }, [markets]);
 
-  // Settle Needs Action Panel
   const needsActionMarkets = useMemo(() => {
-    const now = Math.floor(Date.now() / 1000);
     return markets.filter((m) => {
-      const status = getStatusString(m.account.status);
-      const isExpired = m.account.endTs.toNumber() < now;
-      return status === "Open" && isExpired;
+      const status = getMarketStatusString(m.account.status);
+      const now = Math.floor(Date.now() / 1000);
+      return status === "Open" && m.account.endTs.toNumber() < now;
     });
   }, [markets]);
 
   if (role === "disconnected" && !roleLoading) {
     return (
       <ConnectWalletGate
-        icon={ShieldCheck}
-        title="[■] CONNECT WALLET TO CONTINUE"
-        description="Initialize your Solana keypair terminal connection. Platform administrators are routed to the observatory console automatically; all other wallets go to the pilot ledger."
+        title="[■] SIGN IN TO OBSERVATORY"
+        description="Verify platform administrator key signature credentials. Access is restricted to master protocol wallet nodes."
       />
     );
   }
 
-  if (configLoading || roleLoading) {
+  if (configLoading) {
     return (
-      <div className="space-y-8 animate-pulse max-w-7xl mx-auto w-full">
-        <div className="h-10 bg-white/5 border border-white/10 rounded w-1/3" />
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-28 board-panel skeleton-shimmer bg-[#0C0D12]" />
+      <div className="space-y-6 animate-pulse">
+        <div className="h-10 bg-white/5 border border-[#9e8e78]/30 rounded w-1/3" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-28 board-panel skeleton-shimmer bg-[#131313]" />
           ))}
         </div>
-        <div className="h-96 board-panel skeleton-shimmer bg-[#0C0D12]" />
       </div>
     );
   }
 
-  if (role === "user") {
-    return null; // Will redirect in useEffect
-  }
+  const getStatusString = getMarketStatusString;
 
   return (
-    <div className="space-y-10 animate-fade-in max-w-7xl mx-auto w-full">
-      {/* Cancel Confirmation Modal */}
+    <div className="space-y-10 animate-fade-in font-sans pb-12">
       <ConfirmModal
         isOpen={cancelModal.isOpen}
-        title="Cancel Market"
-        message="Are you sure you want to cancel this market? All traders will be able to claim full refunds. This action cannot be undone."
-        confirmLabel="Cancel Market"
-        cancelLabel="Keep Market"
-        destructive
+        title="CANCEL PREDICTION BOARD"
+        message="Are you sure you want to cancel this market? This is a terminal action. It stops all event trading, sets pool balances to 0, and permits all share holders to withdraw refunds."
+        confirmLabel="CANCEL BOARD"
+        destructive={true}
         onConfirm={() => {
-          if (cancelModal.marketPda) {
-            handleCancelMarket(cancelModal.marketPda);
-          }
-          setCancelModal({ isOpen: false, marketPda: null });
+          if (cancelModal.marketPda) handleCancelMarket(cancelModal.marketPda);
         }}
         onCancel={() => setCancelModal({ isOpen: false, marketPda: null })}
       />
@@ -518,23 +488,23 @@ function AdminPage() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          className="board-panel p-8 space-y-6 border-[#FFA500]/20 bg-[#0C0D12]"
+          className="board-panel p-8 space-y-6 border-[#ffd89c]/40 bg-[#131313]"
         >
-          <div className="flex items-center space-x-3 text-[#FFA500]">
-            <AlertTriangle className="w-6 h-6" />
-            <h2 className="text-lg font-bold font-display">Config PDA Not Found</h2>
+          <div className="flex items-center space-x-3 text-[#ffd89c]">
+            <AlertTriangle className="w-6 h-6 animate-pulse" />
+            <h2 className="text-lg font-bold font-display uppercase tracking-wider">Config PDA Not Found</h2>
           </div>
-          <p className="text-xs text-[#808495]">
+          <p className="text-xs text-[#d6c4ac] leading-relaxed">
             The platform-wide config singleton must be initialized once before markets can be created. The key initialized here will serve as the master Administrator authority.
           </p>
           <div className="grid sm:grid-cols-2 gap-4 items-end max-w-md">
             <div className="space-y-2">
-              <label className="text-xs font-mono text-[#808495]">Fee Basis Points (100 = 1%)</label>
+              <label className="text-xs font-mono text-[#d6c4ac] font-bold">Fee Basis Points (100 = 1%)</label>
               <input
                 type="number"
                 value={feeBps}
                 onChange={(e) => setFeeBps(Number(e.target.value))}
-                className="w-full board-input text-sm py-2 px-3"
+                className="w-full board-input text-sm py-2 px-3 border-[#9e8e78]"
               />
             </div>
             <button onClick={handleInitializeConfig} className="btn-amber py-2 text-xs">
@@ -569,15 +539,15 @@ function AdminPage() {
               count={needsActionMarkets.length}
               variant="alert"
             >
-              <div className="divide-y divide-[#2D3142]/40">
+              <div className="divide-y divide-[#9e8e78]/20">
                 {needsActionMarkets.map((m) => {
                   const marketKey = m.publicKey.toBase58();
                   const targetPrice = m.account.targetPrice.toNumber() / 100;
                   return (
                     <div key={marketKey} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1">
-                        <div className="text-sm font-semibold text-[#F4F4F9]">{m.account.question}</div>
-                        <div className="text-xs text-[#808495] font-mono">
+                        <div className="text-sm font-bold text-[#e5e2e1]">{m.account.question}</div>
+                        <div className="text-xs text-[#d6c4ac] font-mono">
                           Target: ${targetPrice.toFixed(2)} | Category: {getCategoryString(m.account.category)}
                         </div>
                       </div>
@@ -587,7 +557,7 @@ function AdminPage() {
                           step="0.01"
                           value={getSettlePrice(marketKey)}
                           onChange={(e) => setSettlePrice(marketKey, Number(e.target.value))}
-                          className="w-24 board-input py-1 px-2 text-xs font-mono"
+                          className="w-24 board-input py-1 px-2 text-xs font-mono border-[#9e8e78]"
                           placeholder="Price"
                         />
                         <button
@@ -610,44 +580,44 @@ function AdminPage() {
             
             {/* Create Market Form */}
             <div className="space-y-6">
-              <div className="flex items-center space-x-2 text-[#FFA500]">
+              <div className="flex items-center space-x-2 text-[#ffd89c]">
                 <Plus className="w-5 h-5" />
-                <h2 className="text-lg font-bold font-display uppercase tracking-wide">Create Contract</h2>
+                <h2 className="text-lg font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
               </div>
 
-              <div className="board-panel p-6 bg-[#0C0D12] space-y-4 board-panel-3d">
+              <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/40 space-y-4 board-panel-3d">
                 <form onSubmit={handleCreateMarket} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#808495]">Question Text</label>
+                    <label className="text-xs font-bold text-[#d6c4ac]">Question Text</label>
                     <input
                       type="text"
                       required
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       placeholder="Will SOL exceed $280 by tomorrow?"
-                      className="w-full board-input text-xs"
+                      className="w-full board-input text-xs border-[#9e8e78]"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#808495]">Rules & Description</label>
+                    <label className="text-xs font-bold text-[#d6c4ac]">Rules & Description</label>
                     <textarea
                       required
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Settle using Pyth feed SOL/USD. Price must match condition..."
                       rows={3}
-                      className="w-full board-input text-xs"
+                      className="w-full board-input text-xs border-[#9e8e78]"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-[#808495]">Category</label>
+                      <label className="text-xs font-bold text-[#d6c4ac]">Category</label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(Number(e.target.value))}
-                        className="w-full board-input text-xs bg-[#050608]"
+                        className="w-full board-input text-xs bg-[#0d0d0d] border-[#9e8e78]"
                       >
                         {CATEGORIES.map((cat, i) => (
                           <option key={i} value={i}>{cat}</option>
@@ -656,11 +626,11 @@ function AdminPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-[#808495]">Comparison</label>
+                      <label className="text-xs font-bold text-[#d6c4ac]">Comparison</label>
                       <select
                         value={comparison}
                         onChange={(e) => setComparison(Number(e.target.value))}
-                        className="w-full board-input text-xs bg-[#050608]"
+                        className="w-full board-input text-xs bg-[#0d0d0d] border-[#9e8e78]"
                       >
                         <option value={0}>Greater Than</option>
                         <option value={1}>Less Than</option>
@@ -670,30 +640,30 @@ function AdminPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-[#808495]">Target Price ($)</label>
+                      <label className="text-xs font-bold text-[#d6c4ac]">Target Price ($)</label>
                       <input
                         type="number"
                         step="0.01"
                         required
                         value={targetPriceVal}
                         onChange={(e) => setTargetPriceVal(Number(e.target.value))}
-                        className="w-full board-input text-xs"
+                        className="w-full board-input text-xs border-[#9e8e78]"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-[#808495]">Duration (Secs)</label>
+                      <label className="text-xs font-bold text-[#d6c4ac]">Duration (Secs)</label>
                       <input
                         type="number"
                         required
                         value={durationSecs}
                         onChange={(e) => setDurationSecs(Number(e.target.value))}
-                        className="w-full board-input text-xs"
+                        className="w-full board-input text-xs border-[#9e8e78]"
                       />
                     </div>
                   </div>
 
-                  <button type="submit" className="w-full btn-amber text-xs py-2.5 mt-4">
+                  <button type="submit" className="w-full btn-primary text-xs py-2.5 mt-4">
                     Deploy Market PDA
                   </button>
                 </form>
@@ -702,19 +672,19 @@ function AdminPage() {
 
             {/* Manage Markets Table */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="flex items-center space-x-2 text-[#FFA500]">
+              <div className="flex items-center space-x-2 text-[#ffd89c]">
                 <Settings className="w-5 h-5" />
-                <h2 className="text-lg font-bold font-display uppercase tracking-wide">Manage Board</h2>
+                <h2 className="text-lg font-bold font-display uppercase tracking-wider font-bold">Manage Board</h2>
               </div>
 
-              <div className="board-panel bg-[#0C0D12] overflow-hidden board-panel-3d">
+              <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
                 {markets.length === 0 ? (
-                  <p className="text-xs text-[#808495] text-center py-12">No prediction markets created yet.</p>
+                  <p className="text-xs text-[#d6c4ac] text-center py-12">No prediction markets created yet.</p>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto scrollbar-thin">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-[#2D3142] text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#050608]">
+                        <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
                           <th className="py-4 px-6">ID</th>
                           <th className="py-4 px-6">Question</th>
                           <th className="py-4 px-6">Status</th>
@@ -722,7 +692,7 @@ function AdminPage() {
                           <th className="py-4 px-6 text-center">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#2D3142]/40 font-mono text-xs">
+                      <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
                         {markets.map((m) => {
                           const status = getStatusString(m.account.status);
                           const marketKey = m.publicKey.toBase58();
@@ -732,20 +702,20 @@ function AdminPage() {
 
                           return (
                             <tr key={marketKey} className="table-row-3d hover:bg-white/5 transition-colors">
-                              <td className="py-4 px-6 text-[#808495]">#{m.account.marketId.toString()}</td>
-                              <td className="py-4 px-6 text-[#F4F4F9] max-w-xs truncate">{m.account.question}</td>
+                              <td className="py-4 px-6 text-[#d6c4ac]">#{m.account.marketId.toString()}</td>
+                              <td className="py-4 px-6 text-[#e5e2e1] max-w-xs truncate font-bold">{m.account.question}</td>
                               <td className="py-4 px-6">
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   status === "Open" 
-                                    ? "bg-[#235A34]/20 text-green-500 border border-[#235A34]/30" 
+                                    ? "bg-[#a1d494]/15 text-[#a1d494] border border-[#a1d494]/20" 
                                     : status === "Settled" 
-                                    ? "bg-white/5 text-text-muted border border-white/10" 
-                                    : "bg-red-500/10 text-red-400 border border-red-500/20"
+                                    ? "bg-white/5 text-[#d6c4ac] border border-white/10" 
+                                    : "bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/20"
                                 }`}>
                                   {status}
                                 </span>
                               </td>
-                              <td className="py-4 px-6 text-right text-[#F4F4F9]">{volume.toFixed(2)} SOL</td>
+                              <td className="py-4 px-6 text-right text-[#e5e2e1]">{volume.toFixed(2)} SOL</td>
                               <td className="py-4 px-6 text-center">
                                 {status === "Open" && (
                                   <div className="flex items-center justify-center gap-2">
@@ -754,19 +724,19 @@ function AdminPage() {
                                       step="0.01"
                                       value={getSettlePrice(marketKey)}
                                       onChange={(e) => setSettlePrice(marketKey, Number(e.target.value))}
-                                      className="w-16 board-input py-1 px-1.5 text-[10px]"
+                                      className="w-16 board-input py-1 px-1.5 text-[10px] border-[#9e8e78]"
                                       placeholder="Price"
                                     />
                                     <button
                                       disabled={settlingId !== null}
                                       onClick={() => handleMockSettle(m)}
-                                      className="px-2 py-1 bg-[#235A34] hover:bg-[#2D7242] text-white border border-[#1B4527] rounded text-[9px] cursor-pointer"
+                                      className="px-2 py-1 bg-[#a1d494] hover:bg-[#b7e4ac] text-[#131313] border border-[#9e8e78] rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Settle
                                     </button>
                                     <button
                                       onClick={() => setCancelModal({ isOpen: true, marketPda: m.publicKey })}
-                                      className="px-2 py-1 bg-[#8E2424] hover:bg-[#A92C2C] text-white border border-[#6E1B1B] rounded text-[9px] cursor-pointer"
+                                      className="px-2 py-1 bg-[#ffb4ab] hover:bg-[#ffc9c2] text-[#131313] border border-[#9e8e78] rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Cancel
                                     </button>
@@ -775,11 +745,11 @@ function AdminPage() {
                                 {status === "Settled" && (
                                   <div className="flex items-center justify-center">
                                     {m.account.feeWithdrawn ? (
-                                      <span className="text-green-500 text-[10px] font-semibold">Withdrawn</span>
+                                      <span className="text-[#a1d494] text-[10px] font-bold uppercase">Withdrawn</span>
                                     ) : (
                                       <button
                                         onClick={() => handleWithdrawFees(m)}
-                                        className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded text-[9px] text-[#FFA500] font-semibold cursor-pointer"
+                                        className="px-2.5 py-1 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/30 rounded text-[9px] text-[#ffd89c] font-bold cursor-pointer uppercase"
                                       >
                                         Withdraw Fees ({ (m.account.feeCollected.toNumber() / 1e9).toFixed(3) } SOL)
                                       </button>
@@ -787,7 +757,7 @@ function AdminPage() {
                                   </div>
                                 )}
                                 {status === "Cancelled" && (
-                                  <span className="text-[#808495] text-[10px] italic">Refunds enabled</span>
+                                  <span className="text-[#d6c4ac] text-[10px] italic">Refunds enabled</span>
                                 )}
                               </td>
                             </tr>
@@ -806,44 +776,44 @@ function AdminPage() {
       {/* 4. Admin Activity Log Section */}
       {config && (
         <DashboardSection title="Audit Trail Actions" icon={History} delay={0.15}>
-          <div className="board-panel bg-[#0C0D12] overflow-hidden board-panel-3d">
+          <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
             {activityLoading ? (
-              <div className="p-12 text-center text-[#808495] text-xs font-mono animate-pulse">
+              <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono animate-pulse">
                 Fetching action logs...
               </div>
             ) : adminActivity.length === 0 ? (
-              <div className="p-12 text-center text-[#808495] text-xs font-mono">
+              <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono">
                 No admin log updates recorded on-chain.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto scrollbar-thin">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-[#2D3142] text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#050608]">
+                    <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
                       <th className="py-4 px-6">Timestamp</th>
                       <th className="py-4 px-6">Category</th>
                       <th className="py-4 px-6">Prediction Market</th>
                       <th className="py-4 px-6">Execution Detail</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#2D3142]/40 font-mono text-xs">
+                  <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
                     {adminActivity.map((item, idx) => {
                       let tagClass = "";
-                      if (item.type === "CREATE") tagClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
-                      else if (item.type === "SETTLE") tagClass = "bg-green-500/10 text-green-400 border border-green-500/20";
-                      else if (item.type === "CANCEL") tagClass = "bg-red-500/10 text-red-400 border border-red-500/20";
-                      else tagClass = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                      if (item.type === "CREATE") tagClass = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+                      else if (item.type === "SETTLE") tagClass = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
+                      else if (item.type === "CANCEL") tagClass = "bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20";
+                      else tagClass = "bg-[#ffd89c]/10 text-[#ffd89c] border border-[#ffd89c]/20";
 
                       return (
                         <tr key={idx} className="table-row-3d hover:bg-white/5 transition-colors">
-                          <td className="py-4 px-6 text-[#808495]">{item.timeStr}</td>
+                          <td className="py-4 px-6 text-[#d6c4ac]">{item.timeStr}</td>
                           <td className="py-4 px-6">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${tagClass}`}>
                               {item.type}
                             </span>
                           </td>
-                          <td className="py-4 px-6 text-[#F4F4F9] max-w-sm truncate">{item.question}</td>
-                          <td className="py-4 px-6 text-[#808495]">{item.details}</td>
+                          <td className="py-4 px-6 text-[#e5e2e1] max-w-sm truncate font-bold">{item.question}</td>
+                          <td className="py-4 px-6 text-[#d6c4ac]">{item.details}</td>
                         </tr>
                       );
                     })}

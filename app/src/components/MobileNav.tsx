@@ -11,7 +11,7 @@ export function MobileNav() {
   const { role } = useUserRole();
 
   const navLinks = [
-    { href: "/", label: "Explorer" },
+    { href: "/markets", label: "Explorer" },
     { href: "/dashboard", label: "Dashboard" },
     { href: "/leaderboard", label: "Leaderboard" },
     ...(role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
@@ -21,10 +21,10 @@ export function MobileNav() {
     <div className="sm:hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
+        className="p-2 rounded bg-[#1c1c1c] border border-[#9e8e78]/30 hover:bg-[#242424] transition-colors cursor-pointer"
         aria-label={isOpen ? "Close menu" : "Open menu"}
       >
-        {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        {isOpen ? <X className="w-5 h-5 text-[#ffd89c]" /> : <Menu className="w-5 h-5 text-[#ffd89c]" />}
       </button>
 
       <AnimatePresence>
@@ -33,8 +33,8 @@ export function MobileNav() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="absolute top-16 left-0 right-0 z-40 overflow-hidden border-b border-white/8 bg-[#050510]/95 backdrop-blur-xl"
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="absolute top-16 left-0 right-0 z-40 overflow-hidden border-b border-[#9e8e78]/30 bg-[#131313]/95"
           >
             <nav className="flex flex-col px-4 py-4 space-y-1">
               {navLinks.map((link) => (
@@ -42,7 +42,7 @@ export function MobileNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-3 text-sm font-medium text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5 rounded-lg transition-colors"
+                  className="px-4 py-3 text-sm font-medium text-[#d6c4ac] hover:text-[#e5e2e1] hover:bg-white/5 rounded transition-colors"
                 >
                   {link.label}
                 </Link>

@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useProgram } from "@/hooks/useProgram";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
@@ -39,15 +39,16 @@ import { DashboardSection, DashboardHero } from "@/components/dashboard/Dashboar
 interface PositionWithMarket {
   publicKey: PublicKey;
   account: {
-    owner: PublicKey;
     market: PublicKey;
+    owner: PublicKey;
     yesAmount: anchor.BN;
     noAmount: anchor.BN;
-    claimed: boolean;
     totalSpentLamports: anchor.BN;
+    claimed: boolean;
   };
   marketAccount: {
     marketId: anchor.BN;
+    authority: PublicKey;
     question: string;
     description: string;
     category: number;
@@ -61,7 +62,6 @@ interface PositionWithMarket {
     yesSupply: anchor.BN;
     noSupply: anchor.BN;
     totalPayoutPool: anchor.BN;
-    sharePriceLamports: anchor.BN;
   };
 }
 
@@ -102,7 +102,6 @@ export default function UserDashboard() {
   const [activity, setActivity] = useState<PersonalActivity[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [lifetimeClaimedFromEvents, setLifetimeClaimedFromEvents] = useState(0);
-
 
   useEffect(() => {
     setWatchlistKeys(getWatchlist());
@@ -354,8 +353,8 @@ export default function UserDashboard() {
   const stats = useMemo(() => {
     let totalInvested = 0;
     let activeCount = 0;
-    let winCount = 0;
     let settledCount = 0;
+    let winCount = 0;
 
     positions.forEach((p) => {
       const invested = p.account.totalSpentLamports.toNumber() / 1e9;
@@ -444,16 +443,16 @@ export default function UserDashboard() {
     );
   }
 
-  if (loading || roleLoading) {
+  if (loading) {
     return (
-      <div className="space-y-8 animate-pulse max-w-7xl mx-auto w-full">
+      <div className="space-y-6">
         <div className="h-10 bg-white/5 border border-white/10 rounded w-1/3" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 board-panel skeleton-shimmer bg-[#0C0D12]" />
+            <div key={i} className="h-32 board-panel skeleton-shimmer bg-[#131313]" />
           ))}
         </div>
-        <div className="h-64 board-panel skeleton-shimmer bg-[#0C0D12]" />
+        <div className="h-64 board-panel skeleton-shimmer bg-[#131313]" />
       </div>
     );
   }
@@ -463,7 +462,7 @@ export default function UserDashboard() {
     : "";
 
   return (
-    <div className="space-y-10 animate-fade-in max-w-7xl mx-auto w-full">
+    <div className="space-y-10 animate-fade-in max-w-7xl mx-auto w-full font-sans">
       <DashboardHero
         title="[■] PILOT LEDGER DASHBOARD"
         subtitle="Monitor positions, check payouts, analyze category exposure, and review your on-chain audit trail."
@@ -515,7 +514,7 @@ export default function UserDashboard() {
               variants={listVariants}
               initial="hidden"
               animate="visible"
-              className="divide-y divide-[#2D3142]/40"
+              className="divide-y divide-[#9e8e78]/20"
             >
               {needsAttention.map((pos) => {
                 const status = getMarketStatusString(pos.marketAccount.status);
@@ -536,13 +535,13 @@ export default function UserDashboard() {
                     className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
                     <div className="space-y-1">
-                      <div className="text-sm font-semibold text-[#F4F4F9]">
+                      <div className="text-sm font-bold text-[#e5e2e1]">
                         {pos.marketAccount.question}
                       </div>
-                      <div className="flex items-center space-x-3 text-xs text-[#808495] font-mono">
+                      <div className="flex items-center space-x-3 text-xs text-[#d6c4ac] font-mono">
                         <span>
                           Status:{" "}
-                          <span className={isSettled ? "text-green-500" : "text-amber-500"}>
+                          <span className={isSettled ? "text-[#a1d494]" : "text-[#ffd89c] font-bold"}>
                             {status}
                           </span>
                         </span>
@@ -570,7 +569,7 @@ export default function UserDashboard() {
                           {claimingId === posKey ? "Claiming..." : "Claim Rewards"}
                         </button>
                       ) : (
-                        <span className="text-xs text-[#808495] font-mono italic">
+                        <span className="text-xs text-[#d6c4ac] font-mono italic">
                           No payout claimable (lost)
                         </span>
                       )}
@@ -591,20 +590,20 @@ export default function UserDashboard() {
         count={openPositions.length}
         delay={0.05}
       >
-        <div className="board-panel bg-[#0C0D12] overflow-hidden board-panel-3d">
+        <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
           {openPositions.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="py-16 text-center space-y-4"
             >
-              <div className="mx-auto w-16 h-16 rounded border border-[#2D3142] bg-[#050608] flex items-center justify-center animate-float-y">
-                <Briefcase className="w-7 h-7 text-[#808495]" />
+              <div className="mx-auto w-16 h-16 rounded border border-[#9e8e78]/40 bg-[#0d0d0d] flex items-center justify-center animate-float-y">
+                <Briefcase className="w-7 h-7 text-[#d6c4ac]" />
               </div>
-              <p className="text-[#808495] text-sm font-mono">No open positions on the board yet.</p>
+              <p className="text-[#d6c4ac] text-sm font-mono">No open positions on the board yet.</p>
               <Link
-                href="/"
-                className="inline-flex items-center space-x-1 text-[#FFA500] hover:underline text-xs font-semibold"
+                href="/markets"
+                className="inline-flex items-center space-x-1 text-[#ffd89c] hover:underline text-xs font-semibold"
               >
                 <span>Explore prediction markets</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -614,7 +613,7 @@ export default function UserDashboard() {
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-[#2D3142] text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#050608]">
+                  <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
                     <th className="py-4 px-6">Market</th>
                     <th className="py-4 px-6">Side</th>
                     <th className="py-4 px-6">Shares</th>
@@ -623,7 +622,7 @@ export default function UserDashboard() {
                     <th className="py-4 px-6 text-center">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#2D3142]/40 font-mono text-xs">
+                <tbody className="divide-y divide-[#9e8e78]/20 font-mono text-xs">
                   {openPositions.map((pos) => {
                     const yesShares = pos.account.yesAmount.toNumber() / 1e6;
                     const noShares = pos.account.noAmount.toNumber() / 1e6;
@@ -634,22 +633,22 @@ export default function UserDashboard() {
 
                     return (
                       <tr key={pos.publicKey.toBase58()} className="table-row-3d">
-                        <td className="py-4 px-6 text-[#F4F4F9] max-w-xs truncate">
+                        <td className="py-4 px-6 text-[#e5e2e1] max-w-xs truncate font-bold">
                           {pos.marketAccount.question}
                         </td>
                         <td className="py-4 px-6">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               side === "YES"
-                                ? "bg-[#235A34]/20 text-green-500 border border-[#235A34]/30"
-                                : "bg-[#8E2424]/20 text-red-500 border border-[#8E2424]/30"
+                                ? "bg-[#a1d494]/15 text-[#a1d494] border border-[#a1d494]/30"
+                                : "bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/30"
                             }`}
                           >
                             {side}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-[#808495]">{shares}</td>
-                        <td className="py-4 px-6 text-right text-[#F4F4F9]">
+                        <td className="py-4 px-6 text-[#d6c4ac]">{shares}</td>
+                        <td className="py-4 px-6 text-right text-[#e5e2e1]">
                           {invested.toFixed(4)} SOL
                         </td>
                         <td className="py-4 px-6 text-center">
@@ -658,7 +657,7 @@ export default function UserDashboard() {
                         <td className="py-4 px-6 text-center">
                           <Link
                             href={`/market/${marketKey}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-[#2D3142] rounded text-[10px] hover:border-[#FFA500] hover:text-[#FFA500] transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-[#9e8e78]/40 rounded text-[10px] hover:border-[#ffd89c] hover:text-[#ffd89c] transition-colors"
                           >
                             Trade <ExternalLink className="w-3 h-3" />
                           </Link>
@@ -678,11 +677,11 @@ export default function UserDashboard() {
         <div className="lg:col-span-2 space-y-6">
           <DashboardSection title="Ending Soon" icon={Clock} delay={0.1}>
             {endingSoonMarkets.length === 0 ? (
-              <div className="board-panel p-8 text-center bg-[#0C0D12] text-[#808495] text-sm board-panel-3d">
+              <div className="board-panel p-8 text-center bg-[#131313] border-[#9e8e78]/40 text-[#d6c4ac] text-sm board-panel-3d">
                 <p>No open markets from your watchlist or holdings are ending soon.</p>
                 <Link
-                  href="/"
-                  className="inline-flex items-center space-x-1 mt-4 text-[#FFA500] hover:underline text-xs font-semibold"
+                  href="/markets"
+                  className="inline-flex items-center space-x-1 mt-4 text-[#ffd89c] hover:underline text-xs font-semibold"
                 >
                   <span>Browse markets in the explorer</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -701,23 +700,23 @@ export default function UserDashboard() {
                     key={market.publicKey.toBase58()}
                     variants={itemVariants}
                     whileHover={{ y: -4, rotateX: 2 }}
-                    className="board-panel p-5 bg-[#0C0D12] flex flex-col justify-between space-y-4 board-panel-3d"
+                    className="board-panel p-5 bg-[#131313] border-[#9e8e78]/40 flex flex-col justify-between space-y-4 board-panel-3d"
                   >
                     <div className="space-y-1">
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-[#FFA500] px-2 py-0.5 bg-[#FFA500]/10 border border-[#FFA500]/20 rounded">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-[#ffd89c] px-2 py-0.5 bg-[#ffd89c]/10 border border-[#ffd89c]/20 rounded font-bold">
                         {getCategoryString(market.account.category)}
                       </span>
-                      <h3 className="text-sm font-semibold text-[#F4F4F9] pt-2 line-clamp-2 h-10">
+                      <h3 className="text-sm font-bold text-[#e5e2e1] pt-2 line-clamp-2 h-10 leading-snug">
                         {market.account.question}
                       </h3>
                     </div>
-                    <div className="flex items-center justify-between border-t border-[#2D3142]/40 pt-4">
-                      <span className="text-[10px] font-mono text-[#808495]">CLOSING IN</span>
+                    <div className="flex items-center justify-between border-t border-[#9e8e78]/20 pt-4">
+                      <span className="text-[10px] font-mono text-[#d6c4ac]">CLOSING IN</span>
                       <FlipCountdown endTs={market.account.endTs.toNumber()} compact />
                     </div>
                     <Link
                       href={`/market/${market.publicKey.toBase58()}`}
-                      className="w-full text-center block text-xs font-mono font-bold uppercase tracking-wider bg-white/5 border border-[#2D3142] py-2 rounded hover:bg-white/10 hover:border-[#FFA500] transition-colors"
+                      className="w-full text-center block text-xs font-mono font-bold uppercase tracking-wider bg-white/5 border border-[#9e8e78]/40 py-2 rounded hover:bg-white/10 hover:border-[#ffd89c] transition-colors"
                     >
                       View Board
                     </Link>
@@ -730,7 +729,7 @@ export default function UserDashboard() {
 
         <div className="space-y-6">
           <DashboardSection title="Category Exposure" icon={PieChart} delay={0.15}>
-            <div className="board-panel p-6 bg-[#0C0D12] board-panel-3d">
+            <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/40 board-panel-3d">
               <CategoryRing3D segments={categoryExposure.breakdown} total={categoryExposure.total} />
             </div>
           </DashboardSection>
@@ -739,28 +738,28 @@ export default function UserDashboard() {
 
       {/* Activity ledger */}
       <DashboardSection title="Activity Ledger" icon={History} delay={0.2}>
-        <div className="board-panel bg-[#0C0D12] overflow-hidden board-panel-3d">
+        <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
           {activityLoading ? (
-            <div className="p-12 text-center text-[#808495] text-xs font-mono animate-pulse">
+            <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono animate-pulse">
               Parsing on-chain logs...
             </div>
           ) : activity.length === 0 ? (
-            <div className="p-12 text-center text-[#808495] text-xs font-mono space-y-3">
-              <History className="w-8 h-8 mx-auto text-[#2D3142] animate-float-y" />
+            <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono space-y-3">
+              <History className="w-8 h-8 mx-auto text-[#9e8e78] animate-float-y" />
               <p>No transactions recorded for this wallet address.</p>
             </div>
           ) : (
             <div className="overflow-x-auto scrollbar-thin max-h-[420px] overflow-y-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-[#2D3142] text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#050608]">
+                  <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
                     <th className="py-4 px-6">Timestamp</th>
                     <th className="py-4 px-6">Action</th>
-                    <th className="py-4 px-6">Prediction Market</th>
+                    <th className="py-4 px-6">Market</th>
                     <th className="py-4 px-6 text-right">Value (SOL)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#2D3142]/40 font-mono text-xs">
+                <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
                   {activity.map((item, idx) => {
                     const isBuy = item.type.startsWith("BUY");
                     const isClaim = item.type === "CLAIM_REWARDS";
@@ -769,13 +768,13 @@ export default function UserDashboard() {
                     let valClass = "";
                     if (isBuy) {
                       actionText = item.type === "BUY_YES" ? "BUY YES" : "BUY NO";
-                      valClass = "text-text-primary";
+                      valClass = "text-[#e5e2e1]";
                     } else if (isClaim) {
                       actionText = "CLAIMED REWARDS";
-                      valClass = "text-green-500 font-semibold";
+                      valClass = "text-[#a1d494] font-bold";
                     } else if (isRefund) {
                       actionText = "REFUND CLAIMED";
-                      valClass = "text-amber-500";
+                      valClass = "text-[#ffd89c] font-bold";
                     }
 
                     return (
@@ -786,23 +785,23 @@ export default function UserDashboard() {
                         transition={{ delay: idx * 0.03 }}
                         className="table-row-3d"
                       >
-                        <td className="py-4 px-6 text-[#808495]">{item.timeStr}</td>
+                        <td className="py-4 px-6 text-[#d6c4ac]">{item.timeStr}</td>
                         <td className="py-4 px-6">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               isBuy
                                 ? item.type === "BUY_YES"
-                                  ? "bg-[#235A34]/20 text-green-500 border border-[#235A34]/30"
-                                  : "bg-[#8E2424]/20 text-red-500 border border-[#8E2424]/30"
+                                  ? "bg-[#a1d494]/15 text-[#a1d494] border border-[#a1d494]/20"
+                                  : "bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/20"
                                 : isClaim
-                                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                                  : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                  ? "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20"
+                                  : "bg-[#ffd89c]/10 text-[#ffd89c] border border-[#ffd89c]/20"
                             }`}
                           >
                             {actionText}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-[#F4F4F9] max-w-sm truncate">{item.question}</td>
+                        <td className="py-4 px-6 text-[#e5e2e1] max-w-sm truncate font-bold">{item.question}</td>
                         <td className={`py-4 px-6 text-right ${valClass}`}>
                           {isBuy
                             ? `-${item.costOrPayout.toFixed(4)}`
