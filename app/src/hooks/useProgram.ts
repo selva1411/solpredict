@@ -110,7 +110,95 @@ export function useProgram() {
     );
 
     const idlCopy = { ...idl, address: ENV.programId.toBase58() };
-    return new Program(idlCopy as Idl, provider) as unknown as SolPredictProgram;
+    const rawProgram = new Program(idlCopy as Idl, provider);
+
+    // Map category enum to number
+    const parseCategory = (categoryObj: any): number => {
+      if (typeof categoryObj === "number") return categoryObj;
+      if (!categoryObj) return 4; // default to Other (index 4)
+      if (categoryObj.crypto !== undefined) return 0;
+      if (categoryObj.sports !== undefined) return 1;
+      if (categoryObj.politics !== undefined) return 2;
+      if (categoryObj.tech !== undefined) return 3;
+      if (categoryObj.other !== undefined) return 4;
+      
+      // Check uppercase variants
+      if (categoryObj.Crypto !== undefined) return 0;
+      if (categoryObj.Sports !== undefined) return 1;
+      if (categoryObj.Politics !== undefined) return 2;
+      if (categoryObj.Tech !== undefined) return 3;
+      if (categoryObj.Other !== undefined) return 4;
+
+      return 4;
+    };
+
+    // Map comparison enum to number
+    const parseComparison = (comparisonObj: any): number => {
+      if (typeof comparisonObj === "number") return comparisonObj;
+      if (!comparisonObj) return 0; // default to GreaterThan (index 0)
+      if (comparisonObj.greaterThan !== undefined) return 0;
+      if (comparisonObj.lessThan !== undefined) return 1;
+      
+      // Check uppercase variants
+      if (comparisonObj.GreaterThan !== undefined) return 0;
+      if (comparisonObj.LessThan !== undefined) return 1;
+
+      return 0;
+    };
+
+    const wrapMarketAccount = (marketAccount: any) => {
+      if (!marketAccount) return marketAccount;
+      return {
+        ...marketAccount,
+        category: parseCategory(marketAccount.category),
+        comparison: parseComparison(marketAccount.comparison)
+      };
+    };
+
+    // Proxy the market account methods to parse the category enum on fetch/all
+    const originalMarket = (rawProgram.account as any).market;
+    const wrappedMarket = new Proxy(originalMarket, {
+      get(target: any, prop: string | symbol) {
+        if (prop === "fetch") {
+          return async (address: any, ...args: any[]) => {
+            const res = await target.fetch(address, ...args);
+            return wrapMarketAccount(res);
+          };
+        }
+        if (prop === "all") {
+          return async (...args: any[]) => {
+            const res = await target.all(...args);
+            return res.map((item: any) => ({
+              ...item,
+              account: wrapMarketAccount(item.account)
+            }));
+          };
+        }
+        const val = target[prop];
+        return typeof val === "function" ? val.bind(target) : val;
+      }
+    });
+
+    // Create a proxy/wrapper for program to keep all other fields and overwrite account.market
+    const wrappedProgram = new Proxy(rawProgram, {
+      get(target: any, prop: string | symbol) {
+        if (prop === "account") {
+          return new Proxy(target.account, {
+            get(accountTarget: any, accountProp: string | symbol) {
+              if (accountProp === "market") {
+                return wrappedMarket;
+              }
+              const val = accountTarget[accountProp];
+              return typeof val === "function" ? val.bind(accountTarget) : val;
+            }
+          });
+        }
+        const val = target[prop];
+        return typeof val === "function" ? val.bind(target) : val;
+      }
+    });
+
+    return wrappedProgram as unknown as SolPredictProgram;
   }, [connection, wallet]);
 
   return { program, connection, wallet };

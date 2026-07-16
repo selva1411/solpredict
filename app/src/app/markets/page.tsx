@@ -124,7 +124,7 @@ export default function MarketExplorer() {
               placeholder="SEARCH QUESTIONS..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-2.5 board-input text-xs tracking-wider border-[#9e8e78] bg-[#131313]"
+              className="w-full pl-12 pr-4 py-2.5 board-input text-xs tracking-wider border-board-border bg-board-panel"
             />
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function MarketExplorer() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as "trending" | "volume" | "ends" | "newest")}
-            className="w-full board-input text-xs bg-[#131313] border-[#9e8e78] h-[38px]"
+            className="w-full board-input text-xs bg-board-panel border-board-border h-[38px]"
           >
             <option value="trending">Trending Volume</option>
             <option value="volume">Highest Volume</option>
@@ -183,7 +183,7 @@ export default function MarketExplorer() {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="board-input text-xs bg-[#131313] border-[#9e8e78] py-1 px-3"
+            className="board-input text-xs bg-board-panel border-board-border py-1 px-3"
           >
             <option value="Open">OPEN</option>
             <option value="Settled">SETTLED</option>
@@ -197,7 +197,7 @@ export default function MarketExplorer() {
       {loading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="board-panel skeleton-shimmer h-64 bg-[#131313]" />
+            <div key={i} className="board-panel skeleton-shimmer h-64 bg-board-panel" />
           ))}
         </div>
       ) : sortedAndFiltered.length === 0 ? (
@@ -223,7 +223,7 @@ export default function MarketExplorer() {
               <motion.div 
                 key={key} 
                 variants={scaleIn}
-                className="board-panel p-5 flex flex-col justify-between h-64 bg-[#131313] board-panel-3d border-[#9e8e78]/40"
+                className="board-panel p-5 flex flex-col justify-between h-64 bg-board-panel board-panel-3d border-board-border/40"
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -277,7 +277,7 @@ export default function MarketExplorer() {
                 </div>
 
                 <Link href={`/market/${key}`} className="w-full">
-                  <button className="w-full py-2 bg-[#1c1c1c] hover:bg-[#242424] border border-[#9e8e78]/60 text-[10px] font-bold uppercase tracking-wider font-display rounded text-[#e5e2e1] hover:border-[#ffd89c] transition-all cursor-pointer">
+                  <button className="w-full py-2 bg-surface-variant hover:bg-surface-variant/80 border border-board-border/60 text-[10px] font-bold uppercase tracking-wider font-display rounded text-text-primary hover:border-mechanical-amber transition-all cursor-pointer">
                     Inspect Specs
                   </button>
                 </Link>

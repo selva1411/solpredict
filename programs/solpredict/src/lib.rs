@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("DEvuACCqmWuRh119ZSKgwW2CgEJk8itK8RxfZvJWG2kG");
+declare_id!("GLVpWtRzv82WL2GoMbJLgzgBNR5VJKAmzUjaECMjeCjF");
 
 #[program]
 pub mod solpredict {
@@ -87,6 +87,7 @@ pub mod solpredict {
     }
 
     /// Create mock Pyth PriceUpdateV2 account data (testing only).
+    #[cfg(feature = "test-only")]
     pub fn mock_create_price_update(
         ctx: Context<MockCreatePriceUpdate>,
         feed_id: [u8; 32],

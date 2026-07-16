@@ -6,6 +6,7 @@ pub mod claim_rewards;
 pub mod cancel_market;
 pub mod claim_refund;
 pub mod withdraw_fees;
+#[cfg(feature = "test-only")]
 pub mod mock_create_price_update;
 pub mod settle_market_manual;
 
@@ -17,5 +18,6 @@ pub use claim_rewards::*;
 pub use cancel_market::*;
 pub use claim_refund::*;
 pub use withdraw_fees::*;
+#[cfg(feature = "test-only")]
 pub use mock_create_price_update::*;
 pub use settle_market_manual::*;

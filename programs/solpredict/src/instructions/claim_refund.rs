@@ -99,21 +99,17 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         SolPredictError::NothingToClaim
     );
 
-    // 3. Calculate refund: (yes_shares + no_shares) * share_price_lamports
+    // 3. Calculate refund: (yes_tokens + no_tokens) * share_price_lamports / BASE_UNITS_PER_SHARE
     //    user gets back EXACTLY what they paid, no fee taken on cancellation.
-    //    Shares = tokens / BASE_UNITS_PER_SHARE
-    let yes_shares = yes_tokens
-        .checked_div(BASE_UNITS_PER_SHARE)
+    let total_tokens = yes_tokens
+        .checked_add(no_tokens)
         .ok_or(SolPredictError::MathOverflow)?;
-    let no_shares = no_tokens
-        .checked_div(BASE_UNITS_PER_SHARE)
+    let refund = (total_tokens as u128)
+        .checked_mul(ctx.accounts.market.share_price_lamports as u128)
+        .ok_or(SolPredictError::MathOverflow)?
+        .checked_div(BASE_UNITS_PER_SHARE as u128)
         .ok_or(SolPredictError::MathOverflow)?;
-    let total_shares = yes_shares
-        .checked_add(no_shares)
-        .ok_or(SolPredictError::MathOverflow)?;
-    let refund = total_shares
-        .checked_mul(ctx.accounts.market.share_price_lamports)
-        .ok_or(SolPredictError::MathOverflow)?;
+    let refund_u64 = u64::try_from(refund).map_err(|_| SolPredictError::MathOverflow)?;
 
     // 4. Burn YES tokens if non-zero
     if yes_tokens > 0 {
@@ -163,7 +159,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         },
         signer_seeds,
     );
-    anchor_lang::system_program::transfer(cpi_ctx, refund)?;
+    anchor_lang::system_program::transfer(cpi_ctx, refund_u64)?;
 
     // 7. Verify treasury retains rent-exempt minimum or is completely empty
     let treasury_info = ctx.accounts.treasury.to_account_info();
@@ -181,12 +177,12 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
     emit!(RefundClaimed {
         market_id: ctx.accounts.market.market_id,
         user: ctx.accounts.claimer.key(),
-        refund,
+        refund: refund_u64,
     });
 
     msg!(
         "Refunded {} lamports for market {}",
-        refund,
+        refund_u64,
         ctx.accounts.market.market_id
     );
 

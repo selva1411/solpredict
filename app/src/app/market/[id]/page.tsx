@@ -13,7 +13,10 @@ import {
   AlertCircle,
   Award,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Share2,
+  Send,
+  Star
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { EventParser } from "@coral-xyz/anchor";
@@ -23,10 +26,12 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
-import { getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
-import { FlipCountdown } from "@/components/FlipCountdown";
-import { OrderBookDepth } from "@/components/OrderBookDepth";
 import ProbabilityOrb3D from "@/components/ProbabilityOrb3D";
+import { OrderBookDepth } from "@/components/OrderBookDepth";
+import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
+import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
+import { ThreeOrb } from "@/components/ThreeOrb";
+import { FlipCountdown } from "@/components/FlipCountdown";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -171,6 +176,10 @@ export default function MarketDetailPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [successFlip, setSuccessFlip] = useState<boolean>(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+  const [isWatched, setIsWatched] = useState<boolean>(false);
+  const [showShareOptions, setShowShareOptions] = useState<boolean>(false);
+  const [feeBps, setFeeBps] = useState<number | null>(null);
+  const [treasuryBalance, setTreasuryBalance] = useState<number>(0);
 
   // Sparkline history — stores probability snapshots
   const probHistory = useRef<number[]>([50]);
@@ -183,6 +192,8 @@ export default function MarketDetailPage() {
       const marketAcc = await program.account.market.fetch(marketPda);
       setMarket(marketAcc as unknown as MarketDetails);
 
+      setIsWatched(getWatchlist().includes(marketPda.toBase58()));
+
       // Record probability snapshot for sparkline
       const acc = marketAcc as unknown as MarketDetails;
       const yesP = acc.yesPoolLamports.toNumber();
@@ -194,6 +205,20 @@ export default function MarketDetailPage() {
       if (probHistory.current.length <= 1) {
         probHistory.current = [50, yesProbVal];
       }
+
+      // Fetch config fee bps and treasury balance in parallel from the blockchain
+      const configPda = getConfigPda(program.programId);
+      const treasuryPda = getTreasuryPda(marketPda, program.programId);
+      const [configAcc, treasuryBal] = await Promise.all([
+        program.account.config.fetch(configPda).catch(() => null),
+        connection.getBalance(treasuryPda).catch(() => 0),
+      ]);
+
+      if (configAcc) {
+        setFeeBps(configAcc.feeBps);
+      }
+      setTreasuryBalance(treasuryBal);
+
     } catch (err: unknown) {
       console.error("Error fetching market:", err);
       toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
@@ -309,7 +334,48 @@ export default function MarketDetailPage() {
     return <div className="board-panel p-10 h-96 skeleton-shimmer bg-[#131313]" />;
   }
 
-  if (!market) return null;
+  if (!market) {
+    return (
+      <div className="board-panel py-20 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4 max-w-2xl mx-auto board-panel-3d border-[#9e8e78]/40">
+        <AlertCircle className="w-12 h-12 opacity-30 text-[#ffb4ab]" />
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-bold font-display text-[#e5e2e1] uppercase tracking-wide">Contract Departed</h3>
+          <p className="text-xs leading-normal">The requested prediction board does not exist or has been removed from the registry.</p>
+        </div>
+        <div className="pt-4">
+          <Link href="/markets" className="btn-primary text-xs font-semibold px-4 py-2">
+            Return to Explorer
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const handleWatchlistToggle = () => {
+    const next = toggleWatchlist(marketPda.toBase58());
+    setIsWatched(next.includes(marketPda.toBase58()));
+    toast.success(
+      next.includes(marketPda.toBase58())
+        ? "Added to watchlist!"
+        : "Removed from watchlist!"
+    );
+  };
+
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+    `Predicting "${market.question}" on SOLPredict! Current YES Probability: ${Math.round((market.yesPoolLamports.toNumber() / (market.yesPoolLamports.toNumber() + market.noPoolLamports.toNumber() || 1)) * 100)}%`
+  )}&url=${encodeURIComponent(shareUrl)}`;
+  const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(
+    shareUrl
+  )}&text=${encodeURIComponent(
+    `Check out this prediction market on SOLPredict: "${market.question}"`
+  )}`;
+
+  const copyShareLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    toast.success("Share link copied to clipboard!");
+    setShowShareOptions(false);
+  };
 
   const getFeedIdHexString = (feedId: number[] | Uint8Array | Buffer): string => {
     const arr = Array.from(feedId);
@@ -528,7 +594,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="board-panel p-6 sm:p-8 space-y-6 border-[#9e8e78] bg-[#131313]"
+            className="board-panel p-6 sm:p-8 space-y-6 border-board-border bg-board-panel"
           >
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[#9e8e78]/30 text-[#ffd89c]">
@@ -537,9 +603,64 @@ export default function MarketDetailPage() {
               <span className="text-xs font-mono text-[#d6c4ac]">BOARD ID #{market.marketId?.toString()}</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#e5e2e1] uppercase leading-tight">
-              {market.question}
-            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#e5e2e1] uppercase leading-tight flex-1">
+                {market.question}
+              </h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleWatchlistToggle}
+                  className={`p-2.5 rounded border transition-colors flex items-center justify-center cursor-pointer ${
+                    isWatched
+                      ? "border-[#ffd89c] bg-[#ffd89c]/10 text-[#ffd89c]"
+                      : "border-[#9e8e78]/30 bg-black/20 text-[#d6c4ac] hover:text-[#e5e2e1] hover:border-[#9e8e78]/60"
+                  }`}
+                  title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+                >
+                  <Star className={`w-4 h-4 ${isWatched ? "fill-current text-[#ffd89c]" : ""}`} />
+                </button>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setShowShareOptions(!showShareOptions)}
+                    className="p-2.5 rounded border border-[#9e8e78]/30 bg-black/20 text-[#d6c4ac] hover:text-[#e5e2e1] hover:border-[#9e8e78]/60 transition-colors flex items-center justify-center cursor-pointer"
+                    title="Share market"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                  
+                  {showShareOptions && (
+                    <div className="absolute right-0 mt-2 w-40 bg-[#0d0d0d] border border-[#9e8e78]/50 p-1.5 rounded shadow-2xl z-30 font-mono text-[10px] space-y-1">
+                      <button
+                        onClick={copyShareLink}
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#e5e2e1] transition-colors flex items-center gap-2 cursor-pointer"
+                      >
+                        🔗 Copy link
+                      </button>
+                      <a
+                        href={twitterShareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#e5e2e1] transition-colors flex items-center gap-2 block"
+                      >
+                        <svg className="w-3 h-3 fill-current text-[#ffd89c]" viewBox="0 0 24 24">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                        Share on X
+                      </a>
+                      <a
+                        href={telegramShareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#e5e2e1] transition-colors flex items-center gap-2 block"
+                      >
+                        <Send className="w-3 h-3 text-[#a1d494]" /> Telegram
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <p className="text-sm text-[#d6c4ac] leading-relaxed font-medium">
               {market.description}
@@ -598,7 +719,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.05 }}
-            className="board-panel p-6 sm:p-8 space-y-6 border-[#9e8e78]/40 bg-[#131313]"
+            className="board-panel p-6 sm:p-8 space-y-6 border-board-border/40 bg-board-panel"
           >
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
               <TrendingUp className="w-4 h-4 text-[#ffd89c]" />
@@ -641,8 +762,10 @@ export default function MarketDetailPage() {
                 )}
               </div>
 
-              {/* Semicircle dial indicator */}
-              <ProbabilityOrb3D yesProb={yesProb} size={150} />
+              {/* Live WebGL 3D Win-Probability Orb */}
+              <div className="w-full sm:w-48 flex-shrink-0">
+                <ThreeOrb yesProbability={yesProb} />
+              </div>
             </div>
           </motion.div>
 
@@ -654,7 +777,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.15 }}
-            className="board-panel p-6 space-y-4 border-[#9e8e78]/40 bg-[#131313]"
+            className="board-panel p-6 space-y-4 border-board-border/40 bg-board-panel"
           >
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
               <Activity className="w-4 h-4 text-[#ffd89c]" />
@@ -710,6 +833,62 @@ export default function MarketDetailPage() {
               )}
             </div>
           </motion.div>
+
+          {/* Trust Signals & Settlement Explainer Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            className="board-panel p-6 sm:p-8 space-y-6 border-[#9e8e78]/40 bg-[#131313]"
+          >
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c] flex items-center space-x-2">
+              <Award className="w-4 h-4" />
+              <span>⚖️ TRADER SAFETY & TRUST SIGNALS</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
+              <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
+                <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
+                <div className="font-bold text-[#e5e2e1] text-sm pt-1">
+                  {(treasuryBalance / 1e9).toFixed(3)} SOL
+                </div>
+                <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Secure Escrow PDA</div>
+              </div>
+
+              <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
+                <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Protocol Fee BPS</div>
+                <div className="font-bold text-[#e5e2e1] text-sm pt-1">
+                  {feeBps !== null ? `${(feeBps / 100).toFixed(1)}%` : "— BPS"}
+                </div>
+                <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Max capped at 10%</div>
+              </div>
+
+              <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
+                <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
+                <div className="font-bold text-[#a1d494] text-sm pt-1">
+                  {market.category === 0 ? "Pyth Pull Oracle" : "Manual Settle"}
+                </div>
+                <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Automated on-chain feed</div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30 space-y-2 text-xs font-sans text-[#d6c4ac] leading-relaxed">
+              <h4 className="font-display font-bold text-[#e5e2e1] text-[10px] uppercase tracking-wider">How Settlement Works</h4>
+              <p>
+                This prediction board is secured by a decentralized smart contract treasury. 
+                {market.category === 0 ? (
+                  <span>
+                    {" "}For Crypto boards, anyone can trigger settlement once the resolution timestamp has passed. The contract retrieves the target price directly from the Pyth Network pull oracle, validates the feed signature to verify it is not stale, and settles the board based on the comparison rule.
+                  </span>
+                ) : (
+                  <span>
+                    {" "}For Sports and Other boards, the administrator posts the official winning outcome (YES or NO) under a multi-signature verified authority once the event completes.
+                  </span>
+                )}
+                {" "}If the settled side has zero winning shares (meaning nobody bet on the winner), the market auto-cancels and permits all participants to withdraw their full stakes without protocol fees.
+              </p>
+            </div>
+          </motion.div>
         </section>
 
         {/* Right Column: Desktop Trading dashboard */}
@@ -718,7 +897,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className={`board-panel p-6 space-y-6 border-[#9e8e78] bg-[#131313] ${successFlip ? "animate-success-flip" : ""}`}
+            className={`board-panel p-6 space-y-6 border-board-border bg-board-panel ${successFlip ? "animate-success-flip" : ""}`}
           >
             <h3 className="text-sm font-bold uppercase tracking-wider font-display border-b border-[#9e8e78]/30 pb-3 text-[#ffd89c]">
               [■] Prediction Desk

@@ -188,7 +188,16 @@ function AdminPage() {
     try {
       setConfigLoading(true);
       const configPda = getConfigPda(program.programId);
-      const configAcc = await program.account.config.fetch(configPda);
+      
+      let configAcc;
+      try {
+        configAcc = await program.account.config.fetch(configPda);
+      } catch (configErr) {
+        console.log("Config PDA not initialized yet:", configErr);
+        setConfig(null);
+        return; // Config is not initialized, abort secondary queries
+      }
+
       setConfig({
         publicKey: configPda,
         admin: configAcc.admin,
@@ -196,17 +205,25 @@ function AdminPage() {
         marketCount: configAcc.marketCount.toNumber(),
       });
 
-      const allMarkets = (await program.account.market.all()) as Market[];
-      setMarkets(allMarkets);
+      let allMarkets: Market[] = [];
+      try {
+        allMarkets = (await program.account.market.all()) as Market[];
+        setMarkets(allMarkets);
+        fetchAdminActivity(allMarkets);
+      } catch (marketErr) {
+        console.error("Failed to fetch markets list:", marketErr);
+        toast.error(`Failed to load markets: ${getFriendlyErrorMessage(marketErr)}`);
+      }
 
-      const userPositions = await program.account.userPosition.all();
-      const distinctTraders = new Set(userPositions.map((pos: any) => pos.account.owner.toBase58()));
-      setUniqueTradersCount(distinctTraders.size);
-
-      fetchAdminActivity(allMarkets);
+      try {
+        const userPositions = await program.account.userPosition.all();
+        const distinctTraders = new Set(userPositions.map((pos: any) => pos.account.owner.toBase58()));
+        setUniqueTradersCount(distinctTraders.size);
+      } catch (posErr) {
+        console.error("Failed to fetch user positions for stats:", posErr);
+      }
     } catch (err) {
-      console.log("Config PDA not initialized yet:", err);
-      setConfig(null);
+      console.error("General fetchConfigAndMarkets error:", err);
     } finally {
       setConfigLoading(false);
     }

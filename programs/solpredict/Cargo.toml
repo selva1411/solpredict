@@ -9,7 +9,8 @@ crate-type = ["cdylib", "lib"]
 name = "solpredict"
 
 [features]
-default = []
+default = ["test-only"]
+test-only = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

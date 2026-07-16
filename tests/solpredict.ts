@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { PublicKey, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, createTransferInstruction } from "@solana/spl-token";
 import { expect } from "chai";
 import { Solpredict } from "../target/types/solpredict";
 import {
@@ -896,6 +896,129 @@ describe("SOLPredict Integration Suite", () => {
       } catch (err: any) {
         expect(err.message).to.include("MarketNotSettled");
       }
+    });
+  });
+
+  describe("Phase 6: Fractional Refund Math bug validation", () => {
+    let localMarketPda: PublicKey;
+    let localYesMintPda: PublicKey;
+    let localNoMintPda: PublicKey;
+    let localTreasuryPda: PublicKey;
+    let buyer = Keypair.generate();
+    let recipient = Keypair.generate();
+
+    before(async () => {
+      await fundAccount(buyer.publicKey, 10);
+      await fundAccount(recipient.publicKey, 5); // Fund for buying share + gas
+
+      // Bootstrap a new market
+      const res = await bootstrapMarket(
+        configPda,
+        "Will BTC exceed $100k for fractional test?",
+        "Oracle mock",
+        0,
+        Array(32).fill(7), // feed ID
+        new anchor.BN(100000 * 100000000),
+        -8,
+        0,
+        new anchor.BN(Math.floor(Date.now() / 1000) + 120),
+        new anchor.BN(Math.floor(Date.now() / 1000) + 120),
+        new anchor.BN(10_000_000) // 0.01 SOL per share
+      );
+
+      localMarketPda = res.marketPda;
+      localYesMintPda = res.yesMintPda;
+      localNoMintPda = res.noMintPda;
+      localTreasuryPda = res.treasuryPda;
+    });
+
+    it("Buys 2 full YES shares, transfers 1.5 YES shares to recipient, cancels market, and refunds recipient exactly 2.5 * share_price SOL", async () => {
+      const buyerYesAta = getAssociatedTokenAddressSync(localYesMintPda, buyer.publicKey);
+      const buyerNoAta = getAssociatedTokenAddressSync(localNoMintPda, buyer.publicKey);
+      const buyerPositionPda = getUserPositionPda(localMarketPda, buyer.publicKey, program.programId);
+
+      const recipientYesAta = getAssociatedTokenAddressSync(localYesMintPda, recipient.publicKey);
+      const recipientNoAta = getAssociatedTokenAddressSync(localNoMintPda, recipient.publicKey);
+      const recipientPositionPda = getUserPositionPda(localMarketPda, recipient.publicKey, program.programId);
+
+      // 1. Recipient buys 1 NO share to initialize their position PDA and ATAs
+      await program.methods
+        .buyShares({ no: {} } as any, new anchor.BN(1))
+        .accounts({
+          buyer: recipient.publicKey,
+          market: localMarketPda,
+          treasury: localTreasuryPda,
+          yesMint: localYesMintPda,
+          noMint: localNoMintPda,
+          buyerYesAta: recipientYesAta,
+          buyerNoAta: recipientNoAta,
+          userPosition: recipientPositionPda,
+        } as any)
+        .signers([recipient])
+        .rpc();
+
+      // 2. Buyer buys 2 YES shares
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(2))
+        .accounts({
+          buyer: buyer.publicKey,
+          market: localMarketPda,
+          treasury: localTreasuryPda,
+          yesMint: localYesMintPda,
+          noMint: localNoMintPda,
+          buyerYesAta,
+          buyerNoAta,
+          userPosition: buyerPositionPda,
+        } as any)
+        .signers([buyer])
+        .rpc();
+
+      // 3. Buyer transfers 1.5 YES shares (1,500,000 base units) to recipient
+      const tx = new anchor.web3.Transaction().add(
+        createTransferInstruction(
+          buyerYesAta,
+          recipientYesAta,
+          buyer.publicKey,
+          1_500_000
+        )
+      );
+
+      await anchor.web3.sendAndConfirmTransaction(connection, tx, [buyer]);
+
+      // 4. Admin cancels the market
+      await program.methods
+        .cancelMarket()
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          market: localMarketPda,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      // 5. Recipient claims refund
+      const beforeBalance = await connection.getBalance(recipient.publicKey);
+
+      await program.methods
+        .claimRefund()
+        .accounts({
+          claimer: recipient.publicKey,
+          market: localMarketPda,
+          treasury: localTreasuryPda,
+          yesMint: localYesMintPda,
+          noMint: localNoMintPda,
+          claimerYesAta: recipientYesAta,
+          claimerNoAta: recipientNoAta,
+          userPosition: recipientPositionPda,
+        } as any)
+        .signers([recipient])
+        .rpc();
+
+      const afterBalance = await connection.getBalance(recipient.publicKey);
+
+      // Refund should be exact original spent (2.5 shares * 0.01 SOL = 25,000,000 lamports)
+      // Balance difference = refund - tx fee, so it should be very close to 0.025 SOL
+      expect(afterBalance - beforeBalance).to.be.greaterThan(24_900_000);
     });
   });
 });

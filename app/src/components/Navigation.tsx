@@ -1,16 +1,41 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUserRole } from "@/hooks/useUserRole";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { MobileNav } from "@/components/MobileNav";
+import { useProgram } from "@/hooks/useProgram";
 import { Activity, Briefcase, Trophy, Settings } from "lucide-react";
 
 export function Navigation() {
   const { role } = useUserRole();
   const pathname = usePathname();
+  const { connection } = useProgram();
+
+  const [healthStatus, setHealthStatus] = useState<"checking" | "online" | "offline">("checking");
+
+  useEffect(() => {
+    let active = true;
+    const checkConnection = async () => {
+      try {
+        await connection.getSlot();
+        if (active) setHealthStatus("online");
+      } catch (err) {
+        console.error("RPC connection health check failed:", err);
+        if (active) setHealthStatus("offline");
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 12000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [connection]);
 
   return (
     <>
@@ -45,8 +70,12 @@ export function Navigation() {
           {/* Wallet Integration Button & Ticker */}
           <div className="flex items-center space-x-4">
             <div className="hidden md:flex items-center space-x-2 bg-[#0d0d0d] border border-[#9e8e78]/30 px-3 py-1.5 rounded">
-              <span className="w-2 h-2 rounded-full bg-[#ffd89c] animate-pulse"></span>
-              <span className="text-xs font-mono font-medium text-[#d6c4ac]">SOL/USD: $267.12</span>
+              <span className={`w-2 h-2 rounded-full animate-pulse ${
+                healthStatus === "online" ? "bg-[#a1d494]" : healthStatus === "offline" ? "bg-[#ffb4ab]" : "bg-[#ffd89c]"
+              }`}></span>
+              <span className="text-xs font-mono font-medium text-[#d6c4ac] uppercase tracking-wider">
+                RPC: {healthStatus}
+              </span>
             </div>
             
             {/* Mobile Nav */}

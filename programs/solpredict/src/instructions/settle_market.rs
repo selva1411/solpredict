@@ -52,9 +52,9 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // Only Crypto markets can be settled via oracle
+    // Only Crypto, Tech, and Other markets can be settled via oracle
     require!(
-        market.category == Category::Crypto,
+        market.category == Category::Crypto || market.category == Category::Tech || market.category == Category::Other,
         SolPredictError::UseManualSettlement
     );
 
