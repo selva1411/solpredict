@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::MarketSettled;
-use crate::state::{Category, Config, Market, MarketStatus, WinningOutcome};
+use crate::state::{Config, Market, MarketStatus, WinningOutcome};
 use crate::utils::payout_math;
 
 #[derive(Accounts)]
@@ -28,9 +28,9 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // Block oracle-settleable categories — they must use settle_market
+    // Block price-backed markets (non-zero oracle_feed_id) — they must use settle_market
     require!(
-        market.category != Category::Crypto,
+        market.oracle_feed_id == [0u8; 32],
         SolPredictError::UseOracleSettlement
     );
 

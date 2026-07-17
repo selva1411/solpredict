@@ -130,6 +130,14 @@ pub fn handler(
         _ => Category::Other,
     };
 
+    // Enforce that Sports and Politics categories cannot be initialized with a price feed
+    if category_enum == Category::Sports || category_enum == Category::Politics {
+        require!(
+            oracle_feed_id == [0u8; 32],
+            SolPredictError::UseManualSettlement
+        );
+    }
+
     // 7. Validate comparison enum value
     let comparison_enum = match comparison {
         0 => Comparison::GreaterThan,

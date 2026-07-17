@@ -29,6 +29,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConnectWalletGate } from "@/components/dashboard/ConnectWalletGate";
 import { StatTile3D } from "@/components/dashboard/StatTile3D";
 import { DashboardSection, DashboardHero } from "@/components/dashboard/DashboardSection";
+import { PYTH_FEED_REGISTRY, PythFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -91,6 +92,7 @@ function AdminPage() {
   const [question, setQuestion] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [category, setCategory] = useState<number>(0);
+  const [selectedAssetKey, setSelectedAssetKey] = useState<string>("");
   const [targetPriceVal, setTargetPriceVal] = useState<number>(250.00);
   const [comparison, setComparison] = useState<number>(0); 
   const [durationSecs, setDurationSecs] = useState<number>(300); 
@@ -137,7 +139,9 @@ function AdminPage() {
     });
 
     try {
-      const res = await fetch("https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d");
+      const feedHex = "0x" + Array.from(market.account.oracleFeedId).map(b => b.toString(16).padStart(2, '0')).join('');
+      const url = `https://hermes.pyth.network/v2/updates/price/latest?ids%5B%5D=${feedHex.slice(2)}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         const priceUpdate = data.parsed?.[0]?.price;
@@ -349,7 +353,7 @@ function AdminPage() {
       let targetExpo = 0;
       let finalComparison = 0;
 
-      if (category === 0) {
+      if (isOracleCategory(category)) {
         let hex = oracleFeedIdHex.trim();
         if (hex.startsWith("0x")) {
           hex = hex.slice(2);
@@ -503,8 +507,12 @@ function AdminPage() {
     }
   };
 
+  const isOracleSettleable = (feedId: number[]): boolean => {
+    return feedId.some(b => b !== 0);
+  };
+
   const handleSettleButtonClick = (market: Market) => {
-    if (market.account.category === 0) {
+    if (isOracleSettleable(market.account.oracleFeedId)) {
       openSettleModal(market);
     } else {
       setManualSettleModal({
@@ -584,7 +592,7 @@ function AdminPage() {
     let oracle = 0;
     let manual = 0;
     needsActionMarkets.forEach((m) => {
-      if (m.account.category === 0) {
+      if (isOracleSettleable(m.account.oracleFeedId)) {
         oracle++;
       } else {
         manual++;
@@ -927,14 +935,14 @@ function AdminPage() {
               <div className="divide-y divide-[#9e8e78]/20">
                 {needsActionMarkets.map((m) => {
                   const marketKey = m.publicKey.toBase58();
-                  const isCrypto = m.account.category === 0;
+                  const isOracle = isOracleSettleable(m.account.oracleFeedId);
                   return (
                     <div key={marketKey} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1">
                         <div className="text-sm font-bold text-[#e5e2e1]">{m.account.question}</div>
                         <div className="text-[10px] text-[#d6c4ac] font-mono flex items-center gap-2">
                           <span>Category: {getCategoryString(m.account.category)}</span>
-                          {isCrypto ? (
+                          {isOracle ? (
                             <span className="text-[#06b6d4] font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE SETTLED</span>
                           ) : (
                             <span className="text-[#ffd89c] font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUALLY SETTLED</span>
@@ -1007,7 +1015,7 @@ function AdminPage() {
                       </select>
                     </div>
 
-                    {category === 0 && (
+                    {isOracleCategory(category) && (
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-[#d6c4ac]">Comparison</label>
                         <select
@@ -1022,8 +1030,32 @@ function AdminPage() {
                     )}
                   </div>
 
-                  {category === 0 ? (
+                  {isOracleCategory(category) ? (
                     <>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#d6c4ac]">Asset (auto-fills feed ID & target)</label>
+                        <select
+                          value={selectedAssetKey}
+                          onChange={(e) => {
+                            const key = e.target.value;
+                            setSelectedAssetKey(key);
+                            if (key && PYTH_FEED_REGISTRY[key]) {
+                              const entry = PYTH_FEED_REGISTRY[key];
+                              setOracleFeedIdHex(entry.feedIdHex);
+                              setCategory(entry.category === "Crypto" ? 0 : entry.category === "Tech" ? 3 : 4);
+                              // Set a reasonable default target price (15% above current as guess)
+                            }
+                          }}
+                          className="w-full board-input text-xs bg-[#0d0d0d] border-[#9e8e78]"
+                        >
+                          <option value="">-- Select asset --</option>
+                          {Object.entries(PYTH_FEED_REGISTRY).map(([key, entry]) => (
+                            <option key={key} value={key}>
+                              {entry.label} ({key})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-[#d6c4ac]">Oracle Feed ID (Hex)</label>
                         <input
@@ -1124,8 +1156,9 @@ function AdminPage() {
                                 {(() => {
                                   const now = Math.floor(Date.now() / 1000);
                                   const isPast = m.account.resolveTs.toNumber() < now;
+                                  const feedIdNonZero = m.account.oracleFeedId.some(b => b !== 0);
                                   if (status === "Open" && isPast) {
-                                    if (m.account.category === 0) {
+                                    if (feedIdNonZero) {
                                       return (
                                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#06b6d4]/15 text-[#ffd89c] border border-[#06b6d4]/20 inline-flex items-center gap-1">
                                           <Zap className="w-3 h-3 text-[#ffd89c]" /> ORACLE SETTLE

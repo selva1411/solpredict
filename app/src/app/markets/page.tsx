@@ -12,6 +12,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getMarketStatusString } from "@/lib/events";
+import { usePythPrices } from "@/hooks/usePythPrices";
+import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
+import { LivePriceBar } from "@/components/LivePriceBar";
 
 interface Market {
   publicKey: PublicKey;
@@ -20,6 +23,10 @@ interface Market {
     question: string;
     description: string;
     category: number;
+    oracleFeedId: number[];
+    targetPrice: anchor.BN;
+    targetExpo: number;
+    comparison: number;
     endTs: anchor.BN;
     resolveTs: anchor.BN;
     status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
@@ -98,9 +105,25 @@ export default function MarketExplorer() {
         if (sortBy === "volume") return volB - volA;
         if (sortBy === "ends") return a.account.endTs.toNumber() - b.account.endTs.toNumber();
         if (sortBy === "newest") return b.account.marketId.toNumber() - a.account.marketId.toNumber();
-        return volB - volA; // Default trending
+        return volB - volA;
       });
   }, [markets, search, selectedCategory, selectedStatus, watchlistOnly, watchlist, sortBy]);
+
+  // Collect all feed IDs for live price fetching
+  const allFeedHexes = useMemo(() => {
+    const hexes: string[] = [];
+    for (const m of sortedAndFiltered) {
+      if (isOracleCategory(m.account.category) && m.account.oracleFeedId) {
+        const hex = feedIdBytesToHex(m.account.oracleFeedId);
+        if (lookupFeedEntry(hex)) {
+          hexes.push(hex);
+        }
+      }
+    }
+    return hexes;
+  }, [sortedAndFiltered]);
+
+  const livePrices = usePythPrices(allFeedHexes);
 
   return (
     <div className="space-y-8 animate-fade-in font-sans">
@@ -197,7 +220,7 @@ export default function MarketExplorer() {
       {loading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="board-panel skeleton-shimmer h-64 bg-board-panel" />
+            <div key={i} className="board-panel skeleton-shimmer h-76 bg-board-panel" />
           ))}
         </div>
       ) : sortedAndFiltered.length === 0 ? (
@@ -220,72 +243,202 @@ export default function MarketExplorer() {
             const yesPercent = totalVolume > 0 ? Math.round((yesPool / totalVolume) * 100) : 50;
 
             return (
-              <motion.div 
-                key={key} 
-                variants={scaleIn}
-                className="board-panel p-5 flex flex-col justify-between h-64 bg-board-panel board-panel-3d border-board-border/40"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-[#9e8e78]/30 text-[#d6c4ac]">
-                        {CATEGORIES[market.account.category] || "Other"}
-                      </span>
-                      {market.account.category === 0 ? (
-                        <span className="text-[9px] font-mono text-[#06b6d4] font-bold" title="Settled automatically via Pyth Network oracle feed">🔮 Oracle</span>
-                      ) : (
-                        <span className="text-[9px] font-mono text-[#ffd89c] font-bold" title="Settled manually by the platform admin signature">⚖️ Manual</span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button onClick={() => handleToggleWatch(key)} className="text-[#d6c4ac] hover:text-[#ffd89c] cursor-pointer">
-                        <Star className={`w-4 h-4 ${isWatched ? "text-[#ffd89c] fill-[#ffd89c]" : ""}`} />
-                      </button>
-                      <span className={`w-2.5 h-2.5 rounded-full ${
-                        status === "Open" ? "bg-[#a1d494]" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ffb4ab]"
-                      }`} />
-                      <span className="text-[9px] font-mono font-bold uppercase">{status}</span>
-                    </div>
-                  </div>
-                  <Link href={`/market/${key}`} className="block group">
-                    <h3 className="text-sm font-bold font-display text-[#e5e2e1] group-hover:text-[#ffd89c] transition-colors line-clamp-2 leading-snug">
-                      {market.account.question}
-                    </h3>
-                  </Link>
-                </div>
-
-                {/* YES/NO split bar layout */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-[10px] font-mono font-bold">
-                    <span className="text-[#a1d494]">YES: {yesPercent}%</span>
-                    <span className="text-[#ffb4ab]">NO: {100 - yesPercent}%</span>
-                  </div>
-                  <div className="w-full h-3 bg-[#ffb4ab]/30 flex border border-black overflow-hidden rounded">
-                    <div className="h-full bg-[#a1d494]" style={{ width: `${yesPercent}%` }} />
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-[#9e8e78]/20 flex items-center justify-between text-[10px] font-mono">
-                  <div className="flex items-center space-x-1.5 text-[#d6c4ac]">
-                    <Clock className="w-3.5 h-3.5" />
-                    <FlipCountdown endTs={market.account.endTs.toNumber()} compact />
-                  </div>
-                  <div className="flex items-center space-x-1 text-[#ffd89c] font-bold">
-                    <Coins className="w-3.5 h-3.5" />
-                    <span>{totalVolume.toFixed(2)} SOL</span>
-                  </div>
-                </div>
-
-                <Link href={`/market/${key}`} className="w-full">
-                  <button className="w-full py-2 bg-surface-variant hover:bg-surface-variant/80 border border-board-border/60 text-[10px] font-bold uppercase tracking-wider font-display rounded text-text-primary hover:border-mechanical-amber transition-all cursor-pointer">
-                    Inspect Specs
-                  </button>
-                </Link>
-              </motion.div>
+              <MarketCard
+                key={key}
+                market={market}
+                marketKey={key}
+                isWatched={isWatched}
+                handleToggleWatch={handleToggleWatch}
+                status={status}
+                yesPercent={yesPercent}
+                totalVolume={totalVolume}
+                livePrices={livePrices}
+              />
             );
           })}
         </div>
       )}
     </div>
+  );
+}
+
+interface MarketCardProps {
+  market: Market;
+  marketKey: string;
+  isWatched: boolean;
+  handleToggleWatch: (key: string) => void;
+  status: string;
+  yesPercent: number;
+  totalVolume: number;
+  livePrices: Record<string, any>;
+}
+
+function MiniSparkline({ history }: { history: number[] }) {
+  if (history.length < 2) return null;
+  const width = 50;
+  const height = 14;
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min;
+
+  const points = history
+    .map((val, idx) => {
+      const x = (idx / (history.length - 1)) * width;
+      const y = range === 0 ? height / 2 : height - ((val - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const isUp = history[history.length - 1] >= history[0];
+  const color = isUp ? "#a1d494" : "#ffb4ab";
+
+  return (
+    <svg width={width} height={height} className="overflow-visible select-none inline-block align-middle ml-1" style={{ minWidth: width }}>
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+}
+
+function MarketCard({
+  market,
+  marketKey,
+  isWatched,
+  handleToggleWatch,
+  status,
+  yesPercent,
+  totalVolume,
+  livePrices,
+}: MarketCardProps) {
+  const feedHex = isOracleCategory(market.account.category) && market.account.oracleFeedId
+    ? feedIdBytesToHex(market.account.oracleFeedId)
+    : null;
+  const feedEntry = feedHex ? lookupFeedEntry(feedHex) : null;
+  const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
+
+  // Local state to store last N polled prices for sparkline
+  const [priceHistory, setPriceHistory] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (priceData && priceData.price !== null) {
+      setPriceHistory((prev) => {
+        if (prev.length > 0 && prev[prev.length - 1] === priceData.price) {
+          return prev;
+        }
+        const next = [...prev, priceData.price];
+        if (next.length > 10) next.shift();
+        return next;
+      });
+    }
+  }, [priceData?.price]);
+
+  // If we have a price but not enough points for sparkline, mock a tiny history based on current price
+  const sparklineHistory = useMemo(() => {
+    if (priceData && priceData.price !== null) {
+      if (priceHistory.length >= 2) {
+        return priceHistory;
+      }
+      const p = priceData.price;
+      return [p * 0.998, p * 1.001, p * 0.999, p];
+    }
+    return [];
+  }, [priceHistory, priceData?.price]);
+
+  return (
+    <motion.div 
+      variants={scaleIn}
+      className="board-panel p-5 flex flex-col justify-between h-76 bg-board-panel board-panel-3d border-board-border/40 hover:border-mechanical-amber/70"
+    >
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1.5">
+            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-board-border/20 text-[#d6c4ac]">
+              {CATEGORIES[market.account.category] || "Other"}
+            </span>
+            {isOracleCategory(market.account.category) ? (
+              <span className="text-[9px] font-mono text-[#06b6d4] font-bold" title="Settled automatically via Pyth Network oracle feed">🔮 Oracle</span>
+            ) : (
+              <span className="text-[9px] font-mono text-mechanical-amber font-bold" title="Settled manually by the platform admin signature">⚖️ Manual</span>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            <button onClick={() => handleToggleWatch(marketKey)} className="text-[#d6c4ac] hover:text-mechanical-amber cursor-pointer bg-transparent border-0 p-0">
+              <Star className={`w-4 h-4 ${isWatched ? "text-mechanical-amber fill-mechanical-amber" : ""}`} />
+            </button>
+            <span className={`w-2.5 h-2.5 rounded-full ${
+              status === "Open" ? "bg-[#a1d494]" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ffb4ab]"
+            }`} />
+            <span className="text-[9px] font-mono font-bold uppercase text-text-primary">{status}</span>
+          </div>
+        </div>
+
+        {/* Live price / manual badge line */}
+        <div className="flex items-center justify-between min-h-[22px]">
+          {feedEntry && priceData ? (
+            <div className="flex items-center gap-1.5">
+              <LivePriceBar
+                feedIdHex={feedHex!}
+                category={market.account.category}
+                livePrice={priceData.price}
+                liveLoading={priceData.loading}
+                liveError={priceData.error}
+                targetPrice={market.account.targetPrice.toNumber()}
+                targetExpo={market.account.targetExpo}
+                comparison={market.account.comparison}
+                compact
+              />
+              <MiniSparkline history={sparklineHistory} />
+            </div>
+          ) : feedHex && feedEntry && !priceData ? (
+            <span className="text-[10px] font-mono text-[#d6c4ac] animate-pulse">Loading price...</span>
+          ) : (
+            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-mechanical-amber/10 border border-mechanical-amber/20 text-mechanical-amber inline-flex items-center gap-1">
+              ⚖️ Manually resolved
+            </span>
+          )}
+        </div>
+
+        <Link href={`/market/${marketKey}`} className="block group">
+          <h3 className="text-sm font-bold font-display text-text-primary group-hover:text-mechanical-amber transition-colors line-clamp-2 leading-snug">
+            {market.account.question}
+          </h3>
+        </Link>
+      </div>
+
+      {/* YES/NO split bar layout */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-[10px] font-mono font-bold">
+          <span className="text-[#a1d494]">YES: {yesPercent}%</span>
+          <span className="text-[#ffb4ab]">NO: {100 - yesPercent}%</span>
+        </div>
+        <div className="w-full h-3 bg-[#ffb4ab]/20 flex border border-black overflow-hidden rounded-sm">
+          <div className="h-full bg-[#a1d494]" style={{ width: `${yesPercent}%` }} />
+        </div>
+      </div>
+
+      {/* Volume and Countdown */}
+      <div className="pt-3 border-t border-board-border/10 flex items-center justify-between text-[10px] font-mono">
+        <div className="flex items-center space-x-1.5 text-text-muted">
+          <Clock className="w-3.5 h-3.5" />
+          <FlipCountdown endTs={market.account.endTs.toNumber()} compact />
+        </div>
+        <div className="flex items-center space-x-1 text-mechanical-amber font-bold">
+          <Coins className="w-3.5 h-3.5" />
+          <span>{totalVolume.toFixed(2)} SOL</span>
+        </div>
+      </div>
+
+      <Link href={`/market/${marketKey}`} className="w-full pt-1">
+        <button className="w-full py-2 bg-surface-variant hover:bg-surface-variant/80 border border-board-border/40 text-[10px] font-bold uppercase tracking-wider font-display rounded text-text-primary hover:border-mechanical-amber transition-all cursor-pointer">
+          Inspect Specs
+        </button>
+      </Link>
+    </motion.div>
   );
 }

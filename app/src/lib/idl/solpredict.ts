@@ -1,5 +1,11 @@
-{
-  "address": "6LRXkhVNdLdFtVYE2LHyVd2Zhjn2FreKEJNSgq4YKKT5",
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/solpredict.json`.
+ */
+export type Solpredict = {
+  "address": "GLVpWtRzv82WL2GoMbJLgzgBNR5VJKAmzUjaECMjeCjF",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -8,7 +14,7 @@
   },
   "instructions": [
     {
-      "name": "buy_shares",
+      "name": "buyShares",
       "docs": [
         "Buy YES or NO shares on a market."
       ],
@@ -53,7 +59,7 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
@@ -87,7 +93,7 @@
           }
         },
         {
-          "name": "yes_mint",
+          "name": "yesMint",
           "docs": [
             "YES token mint — may or may not be the one we mint to (depends on side)."
           ],
@@ -115,7 +121,7 @@
           }
         },
         {
-          "name": "no_mint",
+          "name": "noMint",
           "docs": [
             "NO token mint."
           ],
@@ -142,7 +148,7 @@
           }
         },
         {
-          "name": "buyer_yes_ata",
+          "name": "buyerYesAta",
           "docs": [
             "Buyer's ATA for the chosen mint — init_if_needed since this may be",
             "the buyer's first purchase of this token."
@@ -193,7 +199,7 @@
               },
               {
                 "kind": "account",
-                "path": "yes_mint"
+                "path": "yesMint"
               }
             ],
             "program": {
@@ -236,7 +242,7 @@
           }
         },
         {
-          "name": "buyer_no_ata",
+          "name": "buyerNoAta",
           "docs": [
             "Buyer's ATA for NO mint."
           ],
@@ -286,7 +292,7 @@
               },
               {
                 "kind": "account",
-                "path": "no_mint"
+                "path": "noMint"
               }
             ],
             "program": {
@@ -329,7 +335,7 @@
           }
         },
         {
-          "name": "user_position",
+          "name": "userPosition",
           "docs": [
             "UserPosition PDA — init_if_needed for first-time buyers.",
             "Seeds: [\"position\", market, buyer]"
@@ -362,15 +368,15 @@
           }
         },
         {
-          "name": "token_program",
+          "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "associated_token_program",
+          "name": "associatedTokenProgram",
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -379,7 +385,7 @@
           "name": "side",
           "type": {
             "defined": {
-              "name": "Side"
+              "name": "side"
             }
           }
         },
@@ -390,7 +396,7 @@
       ]
     },
     {
-      "name": "cancel_market",
+      "name": "cancelMarket",
       "docs": [
         "Cancel an open market (admin-only)."
       ],
@@ -455,7 +461,7 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
@@ -464,7 +470,7 @@
       "args": []
     },
     {
-      "name": "claim_refund",
+      "name": "claimRefund",
       "docs": [
         "Claim a full refund on a cancelled market."
       ],
@@ -508,7 +514,7 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
@@ -542,21 +548,21 @@
           }
         },
         {
-          "name": "yes_mint",
+          "name": "yesMint",
           "docs": [
             "YES mint."
           ],
           "writable": true
         },
         {
-          "name": "no_mint",
+          "name": "noMint",
           "docs": [
             "NO mint."
           ],
           "writable": true
         },
         {
-          "name": "claimer_yes_ata",
+          "name": "claimerYesAta",
           "docs": [
             "User's YES token ATA."
           ],
@@ -606,7 +612,7 @@
               },
               {
                 "kind": "account",
-                "path": "yes_mint"
+                "path": "yesMint"
               }
             ],
             "program": {
@@ -649,7 +655,7 @@
           }
         },
         {
-          "name": "claimer_no_ata",
+          "name": "claimerNoAta",
           "docs": [
             "User's NO token ATA."
           ],
@@ -699,7 +705,7 @@
               },
               {
                 "kind": "account",
-                "path": "no_mint"
+                "path": "noMint"
               }
             ],
             "program": {
@@ -742,7 +748,7 @@
           }
         },
         {
-          "name": "user_position",
+          "name": "userPosition",
           "docs": [
             "UserPosition PDA — double-refund guard."
           ],
@@ -774,18 +780,18 @@
           }
         },
         {
-          "name": "token_program",
+          "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "claim_rewards",
+      "name": "claimRewards",
       "docs": [
         "Claim pro-rata SOL rewards on a settled market (winners only)."
       ],
@@ -829,7 +835,7 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
@@ -863,14 +869,14 @@
           }
         },
         {
-          "name": "winning_mint",
+          "name": "winningMint",
           "docs": [
             "Winning mint — YES or NO depending on market.winning_outcome."
           ],
           "writable": true
         },
         {
-          "name": "claimer_ata",
+          "name": "claimerAta",
           "docs": [
             "Claimer's ATA for the winning mint."
           ],
@@ -920,7 +926,7 @@
               },
               {
                 "kind": "account",
-                "path": "winning_mint"
+                "path": "winningMint"
               }
             ],
             "program": {
@@ -963,7 +969,7 @@
           }
         },
         {
-          "name": "user_position",
+          "name": "userPosition",
           "docs": [
             "UserPosition PDA — double-claim guard."
           ],
@@ -995,18 +1001,18 @@
           }
         },
         {
-          "name": "token_program",
+          "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "initialize_config",
+      "name": "initializeConfig",
       "docs": [
         "One-time program bootstrap. Sets admin and fee percentage."
       ],
@@ -1053,19 +1059,19 @@
           }
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "fee_bps",
+          "name": "feeBps",
           "type": "u16"
         }
       ]
     },
     {
-      "name": "initialize_market",
+      "name": "initializeMarket",
       "docs": [
         "Create a new prediction market (admin-only)."
       ],
@@ -1134,13 +1140,13 @@
               {
                 "kind": "account",
                 "path": "config.market_count",
-                "account": "Config"
+                "account": "config"
               }
             ]
           }
         },
         {
-          "name": "yes_mint",
+          "name": "yesMint",
           "docs": [
             "YES token mint — mint authority = Market PDA (trustless minting).",
             "Seeds: [\"yes_mint\", market.key()]"
@@ -1169,7 +1175,7 @@
           }
         },
         {
-          "name": "no_mint",
+          "name": "noMint",
           "docs": [
             "NO token mint — mint authority = Market PDA (trustless minting).",
             "Seeds: [\"no_mint\", market.key()]"
@@ -1226,11 +1232,11 @@
           }
         },
         {
-          "name": "token_program",
+          "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
         {
@@ -1252,7 +1258,7 @@
           "type": "u8"
         },
         {
-          "name": "oracle_feed_id",
+          "name": "oracleFeedId",
           "type": {
             "array": [
               "u8",
@@ -1261,11 +1267,11 @@
           }
         },
         {
-          "name": "target_price",
+          "name": "targetPrice",
           "type": "i64"
         },
         {
-          "name": "target_expo",
+          "name": "targetExpo",
           "type": "i32"
         },
         {
@@ -1273,21 +1279,21 @@
           "type": "u8"
         },
         {
-          "name": "end_ts",
+          "name": "endTs",
           "type": "i64"
         },
         {
-          "name": "resolve_ts",
+          "name": "resolveTs",
           "type": "i64"
         },
         {
-          "name": "share_price_lamports",
+          "name": "sharePriceLamports",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "mock_create_price_update",
+      "name": "mockCreatePriceUpdate",
       "docs": [
         "Create mock Pyth PriceUpdateV2 account data (testing only)."
       ],
@@ -1308,7 +1314,7 @@
           "signer": true
         },
         {
-          "name": "price_update",
+          "name": "priceUpdate",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1340,13 +1346,13 @@
           }
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "feed_id",
+          "name": "feedId",
           "type": {
             "array": [
               "u8",
@@ -1367,13 +1373,13 @@
           "type": "i32"
         },
         {
-          "name": "publish_time",
+          "name": "publishTime",
           "type": "i64"
         }
       ]
     },
     {
-      "name": "settle_market",
+      "name": "settleMarket",
       "docs": [
         "Settle a market using a Pyth oracle price (admin-only)."
       ],
@@ -1438,13 +1444,13 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
         },
         {
-          "name": "price_update",
+          "name": "priceUpdate",
           "docs": [
             "Pyth PriceUpdateV2 account — posted just before this instruction",
             "in the same transaction bundle.",
@@ -1455,7 +1461,7 @@
       "args": []
     },
     {
-      "name": "settle_market_manual",
+      "name": "settleMarketManual",
       "docs": [
         "Settle a market manually (admin-only)."
       ],
@@ -1511,7 +1517,7 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
@@ -1525,7 +1531,7 @@
       ]
     },
     {
-      "name": "withdraw_fees",
+      "name": "withdrawFees",
       "docs": [
         "Withdraw collected protocol fees from a settled market (admin-only)."
       ],
@@ -1591,7 +1597,7 @@
               {
                 "kind": "account",
                 "path": "market.market_id",
-                "account": "Market"
+                "account": "market"
               }
             ]
           }
@@ -1625,7 +1631,7 @@
           }
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -1634,7 +1640,7 @@
   ],
   "accounts": [
     {
-      "name": "Config",
+      "name": "config",
       "discriminator": [
         155,
         12,
@@ -1647,7 +1653,7 @@
       ]
     },
     {
-      "name": "Market",
+      "name": "market",
       "discriminator": [
         219,
         190,
@@ -1660,7 +1666,7 @@
       ]
     },
     {
-      "name": "UserPosition",
+      "name": "userPosition",
       "discriminator": [
         251,
         248,
@@ -1675,7 +1681,7 @@
   ],
   "events": [
     {
-      "name": "FeesWithdrawn",
+      "name": "feesWithdrawn",
       "discriminator": [
         234,
         15,
@@ -1688,7 +1694,7 @@
       ]
     },
     {
-      "name": "MarketCancelled",
+      "name": "marketCancelled",
       "discriminator": [
         139,
         163,
@@ -1701,7 +1707,7 @@
       ]
     },
     {
-      "name": "MarketCreated",
+      "name": "marketCreated",
       "discriminator": [
         88,
         184,
@@ -1714,7 +1720,7 @@
       ]
     },
     {
-      "name": "MarketSettled",
+      "name": "marketSettled",
       "discriminator": [
         237,
         212,
@@ -1727,7 +1733,7 @@
       ]
     },
     {
-      "name": "RefundClaimed",
+      "name": "refundClaimed",
       "discriminator": [
         136,
         64,
@@ -1740,7 +1746,7 @@
       ]
     },
     {
-      "name": "RewardsClaimed",
+      "name": "rewardsClaimed",
       "discriminator": [
         75,
         98,
@@ -1753,7 +1759,7 @@
       ]
     },
     {
-      "name": "SharesPurchased",
+      "name": "sharesPurchased",
       "discriminator": [
         24,
         220,
@@ -1769,128 +1775,128 @@
   "errors": [
     {
       "code": 6000,
-      "name": "Unauthorized",
+      "name": "unauthorized",
       "msg": "Only the program admin can perform this action"
     },
     {
       "code": 6001,
-      "name": "MarketNotOpen",
+      "name": "marketNotOpen",
       "msg": "Market is not open for trading"
     },
     {
       "code": 6002,
-      "name": "MarketExpired",
+      "name": "marketExpired",
       "msg": "Market trading period has expired"
     },
     {
       "code": 6003,
-      "name": "AlreadySettled",
+      "name": "alreadySettled",
       "msg": "Market has already been settled"
     },
     {
       "code": 6004,
-      "name": "TooEarlyToSettle",
+      "name": "tooEarlyToSettle",
       "msg": "Market cannot be settled before resolve_ts"
     },
     {
       "code": 6005,
-      "name": "MarketNotSettled",
+      "name": "marketNotSettled",
       "msg": "Market has not been settled yet"
     },
     {
       "code": 6006,
-      "name": "MarketNotCancelled",
+      "name": "marketNotCancelled",
       "msg": "Market is not in cancelled state"
     },
     {
       "code": 6007,
-      "name": "AlreadyClaimed",
+      "name": "alreadyClaimed",
       "msg": "Rewards already claimed for this position"
     },
     {
       "code": 6008,
-      "name": "NothingToClaim",
+      "name": "nothingToClaim",
       "msg": "No winning tokens to claim"
     },
     {
       "code": 6009,
-      "name": "StaleOracle",
+      "name": "staleOracle",
       "msg": "Oracle price is too stale"
     },
     {
       "code": 6010,
-      "name": "InvalidOracleFeed",
+      "name": "invalidOracleFeed",
       "msg": "Oracle feed does not match market's configured feed"
     },
     {
       "code": 6011,
-      "name": "LowOracleConfidence",
+      "name": "lowOracleConfidence",
       "msg": "Oracle price confidence interval too wide"
     },
     {
       "code": 6012,
-      "name": "MathOverflow",
+      "name": "mathOverflow",
       "msg": "Arithmetic overflow or underflow detected"
     },
     {
       "code": 6013,
-      "name": "InvalidQuantity",
+      "name": "invalidQuantity",
       "msg": "Quantity must be greater than zero and within limits"
     },
     {
       "code": 6014,
-      "name": "QuestionTooLong",
+      "name": "questionTooLong",
       "msg": "Question text exceeds maximum length"
     },
     {
       "code": 6015,
-      "name": "DescriptionTooLong",
+      "name": "descriptionTooLong",
       "msg": "Description text exceeds maximum length"
     },
     {
       "code": 6016,
-      "name": "InvalidEndTime",
+      "name": "invalidEndTime",
       "msg": "End time must be in the future"
     },
     {
       "code": 6017,
-      "name": "SharePriceTooLow",
+      "name": "sharePriceTooLow",
       "msg": "Share price is below the minimum allowed"
     },
     {
       "code": 6018,
-      "name": "TreasuryInsufficient",
+      "name": "treasuryInsufficient",
       "msg": "Treasury balance insufficient for payout"
     },
     {
       "code": 6019,
-      "name": "FeeTooHigh",
+      "name": "feeTooHigh",
       "msg": "Fee percentage exceeds maximum allowed (10%)"
     },
     {
       "code": 6020,
-      "name": "FeeAlreadyWithdrawn",
+      "name": "feeAlreadyWithdrawn",
       "msg": "Protocol fee has already been withdrawn"
     },
     {
       "code": 6021,
-      "name": "UseOracleSettlement",
+      "name": "useOracleSettlement",
       "msg": "Price-backed markets must use settle_market with oracle price feed"
     },
     {
       "code": 6022,
-      "name": "InvalidOutcome",
+      "name": "invalidOutcome",
       "msg": "Invalid outcome: must be 1 (Yes) or 2 (No)"
     },
     {
       "code": 6023,
-      "name": "UseManualSettlement",
+      "name": "useManualSettlement",
       "msg": "Markets without a price feed must use settle_market_manual"
     }
   ],
   "types": [
     {
-      "name": "Category",
+      "name": "category",
       "docs": [
         "Market category for frontend filtering."
       ],
@@ -1901,25 +1907,25 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "Crypto"
+            "name": "crypto"
           },
           {
-            "name": "Sports"
+            "name": "sports"
           },
           {
-            "name": "Politics"
+            "name": "politics"
           },
           {
-            "name": "Tech"
+            "name": "tech"
           },
           {
-            "name": "Other"
+            "name": "other"
           }
         ]
       }
     },
     {
-      "name": "Comparison",
+      "name": "comparison",
       "docs": [
         "Price comparison direction for settlement."
       ],
@@ -1930,16 +1936,16 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "GreaterThan"
+            "name": "greaterThan"
           },
           {
-            "name": "LessThan"
+            "name": "lessThan"
           }
         ]
       }
     },
     {
-      "name": "Config",
+      "name": "config",
       "docs": [
         "Config PDA — singleton account storing program-wide configuration.",
         "Seeds: [\"config\"]",
@@ -1958,7 +1964,7 @@
             "type": "pubkey"
           },
           {
-            "name": "fee_bps",
+            "name": "feeBps",
             "docs": [
               "Protocol fee in basis points (e.g. 200 = 2%), validated ≤ 1000 (10%).",
               "Taken from the losing pool only at settlement time."
@@ -1966,7 +1972,7 @@
             "type": "u16"
           },
           {
-            "name": "market_count",
+            "name": "marketCount",
             "docs": [
               "Auto-incrementing market counter, used as each market's unique id.",
               "Also used as part of the Market PDA seed."
@@ -1984,7 +1990,7 @@
       }
     },
     {
-      "name": "FeesWithdrawn",
+      "name": "feesWithdrawn",
       "docs": [
         "Emitted when the admin withdraws collected fees."
       ],
@@ -1992,7 +1998,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           },
           {
@@ -2003,12 +2009,12 @@
       }
     },
     {
-      "name": "Market",
+      "name": "market",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "docs": [
               "Unique market identifier (auto-incremented from Config.market_count)."
             ],
@@ -2043,12 +2049,12 @@
             ],
             "type": {
               "defined": {
-                "name": "Category"
+                "name": "category"
               }
             }
           },
           {
-            "name": "oracle_feed_id",
+            "name": "oracleFeedId",
             "docs": [
               "Pyth oracle feed id for the asset this market tracks.",
               "Verified at settlement time against the passed-in price account."
@@ -2061,14 +2067,14 @@
             }
           },
           {
-            "name": "target_price",
+            "name": "targetPrice",
             "docs": [
               "Target price for settlement comparison (in Pyth's fixed-point format)."
             ],
             "type": "i64"
           },
           {
-            "name": "target_expo",
+            "name": "targetExpo",
             "docs": [
               "Target price exponent (matches Pyth's exponent representation)."
             ],
@@ -2081,19 +2087,19 @@
             ],
             "type": {
               "defined": {
-                "name": "Comparison"
+                "name": "comparison"
               }
             }
           },
           {
-            "name": "end_ts",
+            "name": "endTs",
             "docs": [
               "Unix timestamp when trading stops (no more buys accepted after this)."
             ],
             "type": "i64"
           },
           {
-            "name": "resolve_ts",
+            "name": "resolveTs",
             "docs": [
               "Earliest unix timestamp when settlement is allowed (>= end_ts)."
             ],
@@ -2106,107 +2112,107 @@
             ],
             "type": {
               "defined": {
-                "name": "MarketStatus"
+                "name": "marketStatus"
               }
             }
           },
           {
-            "name": "winning_outcome",
+            "name": "winningOutcome",
             "docs": [
               "Winner after settlement: Unset, Yes, or No."
             ],
             "type": {
               "defined": {
-                "name": "WinningOutcome"
+                "name": "winningOutcome"
               }
             }
           },
           {
-            "name": "yes_mint",
+            "name": "yesMint",
             "docs": [
               "Pubkey of the YES SPL token mint (PDA-derived)."
             ],
             "type": "pubkey"
           },
           {
-            "name": "no_mint",
+            "name": "noMint",
             "docs": [
               "Pubkey of the NO SPL token mint (PDA-derived)."
             ],
             "type": "pubkey"
           },
           {
-            "name": "yes_pool_lamports",
+            "name": "yesPoolLamports",
             "docs": [
               "Total lamports deposited by YES-side buyers."
             ],
             "type": "u64"
           },
           {
-            "name": "no_pool_lamports",
+            "name": "noPoolLamports",
             "docs": [
               "Total lamports deposited by NO-side buyers."
             ],
             "type": "u64"
           },
           {
-            "name": "yes_supply",
+            "name": "yesSupply",
             "docs": [
               "Total YES tokens minted (in base units, i.e. shares * 10^6)."
             ],
             "type": "u64"
           },
           {
-            "name": "no_supply",
+            "name": "noSupply",
             "docs": [
               "Total NO tokens minted (in base units)."
             ],
             "type": "u64"
           },
           {
-            "name": "total_payout_pool",
+            "name": "totalPayoutPool",
             "docs": [
               "Computed at settlement: total_pool - fee. This is the pot winners split."
             ],
             "type": "u64"
           },
           {
-            "name": "fee_collected",
+            "name": "feeCollected",
             "docs": [
               "Fee collected at settlement (from losing pool only)."
             ],
             "type": "u64"
           },
           {
-            "name": "fee_withdrawn",
+            "name": "feeWithdrawn",
             "docs": [
               "Double-withdraw guard for admin fee withdrawal."
             ],
             "type": "bool"
           },
           {
-            "name": "settled_price",
+            "name": "settledPrice",
             "docs": [
               "Oracle price used for settlement (stored for transparency/auditability)."
             ],
             "type": "i64"
           },
           {
-            "name": "settled_expo",
+            "name": "settledExpo",
             "docs": [
               "Oracle exponent at settlement time."
             ],
             "type": "i32"
           },
           {
-            "name": "settled_at",
+            "name": "settledAt",
             "docs": [
               "Timestamp of settlement."
             ],
             "type": "i64"
           },
           {
-            "name": "share_price_lamports",
+            "name": "sharePriceLamports",
             "docs": [
               "Fixed price per share in lamports (set at market creation)."
             ],
@@ -2220,7 +2226,7 @@
             "type": "u8"
           },
           {
-            "name": "treasury_bump",
+            "name": "treasuryBump",
             "docs": [
               "Treasury PDA canonical bump (stored here for efficient claim/refund CPIs)."
             ],
@@ -2230,7 +2236,7 @@
       }
     },
     {
-      "name": "MarketCancelled",
+      "name": "marketCancelled",
       "docs": [
         "Emitted when a market is cancelled via `cancel_market`."
       ],
@@ -2238,14 +2244,14 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "MarketCreated",
+      "name": "marketCreated",
       "docs": [
         "Emitted when a new market is created via `initialize_market`.",
         "Frontend subscribes for live \"new market\" toasts and grid updates."
@@ -2254,7 +2260,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           },
           {
@@ -2262,14 +2268,14 @@
             "type": "string"
           },
           {
-            "name": "end_ts",
+            "name": "endTs",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "MarketSettled",
+      "name": "marketSettled",
       "docs": [
         "Emitted when a market is settled via `settle_market`."
       ],
@@ -2277,26 +2283,26 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           },
           {
-            "name": "winning_outcome",
+            "name": "winningOutcome",
             "type": "u8"
           },
           {
-            "name": "settled_price",
+            "name": "settledPrice",
             "type": "i64"
           },
           {
-            "name": "total_payout_pool",
+            "name": "totalPayoutPool",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "MarketStatus",
+      "name": "marketStatus",
       "docs": [
         "Market lifecycle status."
       ],
@@ -2307,19 +2313,19 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "Open"
+            "name": "open"
           },
           {
-            "name": "Settled"
+            "name": "settled"
           },
           {
-            "name": "Cancelled"
+            "name": "cancelled"
           }
         ]
       }
     },
     {
-      "name": "RefundClaimed",
+      "name": "refundClaimed",
       "docs": [
         "Emitted when a user claims a refund on a cancelled market."
       ],
@@ -2327,7 +2333,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           },
           {
@@ -2342,7 +2348,7 @@
       }
     },
     {
-      "name": "RewardsClaimed",
+      "name": "rewardsClaimed",
       "docs": [
         "Emitted when a winner claims their rewards via `claim_rewards`."
       ],
@@ -2350,7 +2356,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           },
           {
@@ -2365,7 +2371,7 @@
       }
     },
     {
-      "name": "SharesPurchased",
+      "name": "sharesPurchased",
       "docs": [
         "Emitted when shares are purchased via `buy_shares`.",
         "Powers the live activity feed and real-time probability bar updates."
@@ -2374,7 +2380,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_id",
+            "name": "marketId",
             "type": "u64"
           },
           {
@@ -2385,7 +2391,7 @@
             "name": "side",
             "type": {
               "defined": {
-                "name": "Side"
+                "name": "side"
               }
             }
           },
@@ -2398,18 +2404,18 @@
             "type": "u64"
           },
           {
-            "name": "new_yes_pool",
+            "name": "newYesPool",
             "type": "u64"
           },
           {
-            "name": "new_no_pool",
+            "name": "newNoPool",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "Side",
+      "name": "side",
       "docs": [
         "Side for buy_shares instruction — YES or NO."
       ],
@@ -2417,16 +2423,16 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "Yes"
+            "name": "yes"
           },
           {
-            "name": "No"
+            "name": "no"
           }
         ]
       }
     },
     {
-      "name": "UserPosition",
+      "name": "userPosition",
       "docs": [
         "UserPosition PDA — one per user per market.",
         "Seeds: [\"position\", market_pubkey, user_pubkey]",
@@ -2452,14 +2458,14 @@
             "type": "pubkey"
           },
           {
-            "name": "yes_amount",
+            "name": "yesAmount",
             "docs": [
               "Number of YES shares purchased (in base units, i.e. shares * 10^6)."
             ],
             "type": "u64"
           },
           {
-            "name": "no_amount",
+            "name": "noAmount",
             "docs": [
               "Number of NO shares purchased (in base units)."
             ],
@@ -2473,7 +2479,7 @@
             "type": "bool"
           },
           {
-            "name": "total_spent_lamports",
+            "name": "totalSpentLamports",
             "docs": [
               "Total lamports spent across all purchases in this market.",
               "Used for portfolio P&L display on the frontend."
@@ -2491,7 +2497,7 @@
       }
     },
     {
-      "name": "WinningOutcome",
+      "name": "winningOutcome",
       "docs": [
         "Winning outcome after settlement."
       ],
@@ -2502,13 +2508,13 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "Unset"
+            "name": "unset"
           },
           {
-            "name": "Yes"
+            "name": "yes"
           },
           {
-            "name": "No"
+            "name": "no"
           }
         ]
       }
@@ -2516,34 +2522,34 @@
   ],
   "constants": [
     {
-      "name": "CONFIG_SEED",
+      "name": "configSeed",
       "type": "bytes",
       "value": "[99, 111, 110, 102, 105, 103]"
     },
     {
-      "name": "MARKET_SEED",
+      "name": "marketSeed",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116]"
     },
     {
-      "name": "NO_MINT_SEED",
+      "name": "noMintSeed",
       "type": "bytes",
       "value": "[110, 111, 95, 109, 105, 110, 116]"
     },
     {
-      "name": "POSITION_SEED",
+      "name": "positionSeed",
       "type": "bytes",
       "value": "[112, 111, 115, 105, 116, 105, 111, 110]"
     },
     {
-      "name": "TREASURY_SEED",
+      "name": "treasurySeed",
       "type": "bytes",
       "value": "[116, 114, 101, 97, 115, 117, 114, 121]"
     },
     {
-      "name": "YES_MINT_SEED",
+      "name": "yesMintSeed",
       "type": "bytes",
       "value": "[121, 101, 115, 95, 109, 105, 110, 116]"
     }
   ]
-}
+};

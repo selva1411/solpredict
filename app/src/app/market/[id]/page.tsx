@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,6 +32,9 @@ import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
 import { ThreeOrb } from "@/components/ThreeOrb";
 import { FlipCountdown } from "@/components/FlipCountdown";
+import { usePythPrices } from "@/hooks/usePythPrices";
+import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
+import { LivePriceBar } from "@/components/LivePriceBar";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -183,6 +186,20 @@ export default function MarketDetailPage() {
 
   // Sparkline history — stores probability snapshots
   const probHistory = useRef<number[]>([50]);
+
+  // Determine feed ID for live Pyth price (re-computed on every render from market state)
+  const marketCategory = market?.category ?? -1;
+  const marketFeedId = market?.oracleFeedId ?? null;
+  const feedHex = useMemo(() => {
+    if (marketFeedId && isOracleCategory(marketCategory)) {
+      return feedIdBytesToHex(marketFeedId);
+    }
+    return null;
+  }, [marketFeedId, marketCategory]);
+  const feedEntry = feedHex ? lookupFeedEntry(feedHex) : null;
+  const priceFeedIds = feedHex ? [feedHex] : [];
+  const livePrices = usePythPrices(priceFeedIds);
+  const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
 
   const marketPda = new PublicKey(id as string);
 
@@ -667,7 +684,7 @@ export default function MarketDetailPage() {
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-[#9e8e78]/30">
-              {market.category === 0 ? (
+              {isOracleCategory(market.category) ? (
                 <>
                   <div className="space-y-1 font-mono">
                     <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Target Price</div>
@@ -700,7 +717,22 @@ export default function MarketDetailPage() {
               </div>
             </div>
 
-            {market.category === 0 && (
+            {isOracleCategory(market.category) && feedEntry && (
+              <div className="pt-4 border-t border-[#9e8e78]/30">
+                <LivePriceBar
+                  feedIdHex={feedHex!}
+                  category={market.category}
+                  livePrice={priceData?.price ?? null}
+                  liveLoading={priceData?.loading ?? true}
+                  liveError={priceData?.error ?? null}
+                  targetPrice={market.targetPrice.toNumber()}
+                  targetExpo={market.targetExpo}
+                  comparison={market.comparison}
+                />
+              </div>
+            )}
+
+            {isOracleCategory(market.category) && (
               <div className="pt-4 border-t border-[#9e8e78]/30 text-xs font-mono text-[#d6c4ac] flex flex-col gap-1 text-left">
                 <div className="text-[10px] uppercase font-bold tracking-wider font-display text-[#d6c4ac]">Settlement Method</div>
                 <div className="text-[#ffd89c]">
@@ -863,26 +895,26 @@ export default function MarketDetailPage() {
                 <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Max capped at 10%</div>
               </div>
 
-              <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
+              <div className="p-4 bg-[#0d0d0d] rounded border border-board-border/30">
                 <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
                 <div className="font-bold text-[#a1d494] text-sm pt-1">
-                  {market.category === 0 ? "Pyth Pull Oracle" : "Manual Settle"}
+                  {isOracleCategory(market.category) ? "Pyth Pull Oracle" : "Manual Settle"}
                 </div>
                 <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Automated on-chain feed</div>
               </div>
             </div>
 
-            <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30 space-y-2 text-xs font-sans text-[#d6c4ac] leading-relaxed">
-              <h4 className="font-display font-bold text-[#e5e2e1] text-[10px] uppercase tracking-wider">How Settlement Works</h4>
+            <div className="p-4 bg-[#0d0d0d] rounded border border-board-border/30 space-y-2 text-xs font-sans text-text-muted leading-relaxed">
+              <h4 className="font-display font-bold text-text-primary text-[10px] uppercase tracking-wider">How Settlement Works</h4>
               <p>
                 This prediction board is secured by a decentralized smart contract treasury. 
-                {market.category === 0 ? (
+                {isOracleCategory(market.category) ? (
                   <span>
-                    {" "}For Crypto boards, anyone can trigger settlement once the resolution timestamp has passed. The contract retrieves the target price directly from the Pyth Network pull oracle, validates the feed signature to verify it is not stale, and settles the board based on the comparison rule.
+                    {" "}For price-backed boards (Crypto, Tech, or Other assets), anyone can trigger settlement once the resolution timestamp has passed. The contract retrieves the target price directly from the Pyth Network pull oracle, validates the feed signature to verify it is not stale, and settles the board based on the comparison rule.
                   </span>
                 ) : (
                   <span>
-                    {" "}For Sports and Other boards, the administrator posts the official winning outcome (YES or NO) under a multi-signature verified authority once the event completes.
+                    {" "}For non-price-backed boards (such as Sports and Politics), the administrator posts the official winning outcome (YES or NO) under a multi-signature verified authority once the event completes.
                   </span>
                 )}
                 {" "}If the settled side has zero winning shares (meaning nobody bet on the winner), the market auto-cancels and permits all participants to withdraw their full stakes without protocol fees.

@@ -18,7 +18,7 @@ export const PYTH_FEED_REGISTRY: Record<string, PythFeedEntry> = {
   "BTC/USD": {
     symbol: "BTC/USD",
     label: "Bitcoin",
-    feedIdHex: "0xe62df6c8b4a85fe1a67d0f246eca93afe6c92e4c6a482ee1190407b0db51bb50",
+    feedIdHex: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
     category: "Crypto",
     expo: -8
   },
@@ -39,7 +39,7 @@ export const PYTH_FEED_REGISTRY: Record<string, PythFeedEntry> = {
   "JUP/USD": {
     symbol: "JUP/USD",
     label: "Jupiter",
-    feedIdHex: "0x327a3c3e89547d216f49495e26372c019d67b3664d4367f0d069b2447781f8f3",
+    feedIdHex: "0x0a0408d619e9380abad35060f9192039ed5042fa6f82301d0e48bb52be830996",
     category: "Crypto",
     expo: -8
   },
@@ -160,3 +160,21 @@ export const PYTH_FEED_REGISTRY: Record<string, PythFeedEntry> = {
     expo: -8
   }
 };
+
+export function feedIdBytesToHex(feedId: number[] | Uint8Array): string {
+  const arr = Array.from(feedId);
+  return "0x" + arr.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function lookupFeedEntry(feedIdHex: string): PythFeedEntry | undefined {
+  const normalized = feedIdHex.toLowerCase();
+  return Object.values(PYTH_FEED_REGISTRY).find(
+    (entry) =>
+      normalized.includes(entry.feedIdHex.slice(2).toLowerCase()) ||
+      entry.feedIdHex.toLowerCase().includes(normalized)
+  );
+}
+
+export function isOracleCategory(category: number): boolean {
+  return category === 0 || category === 3 || category === 4;
+}

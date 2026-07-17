@@ -714,7 +714,100 @@ describe("SOLPredict Integration Suite", () => {
         expect(err.message).to.include("UseManualSettlement");
       }
     });
+
+    it("initialize_market rejects non-zero feed ID for Sports and Politics", async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const resolveTs = now + 10;
+      
+      const nonZeroFeed = Array(32).fill(0);
+      nonZeroFeed[0] = 12;
+
+      try {
+        await bootstrapMarket(
+          configPda,
+          "Sports with non-zero feed",
+          "Should fail init",
+          1, // Sports
+          nonZeroFeed,
+          new anchor.BN(100),
+          0,
+          0,
+          new anchor.BN(resolveTs),
+          new anchor.BN(resolveTs)
+        );
+        expect.fail("Should have failed with UseManualSettlement");
+      } catch (err: any) {
+        expect(err.message).to.include("UseManualSettlement");
+      }
+    });
+
+    it("settle_market (oracle) successfully settles a Tech market with non-zero feed ID", async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const resolveTs = now + 10;
+
+      const techFeed = Array(32).fill(0);
+      techFeed[0] = 88;
+
+      const result = await bootstrapMarket(
+        configPda,
+        "Will NVDA hit target?",
+        "Tech oracle settle",
+        3, // Tech category
+        techFeed,
+        new anchor.BN(150_00), // Target $150
+        -2,
+        0, // GreaterThan
+        new anchor.BN(resolveTs),
+        new anchor.BN(resolveTs)
+      );
+
+      const techMarketPda = result.marketPda;
+      const yesMint = result.yesMintPda;
+      const noMint = result.noMintPda;
+
+      const b1YesAta = getAssociatedTokenAddressSync(yesMint, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(noMint, buyer1.publicKey);
+      const pos1 = getUserPositionPda(techMarketPda, buyer1.publicKey, program.programId);
+
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(5))
+        .accounts({ buyer: buyer1.publicKey, market: techMarketPda, treasury: result.treasuryPda, yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1 } as any)
+        .signers([buyer1])
+        .rpc();
+
+      await ensureTimePassed(resolveTs);
+
+      const mockPayer = Keypair.generate();
+      await fundAccount(mockPayer.publicKey, 1);
+      const mockPda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
+
+      await program.methods
+        .mockCreatePriceUpdate(techFeed, new anchor.BN(160_00), new anchor.BN(1), -2, new anchor.BN(now))
+        .accounts({ payer: mockPayer.publicKey, priceUpdate: mockPda } as any)
+        .signers([mockPayer])
+        .rpc();
+
+      await program.methods
+        .settleMarket()
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          market: techMarketPda,
+          priceUpdate: mockPda,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const acc = await program.account.market.fetch(techMarketPda);
+      expect(acc.status).to.deep.equal({ settled: {} });
+      expect(acc.winningOutcome).to.deep.equal({ yes: {} });
+    });
   });
+
 
   describe("Phase 5: claim_rewards, cancel_market, claim_refund, withdraw_fees", () => {
     let configPda2: PublicKey;
