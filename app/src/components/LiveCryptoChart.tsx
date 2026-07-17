@@ -1,223 +1,172 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
-import type { PricePoint } from "@/hooks/usePythPriceHistory";
+import React, { useRef, useState, useEffect } from "react";
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, ReferenceLine, CartesianGrid,
+} from "recharts";
 
-function fmtPrice(p: number): string {
-  if (p < 0.00001) return `$${p.toExponential(2)}`;
-  if (p < 0.001) return `$${p.toFixed(6)}`;
-  if (p < 0.01) return `$${p.toFixed(5)}`;
-  if (p < 0.1) return `$${p.toFixed(4)}`;
-  if (p < 1) return `$${p.toFixed(3)}`;
-  if (p < 100) return `$${p.toFixed(2)}`;
-  if (p < 10000) return `$${(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  return `$${(p / 1000).toFixed(1)}K`;
+interface Candle {
+  time: number;
+  price: number;
 }
 
-function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const MAX_CANDLES = 200;
+const POLL_MS = 3000;
+
+function fetchPythPrice(feedId: string): Promise<number | null> {
+  const id = feedId.replace("0x", "");
+  return fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids%5B%5D=${id}`)
+    .then((r) => r.json())
+    .then((json) => {
+      const p = json.parsed?.[0]?.price;
+      if (!p) return null;
+      return Number(p.price) * Math.pow(10, p.expo);
+    })
+    .catch(() => null);
 }
 
-const PAD = { t: 12, r: 16, b: 32, l: 62 };
-const CHART_H = 220;
-const DEMO_PTS = 80;
-
-function makeSeed(bp: number): PricePoint[] {
-  const now = Date.now();
-  const pts: PricePoint[] = [];
-  let p = bp;
-  for (let i = 0; i < DEMO_PTS; i++) {
-    p = p + (Math.random() - 0.48) * bp * 0.003;
-    if (p < bp * 0.93) p = bp * 0.93;
-    if (p > bp * 1.07) p = bp * 1.07;
-    pts.push({ price: Math.max(0.0001, p), time: now - (DEMO_PTS - 1 - i) * 300 });
-  }
-  return pts;
-}
-
-export function LiveCryptoChart({
-  data,
-  currentPrice,
-  targetPrice,
-  targetExpo,
-  symbol = "",
-}: {
-  data: PricePoint[];
-  currentPrice: number | null;
+interface LiveCryptoChartProps {
+  feedHex?: string;
   targetPrice?: number;
   targetExpo?: number;
   symbol?: string;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(600);
-  const [frame, setFrame] = useState(0);
-  const ptsRef = useRef<PricePoint[]>([]);
-  const ivRef = useRef<ReturnType<typeof setInterval> | null>(null);
+}
 
-  const basePrice = (currentPrice && currentPrice > 0)
-    ? currentPrice
-    : (targetPrice != null && targetExpo != null ? targetPrice / Math.pow(10, Math.abs(targetExpo)) : 100);
+export function LiveCryptoChart({
+  feedHex,
+  targetPrice,
+  targetExpo,
+  symbol = "",
+}: LiveCryptoChartProps) {
+  const [chartData, setChartData] = useState<Candle[]>(() => {
+    const now = Date.now();
+    const base = 150;
+    return Array.from({ length: 60 }, (_, i) => ({
+      time: now - (60 - i) * 3000,
+      price: base + (Math.random() - 0.5) * base * 0.02,
+    }));
+  });
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const useLive = data.length >= 2;
-
-  // Manage demo interval — keyed by useLive so it restarts when switching modes
   useEffect(() => {
-    if (useLive) {
-      ptsRef.current = [];
-      return;
-    }
+    const id = feedHex ? feedHex.replace("0x", "") : null;
 
-    ptsRef.current = makeSeed(basePrice);
-    setFrame((f) => f + 1);
+    const poll = async () => {
+      if (!id) return;
+      const price = await fetchPythPrice(feedHex!);
+      if (price === null) return;
+      setChartData((prev) => {
+        const next = [...prev, { time: Date.now(), price }];
+        return next.slice(-MAX_CANDLES);
+      });
+    };
 
-    ivRef.current = setInterval(() => {
-      const prev = ptsRef.current;
-      const bp = basePrice > 0 ? basePrice : 100;
-      const last = prev.length > 0 ? prev[prev.length - 1].price : bp;
-      const drift = (Math.random() - 0.48) * bp * 0.003;
-      let np = last + drift;
-      if (np < bp * 0.93) np = bp * 0.93;
-      if (np > bp * 1.07) np = bp * 1.07;
-      ptsRef.current = [...prev.slice(-(DEMO_PTS - 1)), { price: Math.max(0.0001, np), time: Date.now() }];
-      setFrame((f) => f + 1);
-    }, 400);
+    if (id) poll();
+    intervalRef.current = setInterval(poll, POLL_MS);
 
     return () => {
-      if (ivRef.current) clearInterval(ivRef.current);
-      ivRef.current = null;
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [useLive]);
-
-  // Build chart SVG data directly — no useMemo, always fresh
-  const chartData = useLive ? data : ptsRef.current;
-
-  // Compute SVG
-  const drawW = width - PAD.l - PAD.r;
-  const drawH = (CHART_H - PAD.t - PAD.b);
-
-  let yScale = (_v: number) => 0;
-  let xScale = (_v: number) => 0;
-  let yLabels: { val: number; y: number }[] = [];
-  let xLabels: { time: number; x: number }[] = [];
-  let linePoints = "";
-  let targetY: number | null = null;
-  let curY = 0;
-  let priceChange = 0;
-  let priceChangePct = 0;
-  let lastPrice = basePrice;
+  }, [feedHex]);
 
   const targetNorm = (targetPrice != null && targetExpo != null)
     ? targetPrice / Math.pow(10, Math.abs(targetExpo))
     : null;
 
-  if (chartData.length >= 2 && drawW > 0 && drawH > 0) {
-    const prices = chartData.map((d) => d.price);
-    let min = Math.min(...prices);
-    let max = Math.max(...prices);
-    let range = max - min || 1;
-    min -= range * 0.12;
-    max += range * 0.12;
-
-    if (targetNorm != null) {
-      if (targetNorm < min) min = targetNorm - range * 0.05;
-      if (targetNorm > max) max = targetNorm + range * 0.05;
-    }
-
-    range = max - min || 1;
-    yScale = (v: number) => PAD.t + drawH - ((v - min) / range) * drawH;
-    const firstTime = chartData[0].time;
-    const lastTime = chartData[chartData.length - 1].time;
-    const timeRange = Math.max(lastTime - firstTime, 100);
-    xScale = (v: number) => PAD.l + ((v - firstTime) / timeRange) * drawW;
-
-    yLabels = [];
-    for (let i = 0; i <= 4; i++) yLabels.push({ val: min + range * (i / 4), y: yScale(min + range * (i / 4)) });
-
-    xLabels = [];
-    for (let i = 0; i <= 4; i++) {
-      const t = firstTime + timeRange * (i / 4);
-      xLabels.push({ time: t, x: xScale(t) });
-    }
-
-    linePoints = chartData.map((d) => `${xScale(d.time)},${yScale(d.price)}`).join(" ");
-    targetY = targetNorm != null ? yScale(targetNorm) : null;
-    curY = yScale(chartData[chartData.length - 1].price);
-    priceChange = chartData[chartData.length - 1].price - chartData[0].price;
-    priceChangePct = chartData[0].price !== 0 ? (priceChange / chartData[0].price) * 100 : 0;
-    lastPrice = chartData[chartData.length - 1].price;
-  }
-
+  const lastPrice = chartData.length > 0 ? chartData[chartData.length - 1].price : 0;
+  const firstPrice = chartData.length > 0 ? chartData[0].price : 0;
+  const priceChange = lastPrice - firstPrice;
   const isPos = priceChange >= 0;
-  const lineColor = isPos ? "#a1d494" : "#ffb4ab";
-
-  // ResizeObserver
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) setWidth(e.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const lineColor = isPos ? "#ffd89c" : "#ffb4ab";
+  const gradientId = "priceGradient";
 
   return (
-    <div ref={containerRef} className="w-full select-none space-y-3">
-      {/* Top bar */}
-      <div className="flex items-baseline gap-3 px-1">
-        {symbol && <span className="text-xs font-bold font-mono text-[#06b6d4] uppercase">{symbol}</span>}
-        <span className="text-xl font-bold font-mono text-[#e5e2e1] tracking-tight transition-all duration-300">
-          {fmtPrice(lastPrice)}
+    <div className="w-full select-none space-y-3">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ffd89c] opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ffd89c]" />
         </span>
-        <span className={`text-[11px] font-mono font-semibold flex items-center gap-0.5 transition-all duration-300 ${lineColor}`}>
-          {isPos ? "▲" : "▼"} {Math.abs(priceChangePct).toFixed(2)}%
+        <span className="text-xs font-mono text-[#9e8e78]">
+          LIVE{feedHex ? ` · ${symbol || 'SOL/USD'}` : ''} · updates every 3s
         </span>
-        {!useLive && (
-          <span className="text-[9px] font-mono text-[#d6c4ac]/25 ml-auto animate-pulse">SIMULATED</span>
-        )}
-        {useLive && (
-          <span className="text-[9px] font-mono text-[#d6c4ac]/30 ml-auto">{data.length} pts</span>
-        )}
+        <span className="ml-auto flex items-baseline gap-2">
+          <span className="text-sm font-mono text-[#e5e2e1] font-bold">
+            ${lastPrice.toFixed(4)}
+          </span>
+          <span className={`text-[11px] font-mono font-semibold ${lineColor}`}>
+            {isPos ? "▲" : "▼"} {Math.abs(priceChange).toFixed(4)}
+          </span>
+        </span>
       </div>
 
-      {/* Chart SVG */}
-      {chartData.length < 2 ? (
-        <div className="flex items-center justify-center h-[220px] text-[10px] font-mono text-[#d6c4ac]">
-          <span className="animate-pulse opacity-40">Loading price data...</span>
-        </div>
-      ) : (
-        <svg width={width} height={CHART_H} className="overflow-visible">
-          {targetY != null && (
-            <g>
-              <line x1={PAD.l} y1={targetY} x2={width - PAD.r} y2={targetY} stroke="#ffd89c" strokeWidth="1.5" strokeDasharray="6 4" />
-              <rect x={width - PAD.r - 82} y={targetY - 9} width={82} height={18} rx="3" fill="#1c1c1c" stroke="#ffd89c" strokeWidth="0.5" />
-              <text x={width - PAD.r - 6} y={targetY + 4} textAnchor="end" fill="#ffd89c" fontSize="10" fontFamily="monospace" fontWeight="bold">Target {fmtPrice(targetNorm!)}</text>
-            </g>
-          )}
-
-          {yLabels.map(({ val, y }) => (
-            <g key={val.toFixed(4)}>
-              <line x1={PAD.l} y1={y} x2={width - PAD.r} y2={y} stroke="#353534" strokeWidth="1" strokeDasharray="3 3" />
-              <text x={PAD.l - 6} y={y + 3} textAnchor="end" fill="#d6c4ac" fontSize="10" fontFamily="monospace" opacity="0.7">{fmtPrice(val)}</text>
-            </g>
-          ))}
-
-          {xLabels.map(({ time, x }) => (
-            <text key={time} x={x} y={CHART_H - 6} textAnchor="middle" fill="#d6c4ac" fontSize="9" fontFamily="monospace" opacity="0.5">{fmtTime(time)}</text>
-          ))}
-
-          {linePoints && (
-            <polyline fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={linePoints} />
-          )}
-
-          {curY > 0 && (
-            <g>
-              <line x1={PAD.l} y1={curY} x2={width - PAD.r} y2={curY} stroke={lineColor} strokeWidth="1" strokeDasharray="2 2" opacity="0.3" />
-              <circle cx={xScale(chartData[chartData.length - 1].time)} cy={curY} r="4" fill="#131313" stroke={lineColor} strokeWidth="2" />
-            </g>
-          )}
-        </svg>
-      )}
+      <div style={{ width: '100%', height: 280 }}>
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ffd89c" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#ffd89c" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#353534" vertical={false} />
+            <XAxis
+              dataKey="time"
+              tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              stroke="#9e8e78"
+              tick={{ fill: '#9e8e78', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              domain={['auto', 'auto']}
+              stroke="#9e8e78"
+              tick={{ fill: '#9e8e78', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => `$${v.toFixed(1)}`}
+              width={65}
+            />
+            <Tooltip
+              contentStyle={{
+                background: '#1a1a1a',
+                border: '1px solid #9e8e78',
+                borderRadius: 4,
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 12,
+                color: '#e5e2e1',
+              }}
+              labelFormatter={(t: unknown) => new Date(Number(t)).toLocaleTimeString()}
+              formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, symbol || 'SOL/USD']}
+            />
+            {targetNorm != null && (
+              <ReferenceLine
+                y={targetNorm}
+                stroke="#ffd89c"
+                strokeDasharray="6 3"
+                label={{
+                  value: `Target $${targetNorm.toFixed(2)}`,
+                  fill: '#ffd89c',
+                  fontSize: 11,
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}
+              />
+            )}
+            <Area
+              type="monotone"
+              dataKey="price"
+              stroke={lineColor}
+              strokeWidth={1.5}
+              fill={`url(#${gradientId})`}
+              dot={false}
+              activeDot={{ r: 4, fill: '#ffd89c', stroke: '#131313' }}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

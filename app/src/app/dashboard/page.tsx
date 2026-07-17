@@ -37,6 +37,7 @@ import { StatTile3D } from "@/components/dashboard/StatTile3D";
 import { CategoryRing3D } from "@/components/dashboard/CategoryRing3D";
 import { DashboardSection, DashboardHero } from "@/components/dashboard/DashboardSection";
 import { EmptyState } from "@/components/StatePanels";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer, listItem } from "@/lib/motion-variants";
@@ -725,7 +726,9 @@ export default function UserDashboard() {
         <div className="space-y-6">
           <DashboardSection title="Category Exposure" icon={PieChart} delay={0.15}>
             <div className="glass-panel p-6">
-              <CategoryRing3D segments={categoryExposure.breakdown} total={categoryExposure.total} />
+              <ErrorBoundary>
+                <CategoryRing3D segments={categoryExposure.breakdown} total={categoryExposure.total} />
+              </ErrorBoundary>
             </div>
           </DashboardSection>
         </div>

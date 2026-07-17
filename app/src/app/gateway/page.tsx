@@ -31,10 +31,10 @@ export default function SecureGateway() {
         toast.success("Access authorized: Platform Admin Console");
         router.push("/admin");
       } else if (role === "user") {
-        toast.info("Routing to event explorer...");
-        router.push("/markets");
+        toast.success("Access authorized: User Dashboard");
+        router.push("/dashboard");
       }
-    }, 1800);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [role, isLoading, router]);

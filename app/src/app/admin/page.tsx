@@ -109,12 +109,35 @@ function AdminPage() {
     market: Market | null;
     settlePrice: string;
     isFetchingPrice: boolean;
+    livePrice: number | null;
   }>({
     isOpen: false,
     market: null,
     settlePrice: "",
     isFetchingPrice: false,
+    livePrice: null,
   });
+
+  // Poll Pyth price every 5s while oracle settle modal is open
+  useEffect(() => {
+    if (!settleModal.isOpen || !settleModal.market || !isOracleSettleable(settleModal.market.account.oracleFeedId)) return;
+    const feedHex = "0x" + Array.from(settleModal.market.account.oracleFeedId).map(b => b.toString(16).padStart(2, '0')).join('');
+    const id = feedHex.slice(2);
+    const poll = async () => {
+      try {
+        const res = await fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids%5B%5D=${id}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const p = json.parsed?.[0]?.price;
+        if (!p) return;
+        const price = Number(p.price) * Math.pow(10, p.expo);
+        setSettleModal((prev) => ({ ...prev, settlePrice: price.toFixed(6), isFetchingPrice: false, livePrice: price }));
+      } catch { /* ignore */ }
+    };
+    poll();
+    const iv = setInterval(poll, 5000);
+    return () => clearInterval(iv);
+  }, [settleModal.isOpen, settleModal.market]);
 
   const [oracleFeedIdHex, setOracleFeedIdHex] = useState<string>("0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d");
   const [manualSettleModal, setManualSettleModal] = useState<{
@@ -134,37 +157,8 @@ function AdminPage() {
       isOpen: true,
       market,
       settlePrice: "",
-      isFetchingPrice: true
-    });
-
-    try {
-      const feedHex = "0x" + Array.from(market.account.oracleFeedId).map(b => b.toString(16).padStart(2, '0')).join('');
-      const url = `https://hermes.pyth.network/v2/updates/price/latest?ids%5B%5D=${feedHex.slice(2)}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        const priceUpdate = data.parsed?.[0]?.price;
-        if (priceUpdate) {
-          const price = Number(priceUpdate.price) * Math.pow(10, priceUpdate.expo);
-          setSettleModal({
-            isOpen: true,
-            market,
-            settlePrice: price.toFixed(2),
-            isFetchingPrice: false
-          });
-          return;
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching Pyth price:", err);
-    }
-
-    const localVal = getSettlePrice(market.publicKey.toBase58());
-    setSettleModal({
-      isOpen: true,
-      market,
-      settlePrice: localVal > 0 ? String(localVal) : "260.00",
-      isFetchingPrice: false
+      isFetchingPrice: true,
+      livePrice: null,
     });
   };
 
@@ -696,7 +690,7 @@ function AdminPage() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false })}
+                onClick={() => setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false, livePrice: null })}
                 className="flex-1 btn-amber text-xs py-2 uppercase border border-[#9e8e78]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#d6c4ac]"
               >
                 Cancel
@@ -709,7 +703,7 @@ function AdminPage() {
                   const price = parseFloat(raw.startsWith("$") ? raw.slice(1) : raw);
                   if (settleModal.market && !isNaN(price)) {
                     const m = settleModal.market;
-                    setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false });
+                    setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false, livePrice: null });
                     await handleMockSettle(m, price);
                   }
                 }}

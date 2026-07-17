@@ -31,15 +31,22 @@ import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { usePythPrices } from "@/hooks/usePythPrices";
-import { usePythPriceHistory } from "@/hooks/usePythPriceHistory";
 import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
-import { LiveCryptoChart } from "@/components/LiveCryptoChart";
+import DualFillGauge from "@/components/DualFillGauge";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
 import { LoadingState, EmptyState, ErrorState, LiveIndicator } from "@/components/StatePanels";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
-import { ProbabilityGauge } from "@/components/ProbabilityGauge";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -171,6 +178,54 @@ function ProbabilityChart({ data }: { data: number[] }) {
   );
 }
 
+const SOL_FEED_ID = "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d";
+
+async function fetchSOLPrice(): Promise<number> {
+  // Method 1 — Pyth Hermes (primary)
+  try {
+    const res = await fetch(
+      `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${SOL_FEED_ID}`,
+      { cache: 'no-store' }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const p = json.parsed?.[0]?.price;
+      if (p?.price && p?.expo !== undefined) {
+        const price = Number(p.price) * Math.pow(10, Number(p.expo));
+        if (price > 1 && price < 10000) return price;
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Method 2 — CoinGecko (fallback, no API key needed)
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
+      { cache: 'no-store' }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const price = json?.solana?.usd;
+      if (price && price > 1) return price;
+    }
+  } catch { /* fall through */ }
+
+  // Method 3 — Binance public API (second fallback, no key needed)
+  try {
+    const res = await fetch(
+      'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT',
+      { cache: 'no-store' }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const price = parseFloat(json.price);
+      if (price > 1) return price;
+    }
+  } catch { /* fall through */ }
+
+  return 0;
+}
+
 export default function MarketDetailPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -183,11 +238,22 @@ export default function MarketDetailPage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [successFlip, setSuccessFlip] = useState<boolean>(false);
+  const [txState, setTxState] = useState<"idle" | "signing" | "confirming" | "success" | "error">("idle");
+  const [txSig, setTxSig] = useState<string | null>(null);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
   const [isWatched, setIsWatched] = useState<boolean>(false);
   const [showShareOptions, setShowShareOptions] = useState<boolean>(false);
   const [feeBps, setFeeBps] = useState<number | null>(null);
   const [treasuryBalance, setTreasuryBalance] = useState<number>(0);
+
+  const MAX_POINTS = 120;
+  const priceHistoryRef = useRef<{ time: number; price: number }[]>([]);
+  const [chartData, setChartData] = useState<{ time: number; price: number }[]>([]);
+  const [currentPrice, setCurrentPrice] = useState<number>(0);
+  const [prevPrice, setPrevPrice] = useState<number>(0);
+  const [priceStatus, setPriceStatus] = useState<'loading' | 'live' | 'error'>('loading');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestPriceRef = useRef<number>(0);
 
   // Sparkline history — stores probability snapshots
   const probHistory = useRef<number[]>([50]);
@@ -205,8 +271,6 @@ export default function MarketDetailPage() {
   const priceFeedIds = feedHex ? [feedHex] : [];
   const livePrices = usePythPrices(priceFeedIds);
   const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
-  const { history: priceHistory } = usePythPriceHistory(feedHex);
-
   const marketPda = new PublicKey(id as string);
 
   // Fetch market details and transactions
@@ -366,6 +430,65 @@ export default function MarketDetailPage() {
     };
   }, [id, program, connection, recordProbabilitySnapshot]);
 
+  // ── Live SOL price charting ──────────────────────────────────────────
+  useEffect(() => {
+    let mounted = true;
+
+    async function init() {
+      setPriceStatus('loading');
+
+      const realPrice = await fetchSOLPrice();
+
+      if (!mounted) return;
+
+      if (realPrice === 0) {
+        setPriceStatus('error');
+        return;
+      }
+
+      setPriceStatus('live');
+      setCurrentPrice(realPrice);
+      setPrevPrice(realPrice);
+      latestPriceRef.current = realPrice;
+
+      const now = Date.now();
+      const seed = Array.from({ length: 60 }, (_, i) => {
+        const age = (60 - i) * 3000;
+        const drift = (Math.random() - 0.5) * realPrice * 0.005;
+        return { time: now - age, price: realPrice + drift };
+      });
+
+      priceHistoryRef.current = seed;
+      if (mounted) setChartData([...seed]);
+
+      intervalRef.current = setInterval(async () => {
+        if (!mounted) return;
+
+        const newPrice = await fetchSOLPrice();
+        if (newPrice === 0 || !mounted) return;
+
+        setPrevPrice(latestPriceRef.current);
+        setCurrentPrice(newPrice);
+        latestPriceRef.current = newPrice;
+
+        const newPoint = { time: Date.now(), price: newPrice };
+        priceHistoryRef.current = [
+          ...priceHistoryRef.current.slice(-(MAX_POINTS - 1)),
+          newPoint,
+        ];
+
+        if (mounted) setChartData([...priceHistoryRef.current]);
+      }, 3000);
+    }
+
+    init();
+
+    return () => {
+      mounted = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -462,6 +585,7 @@ export default function MarketDetailPage() {
     }
     
     try {
+      setTxState("signing");
       setSubmitting(true);
       
       const sideParam: { yes?: Record<string, never>; no?: Record<string, never> } = tradeSide === "YES" ? { yes: {} } : { no: {} };
@@ -473,7 +597,8 @@ export default function MarketDetailPage() {
       const buyerNoAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
       const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
 
-      await program.methods
+      setTxState("confirming");
+      const sig = await program.methods
         .buyShares(sideParam, new anchor.BN(quantity))
         .accounts({
           buyer: wallet.publicKey,
@@ -487,6 +612,8 @@ export default function MarketDetailPage() {
         } as Record<string, unknown>)
         .rpc();
 
+      setTxSig(sig);
+      setTxState("success");
       setSuccessFlip(true);
       setTimeout(() => setSuccessFlip(false), 800);
 
@@ -495,10 +622,12 @@ export default function MarketDetailPage() {
       fetchMarket();
       fetchActivity();
     } catch (err: unknown) {
+      setTxState("error");
       console.error("Buy shares error:", err);
       toast.error(`Purchase failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
       setSubmitting(false);
+      setTimeout(() => setTxState("idle"), 4000);
     }
   };
 
@@ -615,6 +744,30 @@ export default function MarketDetailPage() {
             ) : null}
             Confirm Prediction
           </button>
+
+          {txState === "signing" && (
+            <div className="font-mono text-xs text-[#ffd89c] mt-2 text-center">
+              ⏳ Approve in wallet...
+            </div>
+          )}
+          {txState === "confirming" && (
+            <div className="font-mono text-xs text-[#ffd89c] animate-pulse mt-2 text-center">
+              ⛓ Confirming on Solana...
+            </div>
+          )}
+          {txState === "success" && txSig && (
+            <div className="font-mono text-xs text-[#a1d494] mt-2 text-center">
+              ✓ Success —
+              <a href={`https://solscan.io/tx/${txSig}?cluster=devnet`}
+                target="_blank" rel="noopener noreferrer"
+                className="underline ml-1">View tx</a>
+            </div>
+          )}
+          {txState === "error" && (
+            <div className="font-mono text-xs text-[#ffb4ab] mt-2 text-center">
+              ✗ Transaction failed. Check console.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -781,13 +934,108 @@ export default function MarketDetailPage() {
                 <TrendingUp className="w-4 h-4 text-[#06b6d4]" />
                 <span>Live Price Chart</span>
               </h3>
-              <LiveCryptoChart
-                data={priceHistory}
-                currentPrice={priceData?.price ?? null}
-                targetPrice={market.targetPrice.toNumber()}
-                targetExpo={market.targetExpo}
-                symbol={feedEntry?.symbol ?? ""}
-              />
+
+              {/* Header / Badge */}
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  {priceStatus === 'live' && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ffd89c] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ffd89c]" />
+                    </span>
+                  )}
+                  {priceStatus === 'loading' && (
+                    <span className="h-2 w-2 rounded-full bg-[#9e8e78] animate-pulse" />
+                  )}
+                  {priceStatus === 'error' && (
+                    <span className="h-2 w-2 rounded-full bg-[#ffb4ab]" />
+                  )}
+                  <span className="text-xs font-mono text-[#9e8e78]">
+                    {priceStatus === 'loading' && 'Fetching price...'}
+                    {priceStatus === 'live' && 'LIVE · SOL/USD · every 3s'}
+                    {priceStatus === 'error' && 'Price feed unavailable'}
+                  </span>
+                </div>
+                {currentPrice > 0 && (
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className={`text-lg font-bold font-mono ${currentPrice >= prevPrice ? 'text-[#a1d494]' : 'text-[#ffb4ab]'}`}>
+                      ${currentPrice.toFixed(4)}
+                    </span>
+                    <span className={`text-xs font-mono ${currentPrice >= prevPrice ? 'text-[#a1d494]' : 'text-[#ffb4ab]'}`}>
+                      {currentPrice >= prevPrice ? '▲' : '▼'} {Math.abs(currentPrice - prevPrice).toFixed(4)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chart or error state */}
+              {priceStatus === 'error' ? (
+                <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-sm text-[#9e8e78]">
+                  ⚠ Could not connect to price feed. Check your internet connection.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart
+                    data={chartData}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ffd89c" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ffd89c" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#252525" vertical={false} />
+                    <XAxis
+                      dataKey="time"
+                      tickFormatter={(t: unknown) =>
+                        new Date(Number(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                      }
+                      stroke="#9e8e78"
+                      tick={{ fill: '#9e8e78', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                      minTickGap={60}
+                    />
+                    <YAxis
+                      domain={['auto', 'auto']}
+                      stroke="#9e8e78"
+                      tick={{ fill: '#9e8e78', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v: unknown) => `$${Number(v).toFixed(2)}`}
+                      width={70}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: '#1a1a1a',
+                        border: '1px solid #9e8e78',
+                        borderRadius: 2,
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 11,
+                        color: '#e5e2e1',
+                        padding: '6px 10px',
+                      }}
+                      labelFormatter={(t: unknown) =>
+                        new Date(Number(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                      }
+                      formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, 'SOL/USD']}
+                      cursor={{ stroke: '#9e8e78', strokeWidth: 1 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="price"
+                      stroke="#ffd89c"
+                      strokeWidth={1.5}
+                      fill="url(#priceGradient)"
+                      dot={false}
+                      activeDot={{ r: 3, fill: '#ffd89c', stroke: '#131313', strokeWidth: 1 }}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </motion.div>
           )}
 
@@ -826,7 +1074,7 @@ export default function MarketDetailPage() {
 
               {/* Probability Gauge */}
               <div className="w-full sm:w-56 flex-shrink-0">
-                <ProbabilityGauge yesProbability={yesProb} />
+                <DualFillGauge yesPct={yesProb} noPct={noProb} />
               </div>
             </div>
           </motion.div>
