@@ -8,8 +8,9 @@ use crate::utils::{oracle, payout_math};
 
 /// Accounts for the `settle_market` instruction.
 ///
-/// Admin-only. Reads a Pyth PriceUpdateV2 account (posted on-chain in the
-/// same transaction bundle) to determine the market outcome.
+/// Permissionless — anyone can trigger settlement for oracle-backed markets
+/// after `resolve_ts`. Only `market` and `price_update` are essential; `config`
+/// is read-only for fee calculation.
 ///
 /// NOTE: We use UncheckedAccount for the Pyth price update to avoid an
 /// anchor-lang version conflict (pyth SDK 2.0.0 uses anchor 1.x internally).
@@ -17,24 +18,21 @@ use crate::utils::{oracle, payout_math};
 /// including account data parsing, staleness, feed ID, and confidence checks.
 #[derive(Accounts)]
 pub struct SettleMarket<'info> {
-    /// Admin signer — must match `config.admin`.
-    pub admin: Signer<'info>,
-
-    /// Config PDA — to verify admin identity.
-    #[account(
-        seeds = [CONFIG_SEED],
-        bump = config.bump,
-        constraint = admin.key() == config.admin @ SolPredictError::Unauthorized,
-    )]
-    pub config: Account<'info, Config>,
-
-    /// Market PDA — must be Open, not already settled.
+    /// Permissionless — anyone can trigger settlement for oracle markets.
+    /// No admin required.
     #[account(
         mut,
         seeds = [MARKET_SEED, market.market_id.to_le_bytes().as_ref()],
         bump = market.bump,
     )]
     pub market: Account<'info, Market>,
+
+    /// Config PDA — read-only for fee calculation.
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bump,
+    )]
+    pub config: Account<'info, Config>,
 
     /// Pyth PriceUpdateV2 account — posted just before this instruction
     /// in the same transaction bundle.

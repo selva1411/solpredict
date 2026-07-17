@@ -11,6 +11,9 @@ import { Trophy, Medal, Crown, Filter, Coins, Users, Briefcase } from "lucide-re
 import * as anchor from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { StatTile3D } from "@/components/dashboard/StatTile3D";
+import { GlassPanel } from "@/components/GlassPanel";
+import { fadeInUp } from "@/lib/motion-variants";
+import { LoadingState, EmptyState } from "@/components/StatePanels";
 
 interface MarketItem {
   publicKey: PublicKey;
@@ -208,7 +211,7 @@ function LeaderboardPage() {
         </div>
 
         {myAddress && myRank > 0 && (
-          <div className="board-panel px-4 py-2 flex items-center gap-3 bg-[#131313] border-[#9e8e78]/40">
+          <div className="glass-panel px-4 py-2 flex items-center gap-3">
             <span className="text-xs text-[#d6c4ac] uppercase font-display font-semibold">Your Rank</span>
             <span className="text-lg font-mono font-bold text-[#ffd89c]">#{myRank}</span>
           </div>
@@ -252,7 +255,7 @@ function LeaderboardPage() {
         <motion.section
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="board-panel p-6 bg-[#131313] border-2 border-[#9e8e78]/60"
+          className="glass-panel p-6"
         >
           <h3 className="text-[10px] uppercase font-display tracking-wider text-[#d6c4ac] mb-4 font-bold">Your Profile Stats ({selectedCategory})</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
@@ -279,7 +282,7 @@ function LeaderboardPage() {
       )}
 
       {/* Aggregate stats summary row */}
-      <section className="grid grid-cols-2 md:grid-cols-3 gap-6">
+      <section className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         <StatTile3D
           label={`Total Volume (${selectedCategory})`}
           value={leaderboardStats.totals.volume.toFixed(1)}
@@ -331,17 +334,15 @@ function LeaderboardPage() {
       {loading ? (
         <section className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="board-panel p-5 h-16 skeleton-shimmer bg-[#131313]" />
+            <div key={i} className="glass-panel p-5 h-16 skeleton-shimmer" />
           ))}
         </section>
       ) : leaderboardStats.traders.length === 0 ? (
-        <div className="board-panel py-16 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4">
-          <Trophy className="w-10 h-10 opacity-30 text-[#ffd89c]" />
-          <div>
-            <h3 className="text-base font-bold font-display text-[#e5e2e1]">BOARD IS VACANT</h3>
-            <p className="text-xs mt-1">Be the first to trade and claim the lead position.</p>
-          </div>
-        </div>
+        <EmptyState
+          icon={Trophy}
+          title="Board Is Vacant"
+          description="Be the first to trade and claim the lead position."
+        />
       ) : (
         <section className="space-y-3">
           <AnimatePresence mode="popLayout">
@@ -359,14 +360,14 @@ function LeaderboardPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                   transition={{ duration: 0.25, delay: Math.min(index * 0.02, 0.2) }}
-                  className={`board-panel p-4 flex items-center justify-between gap-4 border-[#9e8e78]/40 ${
-                    isMe ? "border-[#ffd89c] bg-[#ffd89c]/2" : "bg-[#131313]"
+                  className={`glass-panel p-3 sm:p-4 flex items-center justify-between gap-2 sm:gap-4 hover-lift ${
+                    isMe ? "border-[#ffd89c] bg-[#ffd89c]/2" : ""
                   }`}
                 >
-                  <div className="flex items-center gap-4 min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                     <RankBadge rank={rank} />
                     <div className="min-w-0">
-                      <div className="font-mono text-sm font-bold text-[#e5e2e1] truncate flex items-center gap-2">
+                      <div className="font-mono text-xs sm:text-sm font-bold text-[#e5e2e1] truncate flex items-center gap-2">
                         {shortAddr(trader.owner)}
                         {isMe && (
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#ffd89c]/10 border border-[#ffd89c]/30 text-[#ffd89c] font-bold">
@@ -374,18 +375,18 @@ function LeaderboardPage() {
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-[#d6c4ac] font-mono">
+                      <div className="text-[10px] sm:text-[11px] text-[#d6c4ac] font-mono">
                         {trader.positionsCount} POSITION{trader.positionsCount !== 1 ? "S" : ""}
-                        {winRate !== null && <span> &middot; {winRate}% WIN RATE</span>}
+                        {winRate !== null && <span className="hidden sm:inline"> &middot; {winRate}% WIN RATE</span>}
                       </div>
                     </div>
                   </div>
 
                   <div className="text-right flex-shrink-0 font-mono">
-                    <div className="font-bold text-[#e5e2e1] text-sm">
+                    <div className="font-bold text-[#e5e2e1] text-xs sm:text-sm">
                       {trader.totalVolumeSol.toFixed(2)} SOL
                     </div>
-                    <div className="text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Volume</div>
+                    <div className="text-[8px] sm:text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Volume</div>
                   </div>
                 </motion.div>
               );

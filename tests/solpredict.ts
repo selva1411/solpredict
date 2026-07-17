@@ -423,12 +423,10 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
-            admin: admin.publicKey,
-            config: configPda,
             market: marketPda,
+            config: configPda,
             priceUpdate: currentMockPda,
           } as any)
-          .signers([admin])
           .rpc();
         expect.fail("Should have failed with StaleOracle");
       } catch (err: any) {
@@ -466,12 +464,10 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
-            admin: admin.publicKey,
-            config: configPda,
             market: marketPda,
+            config: configPda,
             priceUpdate: currentMockPda,
           } as any)
-          .signers([admin])
           .rpc();
         expect.fail("Should have failed with InvalidOracleFeed");
       } catch (err: any) {
@@ -509,12 +505,10 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
-            admin: admin.publicKey,
-            config: configPda,
             market: marketPda,
+            config: configPda,
             priceUpdate: currentMockPda,
           } as any)
-          .signers([admin])
           .rpc();
         expect.fail("Should have failed with LowOracleConfidence");
       } catch (err: any) {
@@ -555,12 +549,10 @@ describe("SOLPredict Integration Suite", () => {
       const tx = await program.methods
         .settleMarket()
         .accounts({
-          admin: admin.publicKey,
-          config: configPda,
           market: marketPda,
+          config: configPda,
           priceUpdate: currentMockPda,
         } as any)
-        .signers([admin])
         .rpc();
 
       const marketAccount = await program.account.market.fetch(marketPda);
@@ -702,12 +694,10 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
-            admin: admin.publicKey,
-            config: configPda,
             market: sportsMarketPda,
+            config: configPda,
             priceUpdate: currentMockPda,
           } as any)
-          .signers([admin])
           .rpc();
         expect.fail("Should have failed with UseManualSettlement");
       } catch (err: any) {
@@ -794,12 +784,10 @@ describe("SOLPredict Integration Suite", () => {
       await program.methods
         .settleMarket()
         .accounts({
-          admin: admin.publicKey,
-          config: configPda,
           market: techMarketPda,
+          config: configPda,
           priceUpdate: mockPda,
         } as any)
-        .signers([admin])
         .rpc();
 
       const acc = await program.account.market.fetch(techMarketPda);
@@ -927,12 +915,10 @@ describe("SOLPredict Integration Suite", () => {
       await program.methods
         .settleMarket()
         .accounts({
-          admin: admin.publicKey,
-          config: configPda, // Use configPda instead of configPda2
           market: marketPda,
+          config: configPda,
           priceUpdate: mockPriceUpdatePda,
         } as any)
-        .signers([admin])
         .rpc();
 
       const marketAccount = await program.account.market.fetch(marketPda);

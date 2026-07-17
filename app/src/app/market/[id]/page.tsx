@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,15 +26,20 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
-import ProbabilityOrb3D from "@/components/ProbabilityOrb3D";
 import { OrderBookDepth } from "@/components/OrderBookDepth";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
-import { ThreeOrb } from "@/components/ThreeOrb";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { usePythPrices } from "@/hooks/usePythPrices";
+import { usePythPriceHistory } from "@/hooks/usePythPriceHistory";
 import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
+import { LiveCryptoChart } from "@/components/LiveCryptoChart";
+import { LoadingState, EmptyState, ErrorState, LiveIndicator } from "@/components/StatePanels";
+import { GlassPanel } from "@/components/GlassPanel";
+import { useDeviceCapability } from "@/hooks/useDeviceCapability";
+import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
+import { ProbabilityGauge } from "@/components/ProbabilityGauge";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -200,28 +205,17 @@ export default function MarketDetailPage() {
   const priceFeedIds = feedHex ? [feedHex] : [];
   const livePrices = usePythPrices(priceFeedIds);
   const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
+  const { history: priceHistory } = usePythPriceHistory(feedHex);
 
   const marketPda = new PublicKey(id as string);
 
   // Fetch market details and transactions
   const fetchMarket = async () => {
     try {
-      const marketAcc = await program.account.market.fetch(marketPda);
-      setMarket(marketAcc as unknown as MarketDetails);
-
+      const marketAcc = await program.account.market.fetch(marketPda) as unknown as MarketDetails;
+      setMarket(marketAcc);
       setIsWatched(getWatchlist().includes(marketPda.toBase58()));
-
-      // Record probability snapshot for sparkline
-      const acc = marketAcc as unknown as MarketDetails;
-      const yesP = acc.yesPoolLamports.toNumber();
-      const noP = acc.noPoolLamports.toNumber();
-      const total = yesP + noP;
-      const yesProbVal = total > 0 ? Math.round((yesP / total) * 100) : 50;
-      
-      // If we don't have enough parsed history items, seed with current
-      if (probHistory.current.length <= 1) {
-        probHistory.current = [50, yesProbVal];
-      }
+      recordProbabilitySnapshot(marketAcc);
 
       // Fetch config fee bps and treasury balance in parallel from the blockchain
       const configPda = getConfigPda(program.programId);
@@ -333,38 +327,68 @@ export default function MarketDetailPage() {
     }
   };
 
+  // Record a probability snapshot and append to sparkline history
+  const recordProbabilitySnapshot = useCallback((acc: MarketDetails) => {
+    const yesP = acc.yesPoolLamports.toNumber();
+    const noP = acc.noPoolLamports.toNumber();
+    const total = yesP + noP;
+    const yesProbVal = total > 0 ? Math.round((yesP / total) * 100) : 50;
+    probHistory.current = [...probHistory.current.slice(-29), yesProbVal];
+  }, []);
+
   useEffect(() => {
     fetchMarket();
     fetchActivity();
 
-    const subscription = connection.onLogs(marketPda, () => {
-      fetchMarket();
+    // Real-time market data stream — no RPC call, validator pushes account updates
+    const accountSub = connection.onAccountChange(
+      marketPda,
+      (accountInfo) => {
+        try {
+          const decoded = program.coder.accounts.decode("Market", accountInfo.data) as unknown as MarketDetails;
+          setMarket(decoded);
+          recordProbabilitySnapshot(decoded);
+        } catch {
+          fetchMarket();
+        }
+      },
+      "confirmed"
+    );
+
+    // Logs subscription — cheaper: only refreshes activity feed, not market data
+    const logSub = connection.onLogs(marketPda, () => {
       fetchActivity();
     }, "confirmed");
 
     return () => {
-      connection.removeOnLogsListener(subscription);
+      connection.removeAccountChangeListener(accountSub);
+      connection.removeOnLogsListener(logSub);
     };
-  }, [id, program, connection]);
+  }, [id, program, connection, recordProbabilitySnapshot]);
 
   if (loading) {
-    return <div className="board-panel p-10 h-96 skeleton-shimmer bg-[#131313]" />;
+    return (
+      <div className="space-y-8">
+        <div className="h-8 bg-white/5 border border-white/10 rounded w-1/3" />
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="md:col-span-2 space-y-8">
+            <div className="board-panel p-10 h-96 skeleton-shimmer bg-[#131313]" />
+            <div className="board-panel p-10 h-64 skeleton-shimmer bg-[#131313]" />
+          </div>
+          <div className="board-panel p-10 h-80 skeleton-shimmer bg-[#131313]" />
+        </div>
+      </div>
+    );
   }
 
   if (!market) {
     return (
-      <div className="board-panel py-20 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4 max-w-2xl mx-auto board-panel-3d border-[#9e8e78]/40">
-        <AlertCircle className="w-12 h-12 opacity-30 text-[#ffb4ab]" />
-        <div className="space-y-1.5">
-          <h3 className="text-lg font-bold font-display text-[#e5e2e1] uppercase tracking-wide">Contract Departed</h3>
-          <p className="text-xs leading-normal">The requested prediction board does not exist or has been removed from the registry.</p>
-        </div>
-        <div className="pt-4">
-          <Link href="/markets" className="btn-primary text-xs font-semibold px-4 py-2">
-            Return to Explorer
-          </Link>
-        </div>
-      </div>
+      <EmptyState
+        icon={AlertCircle}
+        title="Contract Departed"
+        description="The requested prediction board does not exist or has been removed from the registry."
+        action={{ label: "Return to Explorer", href: "/markets" }}
+      />
     );
   }
 
@@ -611,7 +635,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="board-panel p-6 sm:p-8 space-y-6 border-board-border bg-board-panel"
+            className="glass-panel p-6 sm:p-8 space-y-6"
           >
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[#9e8e78]/30 text-[#ffd89c]">
@@ -683,33 +707,33 @@ export default function MarketDetailPage() {
               {market.description}
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-[#9e8e78]/30">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pt-4 border-t border-[#9e8e78]/30">
               {isOracleCategory(market.category) ? (
                 <>
                   <div className="space-y-1 font-mono">
                     <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Target Price</div>
-                    <div className="text-lg font-bold text-[#e5e2e1]">
+                    <div className="text-base sm:text-lg font-bold text-[#e5e2e1]">
                       {formatTargetPrice(market.targetPrice, market.targetExpo)}
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
-                    <div className="text-lg font-bold text-[#e5e2e1] font-display uppercase tracking-wide">
+                    <div className="text-base sm:text-lg font-bold text-[#e5e2e1] font-display uppercase tracking-wide">
                       {market.comparison === 0 ? "Greater Than" : "Less Than"}
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="sm:col-span-2 space-y-1">
+                <div className="col-span-2 xl:col-span-2 space-y-1">
                   <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Settlement Mode</div>
                   <div className="text-sm font-bold text-[#ffd89c] font-display uppercase tracking-wide flex items-center gap-1.5 pt-0.5">
-                    ⚖️ Manual Settle (via Admin signature)
+                    ⚖️ Manual Settle
                   </div>
                 </div>
               )}
 
-              <div className="space-y-1">
+              <div className="space-y-1 col-span-2 xl:col-span-1">
                 <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Ending clock</div>
                 <div className="pt-1">
                   <FlipCountdown endTs={market.endTs.toNumber()} compact />
@@ -723,7 +747,6 @@ export default function MarketDetailPage() {
                   feedIdHex={feedHex!}
                   category={market.category}
                   livePrice={priceData?.price ?? null}
-                  liveLoading={priceData?.loading ?? true}
                   liveError={priceData?.error ?? null}
                   targetPrice={market.targetPrice.toNumber()}
                   targetExpo={market.targetExpo}
@@ -746,12 +769,34 @@ export default function MarketDetailPage() {
             )}
           </motion.div>
 
+          {/* Live Crypto Price Chart */}
+          {isOracleCategory(market.category) && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.07 }}
+              className="glass-panel p-6 sm:p-8 space-y-4"
+            >
+              <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
+                <TrendingUp className="w-4 h-4 text-[#06b6d4]" />
+                <span>Live Price Chart</span>
+              </h3>
+              <LiveCryptoChart
+                data={priceHistory}
+                currentPrice={priceData?.price ?? null}
+                targetPrice={market.targetPrice.toNumber()}
+                targetExpo={market.targetExpo}
+                symbol={feedEntry?.symbol ?? ""}
+              />
+            </motion.div>
+          )}
+
           {/* Semicircle Probability Dial and Sparkline Trend */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.05 }}
-            className="board-panel p-6 sm:p-8 space-y-6 border-board-border/40 bg-board-panel"
+            className="glass-panel p-6 sm:p-8 space-y-6"
           >
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
               <TrendingUp className="w-4 h-4 text-[#ffd89c]" />
@@ -760,21 +805,6 @@ export default function MarketDetailPage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-8 py-2">
               <div className="flex-1 w-full space-y-4">
-                <div className="flex items-center justify-between text-xs font-mono font-bold">
-                  <span className="text-[#a1d494] text-sm">YES: {yesProb}%</span>
-                  <span className="text-[#ffb4ab] text-sm">NO: {noProb}%</span>
-                </div>
-                
-                {/* Horizontal probability strip */}
-                <div className="w-full h-3 bg-[#ffb4ab]/30 rounded overflow-hidden flex border border-[#0d0d0d]">
-                  <motion.div
-                    className="h-full bg-[#a1d494]"
-                    initial={{ width: "50%" }}
-                    animate={{ width: `${yesProb}%` }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
-                  />
-                </div>
-
                 <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-2">
                   <div className="p-3 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
                     <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">YES Pool Weight</div>
@@ -794,9 +824,9 @@ export default function MarketDetailPage() {
                 )}
               </div>
 
-              {/* Live WebGL 3D Win-Probability Orb */}
-              <div className="w-full sm:w-48 flex-shrink-0">
-                <ThreeOrb yesProbability={yesProb} />
+              {/* Probability Gauge */}
+              <div className="w-full sm:w-56 flex-shrink-0">
+                <ProbabilityGauge yesProbability={yesProb} />
               </div>
             </div>
           </motion.div>
@@ -809,16 +839,23 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.15 }}
-            className="board-panel p-6 space-y-4 border-board-border/40 bg-board-panel"
+            className="glass-panel p-6 space-y-4"
           >
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
               <Activity className="w-4 h-4 text-[#ffd89c]" />
               <span>Decoded On-Chain Transactions</span>
+              <div className="ml-auto flex items-center gap-2">
+                <LiveIndicator isLive={activity.length > 0} label={activity.length > 0 ? "Streaming" : "Idle"} />
+              </div>
             </h3>
             
             <div className="space-y-2 font-mono text-xs max-h-96 overflow-y-auto scrollbar-thin">
               {activity.length === 0 ? (
-                <p className="text-[#d6c4ac] text-center py-8">No matching transaction logs decoded.</p>
+                <EmptyState
+                  icon={Activity}
+                  title="No Transactions Yet"
+                  description="No matching transaction logs decoded. New activity will appear here in real-time."
+                />
               ) : (
                 <AnimatePresence>
                   {activity.map((item, index) => {
@@ -826,6 +863,7 @@ export default function MarketDetailPage() {
                     const isClaim = item.side === "CLAIM";
                     const isYes = item.side === "YES";
                     const isNo = item.side === "NO";
+                    const isNew = index < 3;
 
                     let badgeColor = "bg-white/5 text-[#e5e2e1]";
                     if (isYes) badgeColor = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
@@ -838,13 +876,13 @@ export default function MarketDetailPage() {
                         initial={{ opacity: 0, x: -5 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: Math.min(index * 0.03, 0.3) }}
-                        className="flex justify-between items-center py-2.5 border-b border-[#9e8e78]/10 hover:bg-white/5 px-2 rounded"
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[#9e8e78]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#ffd89c]/3 border-l-2 border-l-[#a1d494]" : ""}`}
                       >
-                        <div className="flex items-center space-x-2.5">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${badgeColor}`}>
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>
                             {item.side}
                           </span>
-                          <span className="text-[#e5e2e1] text-[11px]">
+                          <span className="text-[#e5e2e1] text-[11px] truncate">
                             {isSettle ? (
                               <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
                             ) : isClaim ? (
@@ -853,8 +891,13 @@ export default function MarketDetailPage() {
                               <span>{item.quantity} SHARES AT {item.cost.toFixed(2)} SOL</span>
                             )}
                           </span>
+                          {isNew && (
+                            <span className="text-[8px] font-mono font-bold text-[#a1d494] bg-[#a1d494]/10 px-1 py-0.5 rounded border border-[#a1d494]/20 animate-pulse shrink-0">
+                              NEW
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[#d6c4ac] text-[10px] flex items-center space-x-2">
+                        <div className="text-[#d6c4ac] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
                           <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
                           <span>{item.time}</span>
                         </div>
@@ -871,7 +914,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            className="board-panel p-6 sm:p-8 space-y-6 border-[#9e8e78]/40 bg-[#131313]"
+            className="glass-panel p-6 sm:p-8 space-y-6"
           >
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c] flex items-center space-x-2">
               <Award className="w-4 h-4" />
@@ -929,7 +972,7 @@ export default function MarketDetailPage() {
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className={`board-panel p-6 space-y-6 border-board-border bg-board-panel ${successFlip ? "animate-success-flip" : ""}`}
+            className={`glass-panel p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
           >
             <h3 className="text-sm font-bold uppercase tracking-wider font-display border-b border-[#9e8e78]/30 pb-3 text-[#ffd89c]">
               [■] Prediction Desk

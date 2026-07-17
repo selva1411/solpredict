@@ -21,6 +21,7 @@ import {
   PieChart,
   Briefcase,
   ExternalLink,
+  BarChart3,
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { EventParser } from "@coral-xyz/anchor";
@@ -35,6 +36,10 @@ import { ConnectWalletGate } from "@/components/dashboard/ConnectWalletGate";
 import { StatTile3D } from "@/components/dashboard/StatTile3D";
 import { CategoryRing3D } from "@/components/dashboard/CategoryRing3D";
 import { DashboardSection, DashboardHero } from "@/components/dashboard/DashboardSection";
+import { EmptyState } from "@/components/StatePanels";
+import { GlassPanel } from "@/components/GlassPanel";
+import { useDeviceCapability } from "@/hooks/useDeviceCapability";
+import { fadeInUp, staggerContainer, listItem } from "@/lib/motion-variants";
 
 interface PositionWithMarket {
   publicKey: PublicKey;
@@ -471,7 +476,7 @@ export default function UserDashboard() {
       />
 
       {/* Stats row */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
         <StatTile3D label="Total Spent" value={stats.totalSpent.toFixed(2)} unit="SOL" icon={Coins} delay={0} />
         <StatTile3D
           label="Active Positions"
@@ -499,6 +504,9 @@ export default function UserDashboard() {
           useSplitFlap={false}
         />
       </section>
+
+      {/* PnL sparkline from activity history */}
+      {activity.length >= 2 && <PnLSparklineSection activity={activity} />}
 
       {/* Needs attention */}
       <AnimatePresence>
@@ -529,52 +537,52 @@ export default function UserDashboard() {
                 const posKey = pos.publicKey.toBase58();
 
                 return (
-                  <motion.div
-                    key={posKey}
-                    variants={itemVariants}
-                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="text-sm font-bold text-[#e5e2e1]">
-                        {pos.marketAccount.question}
-                      </div>
-                      <div className="flex items-center space-x-3 text-xs text-[#d6c4ac] font-mono">
-                        <span>
-                          Status:{" "}
-                          <span className={isSettled ? "text-[#a1d494]" : "text-[#ffd89c] font-bold"}>
-                            {status}
+                    <motion.div
+                      key={posKey}
+                      variants={itemVariants}
+                      className="glass-panel-interactive py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="text-sm font-bold text-[#e5e2e1] truncate">
+                          {pos.marketAccount.question}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#d6c4ac] font-mono">
+                          <span>
+                            Status:{" "}
+                            <span className={isSettled ? "text-[#a1d494]" : "text-[#ffd89c] font-bold"}>
+                              {status}
+                            </span>
                           </span>
-                        </span>
-                        <span>•</span>
-                        <span>
-                          Your Position: {yesShares > 0 ? `${yesShares} YES` : `${noShares} NO`}
-                        </span>
+                          <span className="hidden sm:inline">•</span>
+                          <span>
+                            Position: {yesShares > 0 ? `${yesShares} YES` : `${noShares} NO`}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      {isCancelled ? (
-                        <button
-                          onClick={() => handleClaimRefund(pos)}
-                          disabled={claimingId === posKey}
-                          className="btn-amber text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50"
-                        >
-                          {claimingId === posKey ? "Claiming..." : "Claim Refund"}
-                        </button>
-                      ) : isWinner ? (
-                        <button
-                          onClick={() => handleClaimRewards(pos)}
-                          disabled={claimingId === posKey}
-                          className="btn-yes-mechanical text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50 animate-pulse-glow"
-                        >
-                          {claimingId === posKey ? "Claiming..." : "Claim Rewards"}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-[#d6c4ac] font-mono italic">
-                          No payout claimable (lost)
-                        </span>
-                      )}
-                    </div>
-                  </motion.div>
+                      <div className="shrink-0">
+                        {isCancelled ? (
+                          <button
+                            onClick={() => handleClaimRefund(pos)}
+                            disabled={claimingId === posKey}
+                            className="btn-amber text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50 w-full sm:w-auto"
+                          >
+                            {claimingId === posKey ? "Claiming..." : "Claim Refund"}
+                          </button>
+                        ) : isWinner ? (
+                          <button
+                            onClick={() => handleClaimRewards(pos)}
+                            disabled={claimingId === posKey}
+                            className="btn-yes-mechanical text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50 animate-pulse-glow w-full sm:w-auto"
+                          >
+                            {claimingId === posKey ? "Claiming..." : "Claim Rewards"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[#d6c4ac] font-mono italic">
+                            No payout claimable (lost)
+                          </span>
+                        )}
+                      </div>
+                    </motion.div>
                 );
               })}
             </motion.div>
@@ -590,36 +598,27 @@ export default function UserDashboard() {
         count={openPositions.length}
         delay={0.05}
       >
-        <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
+        <div className="glass-panel overflow-hidden">
           {openPositions.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="py-16 text-center space-y-4"
-            >
-              <div className="mx-auto w-16 h-16 rounded border border-[#9e8e78]/40 bg-[#0d0d0d] flex items-center justify-center animate-float-y">
-                <Briefcase className="w-7 h-7 text-[#d6c4ac]" />
-              </div>
-              <p className="text-[#d6c4ac] text-sm font-mono">No open positions on the board yet.</p>
-              <Link
-                href="/markets"
-                className="inline-flex items-center space-x-1 text-[#ffd89c] hover:underline text-xs font-semibold"
-              >
-                <span>Explore prediction markets</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </motion.div>
+            <div className="glass-panel overflow-hidden">
+              <EmptyState
+                icon={Briefcase}
+                title="No Open Positions"
+                description="No open positions on the board yet."
+                action={{ label: "Explore prediction markets", href: "/markets" }}
+              />
+            </div>
           ) : (
             <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead>
                   <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
-                    <th className="py-4 px-6">Market</th>
-                    <th className="py-4 px-6">Side</th>
-                    <th className="py-4 px-6">Shares</th>
-                    <th className="py-4 px-6 text-right">Invested</th>
-                    <th className="py-4 px-6 text-center">Closes In</th>
-                    <th className="py-4 px-6 text-center">Action</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6">Market</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6">Side</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6">Shares</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Invested</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6 text-center hidden sm:table-cell">Closes In</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#9e8e78]/20 font-mono text-xs">
@@ -633,10 +632,10 @@ export default function UserDashboard() {
 
                     return (
                       <tr key={pos.publicKey.toBase58()} className="table-row-3d">
-                        <td className="py-4 px-6 text-[#e5e2e1] max-w-xs truncate font-bold">
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#e5e2e1] max-w-[140px] sm:max-w-xs truncate font-bold">
                           {pos.marketAccount.question}
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-3 sm:py-4 px-3 sm:px-6">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               side === "YES"
@@ -647,14 +646,14 @@ export default function UserDashboard() {
                             {side}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-[#d6c4ac]">{shares}</td>
-                        <td className="py-4 px-6 text-right text-[#e5e2e1]">
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac]">{shares}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-[#e5e2e1]">
                           {invested.toFixed(4)} SOL
                         </td>
-                        <td className="py-4 px-6 text-center">
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-center hidden sm:table-cell">
                           <FlipCountdown endTs={pos.marketAccount.endTs.toNumber()} compact />
                         </td>
-                        <td className="py-4 px-6 text-center">
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-center">
                           <Link
                             href={`/market/${marketKey}`}
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-[#9e8e78]/40 rounded text-[10px] hover:border-[#ffd89c] hover:text-[#ffd89c] transition-colors"
@@ -677,16 +676,12 @@ export default function UserDashboard() {
         <div className="lg:col-span-2 space-y-6">
           <DashboardSection title="Ending Soon" icon={Clock} delay={0.1}>
             {endingSoonMarkets.length === 0 ? (
-              <div className="board-panel p-8 text-center bg-[#131313] border-[#9e8e78]/40 text-[#d6c4ac] text-sm board-panel-3d">
-                <p>No open markets from your watchlist or holdings are ending soon.</p>
-                <Link
-                  href="/markets"
-                  className="inline-flex items-center space-x-1 mt-4 text-[#ffd89c] hover:underline text-xs font-semibold"
-                >
-                  <span>Browse markets in the explorer</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
+              <EmptyState
+                icon={Clock}
+                title="No Markets Ending Soon"
+                description="No open markets from your watchlist or holdings are ending soon."
+                action={{ label: "Browse markets in the explorer", href: "/markets" }}
+              />
             ) : (
               <motion.div
                 variants={listVariants}
@@ -700,7 +695,7 @@ export default function UserDashboard() {
                     key={market.publicKey.toBase58()}
                     variants={itemVariants}
                     whileHover={{ y: -4, rotateX: 2 }}
-                    className="board-panel p-5 bg-[#131313] border-[#9e8e78]/40 flex flex-col justify-between space-y-4 board-panel-3d"
+                    className="glass-panel p-5 flex flex-col justify-between space-y-4 hover-lift"
                   >
                     <div className="space-y-1">
                       <span className="text-[9px] font-mono uppercase tracking-widest text-[#ffd89c] px-2 py-0.5 bg-[#ffd89c]/10 border border-[#ffd89c]/20 rounded font-bold">
@@ -729,7 +724,7 @@ export default function UserDashboard() {
 
         <div className="space-y-6">
           <DashboardSection title="Category Exposure" icon={PieChart} delay={0.15}>
-            <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/40 board-panel-3d">
+            <div className="glass-panel p-6">
               <CategoryRing3D segments={categoryExposure.breakdown} total={categoryExposure.total} />
             </div>
           </DashboardSection>
@@ -738,25 +733,26 @@ export default function UserDashboard() {
 
       {/* Activity ledger */}
       <DashboardSection title="Activity Ledger" icon={History} delay={0.2}>
-        <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
+        <div className="glass-panel overflow-hidden">
           {activityLoading ? (
             <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono animate-pulse">
               Parsing on-chain logs...
             </div>
           ) : activity.length === 0 ? (
-            <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono space-y-3">
-              <History className="w-8 h-8 mx-auto text-[#9e8e78] animate-float-y" />
-              <p>No transactions recorded for this wallet address.</p>
-            </div>
+            <EmptyState
+              icon={History}
+              title="No Activity Yet"
+              description="No transactions recorded for this wallet address."
+            />
           ) : (
             <div className="overflow-x-auto scrollbar-thin max-h-[420px] overflow-y-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[500px]">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
-                    <th className="py-4 px-6">Timestamp</th>
-                    <th className="py-4 px-6">Action</th>
-                    <th className="py-4 px-6">Market</th>
-                    <th className="py-4 px-6 text-right">Value (SOL)</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6">Timestamp</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6">Action</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Market</th>
+                    <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Value (SOL)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
@@ -785,8 +781,8 @@ export default function UserDashboard() {
                         transition={{ delay: idx * 0.03 }}
                         className="table-row-3d"
                       >
-                        <td className="py-4 px-6 text-[#d6c4ac]">{item.timeStr}</td>
-                        <td className="py-4 px-6">
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac]">{item.timeStr}</td>
+                        <td className="py-3 sm:py-4 px-3 sm:px-6">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               isBuy
@@ -801,8 +797,8 @@ export default function UserDashboard() {
                             {actionText}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-[#e5e2e1] max-w-sm truncate font-bold">{item.question}</td>
-                        <td className={`py-4 px-6 text-right ${valClass}`}>
+                        <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#e5e2e1] max-w-[140px] sm:max-w-sm truncate font-bold hidden sm:table-cell">{item.question}</td>
+                        <td className={`py-3 sm:py-4 px-3 sm:px-6 text-right ${valClass}`}>
                           {isBuy
                             ? `-${item.costOrPayout.toFixed(4)}`
                             : `+${item.costOrPayout.toFixed(4)}`}
@@ -816,6 +812,95 @@ export default function UserDashboard() {
           )}
         </div>
       </DashboardSection>
+    </div>
+  );
+}
+
+// ─── PnL History Sparkline ──────────────────────────────────────────────
+
+function computePnLSeries(activity: PersonalActivity[]): number[] {
+  const chrono = [...activity].reverse();
+  const series: number[] = [];
+  let cumulative = 0;
+  for (const item of chrono) {
+    const isBuy = item.type.startsWith("BUY");
+    cumulative += isBuy ? -item.costOrPayout : item.costOrPayout;
+    series.push(cumulative);
+  }
+  return series;
+}
+
+function PnLSparkline({ series }: { series: number[] }) {
+  if (series.length < 2) return null;
+  const w = 260;
+  const h = 48;
+  const pad = 2;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const range = max - min || 1;
+
+  const points = series
+    .map((v, i) => {
+      const x = pad + (i / (series.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const endPnl = series[series.length - 1];
+  const color = endPnl >= 0 ? "#a1d494" : "#ffb4ab";
+
+  return (
+    <svg
+      width={w}
+      height={h}
+      className="overflow-visible shrink-0"
+      style={{ minWidth: w }}
+    >
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+}
+
+function PnLSparklineSection({ activity }: { activity: PersonalActivity[] }) {
+  const series = useMemo(() => computePnLSeries(activity), [activity]);
+  const endPnl = series[series.length - 1];
+  const isPositive = endPnl >= 0;
+
+  return (
+    <div className="glass-panel p-5 flex items-center justify-between gap-6">
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className={`w-10 h-10 rounded flex items-center justify-center shrink-0 ${
+            isPositive
+              ? "bg-[#a1d494]/10 border border-[#a1d494]/20 text-[#a1d494]"
+              : "bg-[#ffb4ab]/10 border border-[#ffb4ab]/20 text-[#ffb4ab]"
+          }`}
+        >
+          <BarChart3 className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[9px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">
+            Realised PnL (historical)
+          </div>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className={`text-lg font-mono font-bold ${isPositive ? "text-[#a1d494]" : "text-[#ffb4ab]"}`}>
+              {isPositive ? "+" : ""}{endPnl.toFixed(3)} SOL
+            </span>
+            <span className="text-[9px] text-[#d6c4ac]/60 font-mono">
+              from {activity.length} event{activity.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+      </div>
+      <PnLSparkline series={series} />
     </div>
   );
 }

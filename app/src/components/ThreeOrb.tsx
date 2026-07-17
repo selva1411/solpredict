@@ -1,9 +1,10 @@
 "use client";
 
-import React, { Suspense, useRef, useState, useEffect } from "react";
+import React, { Suspense, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial } from "@react-three/drei";
 import * as THREE from "three";
+import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 
 interface DynamicOrbProps {
   yesProbability: number;
@@ -59,20 +60,8 @@ function DynamicOrb({ yesProbability }: DynamicOrbProps) {
 }
 
 export function ThreeOrb({ yesProbability }: { yesProbability: number }) {
-  const [webglSupported, setWebglSupported] = useState<boolean>(true);
-
-  useEffect(() => {
-    try {
-      const canvas = document.createElement("canvas");
-      const support = !!(
-        window.WebGLRenderingContext &&
-        (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
-      );
-      setWebglSupported(support);
-    } catch (e) {
-      setWebglSupported(false);
-    }
-  }, []);
+  const { webglSupported, lowEndDevice, prefersReducedMotion } = useDeviceCapability();
+  const useFallback = !webglSupported || lowEndDevice || prefersReducedMotion;
 
   const getCssColor = (prob: number) => {
     if (prob > 50) {
@@ -86,9 +75,9 @@ export function ThreeOrb({ yesProbability }: { yesProbability: number }) {
   const cssColor = getCssColor(yesProbability);
 
   return (
-    <div className="w-full h-44 relative rounded bg-[#0d0d0d] border border-[#9e8e78]/30 overflow-hidden flex items-center justify-center select-none shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
+    <div className="w-full h-44 relative rounded glass-panel overflow-hidden flex items-center justify-center select-none">
       <div className="absolute inset-0 z-0 flex items-center justify-center">
-        {webglSupported ? (
+        {!useFallback ? (
           <Canvas camera={{ position: [0, 0, 2.8], fov: 45 }}>
             <ambientLight intensity={0.6} />
             <pointLight position={[3, 3, 3]} intensity={2.0} color="#ffd89c" />
@@ -110,7 +99,7 @@ export function ThreeOrb({ yesProbability }: { yesProbability: number }) {
         )}
       </div>
       <div className="absolute bottom-2 right-3 font-mono text-[9px] uppercase tracking-widest text-[#d6c4ac] z-10 bg-[#0d0d0d]/80 px-2 py-0.5 rounded border border-[#9e8e78]/30 font-bold">
-        {webglSupported ? "Live 3D Probability Orb" : "Live Probability Indicator"}
+        {!useFallback ? "Live 3D Probability Orb" : "Live Probability Indicator"}
       </div>
     </div>
   );

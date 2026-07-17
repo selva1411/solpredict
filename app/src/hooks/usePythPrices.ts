@@ -6,11 +6,10 @@ export interface PythPriceData {
   price: number | null;
   confidence: number | null;
   publishTime: number | null;
-  loading: boolean;
   error: string | null;
 }
 
-const POLL_MS = 10_000;
+const POLL_MS = 2_000;
 
 function hexToId(hex: string): string {
   return hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -29,14 +28,6 @@ export function usePythPrices(feedIds: string[]): Record<string, PythPriceData> 
     const fetchPrices = async () => {
       if (deduped.length === 0) return;
 
-      setData((prev) => {
-        const next = { ...prev };
-        for (const id of deduped) {
-          next[id] = { ...next[id], loading: true, error: null };
-        }
-        return next;
-      });
-
       const url = `https://hermes.pyth.network/v2/updates/price/latest?${deduped.map((id) => `ids%5B%5D=${id}`).join("&")}`;
 
       try {
@@ -49,11 +40,6 @@ export function usePythPrices(feedIds: string[]): Record<string, PythPriceData> 
           const now = Math.floor(Date.now() / 1000);
           setData((prev) => {
             const next = { ...prev };
-            for (const id of deduped) {
-              if (!next[id]) {
-                next[id] = { price: null, confidence: null, publishTime: null, loading: false, error: null };
-              }
-            }
             for (const update of json.parsed) {
               const pid = update.id;
               const p = update.price;
@@ -64,42 +50,22 @@ export function usePythPrices(feedIds: string[]): Record<string, PythPriceData> 
                   price,
                   confidence: conf,
                   publishTime: p.publish_time ?? now,
-                  loading: false,
                   error: null,
                 };
               }
-            }
-            for (const id of deduped) {
-              if (next[id] && next[id].loading) {
-                next[id] = { ...next[id], loading: false, error: "No price data returned" };
-              }
-            }
-            return next;
-          });
-        } else {
-          setData((prev) => {
-            const next = { ...prev };
-            for (const id of deduped) {
-              next[id] = { price: null, confidence: null, publishTime: null, loading: false, error: "No parsed data" };
             }
             return next;
           });
         }
       } catch (err: unknown) {
         if (!activeRef.current) return;
-        const msg = err instanceof Error ? err.message : "Failed to fetch";
-        setData((prev) => {
-          const next = { ...prev };
-          for (const id of deduped) {
-            next[id] = { price: null, confidence: null, publishTime: null, loading: false, error: msg };
-          }
-          return next;
-        });
       }
     };
 
-    fetchPrices();
-    timerRef.current = setInterval(fetchPrices, POLL_MS);
+    if (deduped.length > 0) {
+      fetchPrices();
+      timerRef.current = setInterval(fetchPrices, POLL_MS);
+    }
 
     return () => {
       activeRef.current = false;
@@ -112,7 +78,7 @@ export function usePythPrices(feedIds: string[]): Record<string, PythPriceData> 
 
   const result: Record<string, PythPriceData> = {};
   for (const id of deduped) {
-    result[id] = data[id] ?? { price: null, confidence: null, publishTime: null, loading: true, error: null };
+    result[id] = data[id] ?? { price: null, confidence: null, publishTime: null, error: null };
   }
   return result;
 }

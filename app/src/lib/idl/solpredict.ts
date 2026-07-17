@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "GLVpWtRzv82WL2GoMbJLgzgBNR5VJKAmzUjaECMjeCjF",
+  "address": "HdnErNjvwK7dXG7amjZbnMzG3hEHFAS4izqnNW1BkAxQ",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -1395,37 +1395,10 @@ export type Solpredict = {
       ],
       "accounts": [
         {
-          "name": "admin",
-          "docs": [
-            "Admin signer — must match `config.admin`."
-          ],
-          "signer": true
-        },
-        {
-          "name": "config",
-          "docs": [
-            "Config PDA — to verify admin identity."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "market",
           "docs": [
-            "Market PDA — must be Open, not already settled."
+            "Permissionless — anyone can trigger settlement for oracle markets.",
+            "No admin required."
           ],
           "writable": true,
           "pda": {
@@ -1445,6 +1418,27 @@ export type Solpredict = {
                 "kind": "account",
                 "path": "market.market_id",
                 "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Config PDA — read-only for fee calculation."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
               }
             ]
           }

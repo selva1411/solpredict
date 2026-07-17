@@ -15,6 +15,11 @@ import { getMarketStatusString } from "@/lib/events";
 import { usePythPrices } from "@/hooks/usePythPrices";
 import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
+import { LoadingState, EmptyState } from "@/components/StatePanels";
+import { GlassPanel } from "@/components/GlassPanel";
+import { useDeviceCapability } from "@/hooks/useDeviceCapability";
+import { cardHover, fadeInUp } from "@/lib/motion-variants";
+import dynamic from "next/dynamic";
 
 interface Market {
   publicKey: PublicKey;
@@ -137,7 +142,7 @@ export default function MarketExplorer() {
       </div>
 
       {/* Explorer Controls Form */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-end">
         <div className="md:col-span-2 space-y-2">
           <label className="text-[10px] uppercase font-mono font-bold text-[#d6c4ac]">Search Question</label>
           <div className="relative">
@@ -167,12 +172,12 @@ export default function MarketExplorer() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#9e8e78]/20 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 border-b border-[#9e8e78]/20 pb-4">
         {/* Categories list */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-none">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-none">
           <button
             onClick={() => setSelectedCategory("All")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded ${
+            className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded shrink-0 ${
               selectedCategory === "All" ? "mechanical-switch-active" : "mechanical-switch-inactive"
             }`}
           >
@@ -182,7 +187,7 @@ export default function MarketExplorer() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded ${
+              className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded shrink-0 ${
                 selectedCategory === cat ? "mechanical-switch-active" : "mechanical-switch-inactive"
               }`}
             >
@@ -191,48 +196,42 @@ export default function MarketExplorer() {
           ))}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {/* Watchlist Toggle Switch */}
           <button
             onClick={() => setWatchlistOnly(!watchlistOnly)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded ${
+            className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded ${
               watchlistOnly ? "mechanical-switch-active" : "mechanical-switch-inactive"
             }`}
           >
-            ⭐ WATCHLIST ONLY
+            ⭐ WATCHLIST
           </button>
 
           {/* Status Selection */}
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="board-input text-xs bg-board-panel border-board-border py-1 px-3"
+            className="board-input text-[10px] sm:text-xs bg-board-panel border-board-border py-1 px-2 sm:px-3"
           >
             <option value="Open">OPEN</option>
             <option value="Settled">SETTLED</option>
             <option value="Cancelled">CANCELLED</option>
-            <option value="All">ALL STATUS</option>
+            <option value="All">ALL</option>
           </select>
         </div>
       </div>
 
       {/* Markets Grid */}
       {loading ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="board-panel skeleton-shimmer h-76 bg-board-panel" />
-          ))}
-        </div>
+        <LoadingState count={6} />
       ) : sortedAndFiltered.length === 0 ? (
-        <div className="board-panel py-20 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4">
-          <HelpCircle className="w-12 h-12 opacity-30 text-[#ffd89c]" />
-          <div className="space-y-1">
-            <h3 className="text-md font-bold font-display text-[#e5e2e1] uppercase">No matching boards</h3>
-            <p className="text-xs">Adjust your search parameters or check the filter categories.</p>
-          </div>
-        </div>
+        <EmptyState
+          icon={HelpCircle}
+          title="No matching boards"
+          description="Adjust your search parameters or check the filter categories."
+        />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
           {sortedAndFiltered.map((market) => {
             const key = market.publicKey.toBase58();
             const status = getMarketStatusString(market.account.status);
@@ -316,13 +315,13 @@ function MarketCard({
   totalVolume,
   livePrices,
 }: MarketCardProps) {
+  const { lowEndDevice, prefersReducedMotion } = useDeviceCapability();
   const feedHex = isOracleCategory(market.account.category) && market.account.oracleFeedId
     ? feedIdBytesToHex(market.account.oracleFeedId)
     : null;
   const feedEntry = feedHex ? lookupFeedEntry(feedHex) : null;
   const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
 
-  // Local state to store last N polled prices for sparkline
   const [priceHistory, setPriceHistory] = useState<number[]>([]);
 
   useEffect(() => {
@@ -338,7 +337,6 @@ function MarketCard({
     }
   }, [priceData?.price]);
 
-  // If we have a price but not enough points for sparkline, mock a tiny history based on current price
   const sparklineHistory = useMemo(() => {
     if (priceData && priceData.price !== null) {
       if (priceHistory.length >= 2) {
@@ -351,34 +349,38 @@ function MarketCard({
   }, [priceHistory, priceData?.price]);
 
   return (
-    <motion.div 
-      variants={scaleIn}
-      className="board-panel p-5 flex flex-col justify-between h-76 bg-board-panel board-panel-3d border-board-border/40 hover:border-mechanical-amber/70"
+    <motion.div
+      variants={prefersReducedMotion ? {} : fadeInUp}
+      {...(!prefersReducedMotion ? cardHover : {})}
+      className="glass-panel glass-panel-interactive p-4 sm:p-5 flex flex-col justify-between h-76 border-[var(--glass-border)]"
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1.5">
-            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-board-border/20 text-[#d6c4ac]">
+            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-[var(--glass-border)] text-[#d6c4ac]">
               {CATEGORIES[market.account.category] || "Other"}
             </span>
             {isOracleCategory(market.account.category) ? (
-              <span className="text-[9px] font-mono text-[#06b6d4] font-bold" title="Settled automatically via Pyth Network oracle feed">🔮 Oracle</span>
+              <span className="text-[9px] font-mono text-[#06b6d4] font-bold" title="Oracle-settled via Pyth Network">🔮 Oracle</span>
             ) : (
-              <span className="text-[9px] font-mono text-mechanical-amber font-bold" title="Settled manually by the platform admin signature">⚖️ Manual</span>
+              <span className="text-[9px] font-mono text-[#ffd89c] font-bold" title="Admin-manually settled">⚖️ Manual</span>
             )}
           </div>
           <div className="flex items-center space-x-2">
-            <button onClick={() => handleToggleWatch(marketKey)} className="text-[#d6c4ac] hover:text-mechanical-amber cursor-pointer bg-transparent border-0 p-0">
-              <Star className={`w-4 h-4 ${isWatched ? "text-mechanical-amber fill-mechanical-amber" : ""}`} />
+            <button
+              onClick={() => handleToggleWatch(marketKey)}
+              className="text-[#d6c4ac] hover:text-[#ffd89c] cursor-pointer bg-transparent border-0 p-1"
+              aria-label={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+            >
+              <Star className={`w-4 h-4 ${isWatched ? "text-[#ffd89c] fill-[#ffd89c]" : ""}`} />
             </button>
             <span className={`w-2.5 h-2.5 rounded-full ${
               status === "Open" ? "bg-[#a1d494]" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ffb4ab]"
             }`} />
-            <span className="text-[9px] font-mono font-bold uppercase text-text-primary">{status}</span>
+            <span className="text-[9px] font-mono font-bold uppercase text-[#e5e2e1]">{status}</span>
           </div>
         </div>
 
-        {/* Live price / manual badge line */}
         <div className="flex items-center justify-between min-h-[22px]">
           {feedEntry && priceData ? (
             <div className="flex items-center gap-1.5">
@@ -386,7 +388,6 @@ function MarketCard({
                 feedIdHex={feedHex!}
                 category={market.account.category}
                 livePrice={priceData.price}
-                liveLoading={priceData.loading}
                 liveError={priceData.error}
                 targetPrice={market.account.targetPrice.toNumber()}
                 targetExpo={market.account.targetExpo}
@@ -396,46 +397,44 @@ function MarketCard({
               <MiniSparkline history={sparklineHistory} />
             </div>
           ) : feedHex && feedEntry && !priceData ? (
-            <span className="text-[10px] font-mono text-[#d6c4ac] animate-pulse">Loading price...</span>
+            <span className="text-[10px] font-mono text-[#d6c4ac] skeleton-shimmer px-2 py-0.5 rounded">Loading price...</span>
           ) : (
-            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-mechanical-amber/10 border border-mechanical-amber/20 text-mechanical-amber inline-flex items-center gap-1">
+            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-[#ffd89c]/10 border border-[#ffd89c]/20 text-[#ffd89c] inline-flex items-center gap-1">
               ⚖️ Manually resolved
             </span>
           )}
         </div>
 
         <Link href={`/market/${marketKey}`} className="block group">
-          <h3 className="text-sm font-bold font-display text-text-primary group-hover:text-mechanical-amber transition-colors line-clamp-2 leading-snug">
+          <h3 className="text-sm font-bold font-display text-[#e5e2e1] group-hover:text-[#ffd89c] transition-colors line-clamp-2 leading-snug">
             {market.account.question}
           </h3>
         </Link>
       </div>
 
-      {/* YES/NO split bar layout */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-[10px] font-mono font-bold">
           <span className="text-[#a1d494]">YES: {yesPercent}%</span>
           <span className="text-[#ffb4ab]">NO: {100 - yesPercent}%</span>
         </div>
-        <div className="w-full h-3 bg-[#ffb4ab]/20 flex border border-black overflow-hidden rounded-sm">
-          <div className="h-full bg-[#a1d494]" style={{ width: `${yesPercent}%` }} />
+        <div className="w-full h-3 bg-[#ffb4ab]/20 flex border border-black/40 overflow-hidden rounded-sm">
+          <div className="h-full bg-[#a1d494] transition-all duration-500" style={{ width: `${yesPercent}%` }} />
         </div>
       </div>
 
-      {/* Volume and Countdown */}
-      <div className="pt-3 border-t border-board-border/10 flex items-center justify-between text-[10px] font-mono">
-        <div className="flex items-center space-x-1.5 text-text-muted">
+      <div className="pt-3 border-t border-[var(--glass-border)] flex items-center justify-between text-[10px] font-mono">
+        <div className="flex items-center space-x-1.5 text-[#d6c4ac]">
           <Clock className="w-3.5 h-3.5" />
           <FlipCountdown endTs={market.account.endTs.toNumber()} compact />
         </div>
-        <div className="flex items-center space-x-1 text-mechanical-amber font-bold">
+        <div className="flex items-center space-x-1 text-[#ffd89c] font-bold">
           <Coins className="w-3.5 h-3.5" />
           <span>{totalVolume.toFixed(2)} SOL</span>
         </div>
       </div>
 
       <Link href={`/market/${marketKey}`} className="w-full pt-1">
-        <button className="w-full py-2 bg-surface-variant hover:bg-surface-variant/80 border border-board-border/40 text-[10px] font-bold uppercase tracking-wider font-display rounded text-text-primary hover:border-mechanical-amber transition-all cursor-pointer">
+        <button className="w-full py-2 bg-white/5 hover:bg-white/10 border border-[var(--glass-border)] text-[10px] font-bold uppercase tracking-wider font-display rounded text-[#e5e2e1] hover:border-[#ffd89c]/50 transition-all cursor-pointer">
           Inspect Specs
         </button>
       </Link>

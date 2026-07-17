@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useProgram } from "@/hooks/useProgram";
-import { motion } from "framer-motion";
-import { Coins, HelpCircle, ArrowRight, Activity, Users, ShieldAlert, Award } from "lucide-react";
+import { motion, type Variants } from "framer-motion";
+import { GlassPanel } from "@/components/GlassPanel";
+import { Coins, ArrowRight, Activity, Award, BarChart3 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { toast } from "sonner";
 import { getMarketStatusString } from "@/lib/events";
@@ -16,37 +17,34 @@ interface MarketItem {
   publicKey: PublicKey;
   account: {
     marketId: anchor.BN;
-    authority: PublicKey;
     question: string;
-    description: string;
-    category: number;
-    oracleFeedId: number[];
-    targetPrice: anchor.BN;
-    targetExpo: number;
-    comparison: number;
-    endTs: anchor.BN;
-    resolveTs: anchor.BN;
     status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
-    winningOutcome: { unset?: Record<string, never>; yes?: Record<string, never>; no?: Record<string, never> };
-    yesMint: PublicKey;
-    noMint: PublicKey;
     yesPoolLamports: anchor.BN;
     noPoolLamports: anchor.BN;
-    yesSupply: anchor.BN;
-    noSupply: anchor.BN;
-    totalPayoutPool: anchor.BN;
-    sharePriceLamports: anchor.BN;
-    feeCollected: anchor.BN;
-    feeWithdrawn: boolean;
   };
 }
+
+const stagger: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+
+const scaleIn: Variants = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.35 } },
+};
 
 function SplitFlapHero() {
   const line1 = "PREDICT THE FUTURE.";
   const line2 = "SETTLE THE BOARD.  ";
 
   return (
-    <div className="flex flex-col items-center gap-4 py-8 font-mono select-none">
+    <div className="flex flex-col items-center gap-4 py-6 font-mono select-none">
       <div className="flex gap-1.5 flex-wrap justify-center">
         {line1.split("").map((char, i) => (
           <div
@@ -98,6 +96,30 @@ function FlapText({ text }: { text: string }) {
   );
 }
 
+const FEATURES = [
+  {
+    icon: Coins,
+    title: "Instant Liquidity",
+    desc: "Order values escrowed into individual market vault PDAs. Collect rewards instantly once results are resolved.",
+    color: "#ffd89c",
+    bgClass: "bg-[#ffd89c]/10 border-[#ffd89c]/20 text-[#ffd89c]",
+  },
+  {
+    icon: Activity,
+    title: "Pyth Settlement",
+    desc: "Decentralized validations verify target conditions without middleman consensus. Fully on-chain.",
+    color: "#a1d494",
+    bgClass: "bg-[#a1d494]/10 border-[#a1d494]/20 text-[#a1d494]",
+  },
+  {
+    icon: Award,
+    title: "Mechanical Ledger",
+    desc: "Track win-rates, settled exposures, and personal chronological actions directly from logged smart contract events.",
+    color: "#ffb4ab",
+    bgClass: "bg-[#ffb4ab]/10 border-[#ffb4ab]/20 text-[#ffb4ab]",
+  },
+];
+
 export default function LandingPage() {
   const { program, connection } = useProgram();
   const { role } = useUserRole();
@@ -113,7 +135,6 @@ export default function LandingPage() {
         program.account.userPosition.all(),
       ]);
 
-      // Calculate stats
       let totalVolumeLamports = 0;
       let openCount = 0;
       let settledCount = 0;
@@ -134,7 +155,6 @@ export default function LandingPage() {
         traders: uniqueTraders,
       });
 
-      // Filter open markets for the ticker
       const openMarkets = allMarkets.filter((m) => getMarketStatusString(m.account.status) === "Open");
       setTickerMarkets(openMarkets);
     } catch (err: unknown) {
@@ -154,7 +174,12 @@ export default function LandingPage() {
   const doubleTickerMarkets = [...tickerMarkets, ...tickerMarkets, ...tickerMarkets];
 
   return (
-    <div className="space-y-12 animate-fade-in font-sans pb-12">
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={stagger}
+      className="space-y-10 pb-12"
+    >
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(0); }
@@ -168,40 +193,53 @@ export default function LandingPage() {
         }
       `}</style>
 
-      {/* Hero display block */}
-      <section className="board-panel p-6 sm:p-12 text-center space-y-6 bg-[#131313] border-[#9e8e78] relative">
-        <div className="absolute top-4 left-4 flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#ffd89c] animate-pulse" />
-          <span className="text-[10px] font-mono font-bold tracking-widest text-[#ffd89c]">SOLPREDICT MAINFRAME</span>
+      {/* Hero */}
+      <motion.section variants={fadeUp} className="glass-panel p-6 sm:p-12 text-center space-y-6 relative overflow-hidden">
+        <div className="absolute top-4 left-4 flex items-center space-x-2 z-10">
+          <span className="w-2 h-2 rounded-full bg-[#ffd89c] animate-pulse" />
+          <span className="text-[9px] font-mono font-bold tracking-widest text-[#ffd89c]">SOLPREDICT MAINFRAME</span>
         </div>
 
         <SplitFlapHero />
 
-        <div className="max-w-2xl mx-auto space-y-4">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
+          className="max-w-2xl mx-auto space-y-6"
+        >
           <p className="text-sm text-[#d6c4ac] leading-relaxed">
-            Trade YES/NO contracts on decentralized events. Fully on-chain order matching settled by trustless Pyth validation. Fully secure, peer-to-peer.
+            Trade <strong className="text-[#e5e2e1]">YES/NO</strong> contracts on decentralized events.
+            Fully on-chain order matching settled by trustless <strong className="text-[#06b6d4]">Pyth</strong> oracles.
           </p>
-          <div className="flex justify-center gap-4 pt-4">
-            <Link href="/markets" className="btn-primary text-xs font-semibold">
-              Enter Terminal <ArrowRight className="w-4 h-4 inline pl-1" />
+          <div className="flex justify-center gap-4">
+            <Link
+              href="/markets"
+              className="group inline-flex items-center gap-2 bg-[#ffd89c] text-[#131313] font-bold font-display text-xs uppercase tracking-widest px-6 py-3 rounded border-2 border-[#9e8e78] shadow-[0_4px_0_#5f4100,0_4px_10px_rgba(0,0,0,0.4)] hover:bg-[#ffe6c2] active:translate-y-[3px] active:shadow-[0_1px_0_#5f4100,0_2px_4px_rgba(0,0,0,0.4)] transition-all duration-100"
+            >
+              Enter Terminal
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
             {role === "admin" && (
-              <Link href="/admin" className="btn-amber text-xs font-semibold">
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 bg-[#0d0d0d] text-[#ffd89c] font-bold font-display text-xs uppercase tracking-widest px-6 py-3 rounded border-2 border-[#9e8e78] hover:bg-[#1c1c1c] transition-all duration-100"
+              >
                 Control Panel
               </Link>
             )}
           </div>
-        </div>
-      </section>
+        </motion.div>
+      </motion.section>
 
-      {/* Ticker bar */}
+      {/* Ticker */}
       {tickerMarkets.length > 0 && (
-        <section className="board-panel py-3 bg-[#131313] border-[#9e8e78]/40 overflow-hidden relative select-none">
-          <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#131313] to-transparent z-10" />
-          <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#131313] to-transparent z-10" />
-          
-          <div className="ticker-container flex">
-            <div className="ticker-content flex space-x-12 animate-marquee cursor-pointer whitespace-nowrap">
+        <motion.section variants={fadeUp} className="glass-panel py-3 overflow-hidden relative select-none hover-lift">
+          <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#131313] to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#131313] to-transparent z-10 pointer-events-none" />
+
+          <div className="flex">
+            <div className="flex space-x-12 animate-marquee cursor-pointer whitespace-nowrap">
               {doubleTickerMarkets.map((market, idx) => {
                 const yesPool = market.account.yesPoolLamports.toNumber() / 1e9;
                 const noPool = market.account.noPoolLamports.toNumber() / 1e9;
@@ -209,8 +247,8 @@ export default function LandingPage() {
                 const prob = total > 0 ? Math.round((yesPool / total) * 100) : 50;
 
                 return (
-                  <Link 
-                    key={market.publicKey.toBase58() + "-" + idx} 
+                  <Link
+                    key={market.publicKey.toBase58() + "-" + idx}
                     href={`/market/${market.publicKey.toBase58()}`}
                     className="flex items-center space-x-3 text-xs font-mono"
                   >
@@ -225,85 +263,66 @@ export default function LandingPage() {
               })}
             </div>
           </div>
-        </section>
+        </motion.section>
       )}
 
-      {/* Stats counter strip */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#131313] border-[#9e8e78]/40">
-          <div className="text-[9px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">Total Volume</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#d6c4ac]">SOL</span>
-            <FlapText text={loading ? "0.0" : stats.volume.toFixed(1)} />
-          </div>
-        </div>
+      {/* Stats */}
+      <motion.section variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {[
+          { label: "Total Volume", suffix: "SOL", value: loading ? "0.0" : stats.volume.toFixed(1) },
+          { label: "Open Board", suffix: "QTY", value: loading ? "0" : String(stats.open) },
+          { label: "Settled Board", suffix: "QTY", value: loading ? "0" : String(stats.settled) },
+          { label: "Active Pilots", suffix: "QTY", value: loading ? "0" : String(stats.traders) },
+        ].map((stat, idx) => (
+          <motion.div
+            key={stat.label}
+            variants={scaleIn}
+            className="glass-panel p-5 flex flex-col justify-between h-28"
+          >
+            <div className="text-[9px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">
+              {stat.label}
+            </div>
+            <div className="flex items-end justify-between">
+              <span className="text-xs font-mono text-[#d6c4ac]/60">{stat.suffix}</span>
+              <FlapText text={stat.value} />
+            </div>
+          </motion.div>
+        ))}
+      </motion.section>
 
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#131313] border-[#9e8e78]/40">
-          <div className="text-[9px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">Open Board</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#d6c4ac]">QTY</span>
-            <FlapText text={loading ? "0" : String(stats.open)} />
-          </div>
-        </div>
-
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#131313] border-[#9e8e78]/40">
-          <div className="text-[9px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">Settled Board</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#d6c4ac]">QTY</span>
-            <FlapText text={loading ? "0" : String(stats.settled)} />
-          </div>
-        </div>
-
-        <div className="board-panel p-5 flex flex-col justify-between h-28 bg-[#131313] border-[#9e8e78]/40">
-          <div className="text-[9px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">Active Pilots</div>
-          <div className="flex items-end justify-between">
-            <span className="text-xs font-mono text-[#d6c4ac]">QTY</span>
-            <FlapText text={loading ? "0" : String(stats.traders)} />
-          </div>
-        </div>
-      </section>
-
-      {/* Feature Highlighting Section */}
-      <section className="space-y-6 pt-4">
-        <div className="text-center">
-          <h2 className="text-xl font-bold font-display text-[#e5e2e1] uppercase tracking-wider">
-            [■] PRECISION MARKETS INFRASTRUCTURE
+      {/* Features */}
+      <motion.section variants={fadeUp} className="space-y-6 pt-2">
+        <div className="text-center space-y-1">
+          <h2 className="text-lg sm:text-xl font-bold font-display text-[#e5e2e1] uppercase tracking-wider flex items-center justify-center gap-2">
+            <BarChart3 className="w-5 h-5 text-[#ffd89c]" />
+            Precision Markets Infrastructure
           </h2>
-          <p className="text-xs text-[#d6c4ac]">State-of-the-art decentralized prediction mechanics.</p>
+          <p className="text-xs text-[#d6c4ac]/60">
+            State-of-the-art decentralized prediction mechanics on Solana.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/30 space-y-3">
-            <div className="w-10 h-10 rounded bg-[#ffd89c]/10 border border-[#ffd89c]/20 flex items-center justify-center text-[#ffd89c]">
-              <Coins className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-bold font-display text-[#e5e2e1] uppercase">Instant Liquidity</h3>
-            <p className="text-xs text-[#d6c4ac] leading-relaxed">
-              Order values are escrowed into individual market vault PDAs. Collect rewards instantly once results are resolved.
-            </p>
-          </div>
-
-          <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/30 space-y-3">
-            <div className="w-10 h-10 rounded bg-[#a1d494]/10 border border-[#a1d494]/20 flex items-center justify-center text-[#a1d494]">
-              <Activity className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-bold font-display text-[#e5e2e1] uppercase">Pyth Settlement</h3>
-            <p className="text-xs text-[#d6c4ac] leading-relaxed">
-              Decentralized validations verify target conditions without middleman consensus.
-            </p>
-          </div>
-
-          <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/30 space-y-3">
-            <div className="w-10 h-10 rounded bg-[#ffb4ab]/10 border border-[#ffb4ab]/20 flex items-center justify-center text-[#ffb4ab]">
-              <Award className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-bold font-display text-[#e5e2e1] uppercase">Mechanical Ledger</h3>
-            <p className="text-xs text-[#d6c4ac] leading-relaxed">
-              Track win-rates, settled exposures, and personal chronological actions directly from logged smart contract events.
-            </p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+          {FEATURES.map((feature, idx) => (
+            <motion.div
+              key={feature.title}
+              variants={fadeUp}
+              custom={idx}
+              className="glass-panel p-6 space-y-3 hover-lift"
+            >
+              <div className={`w-10 h-10 rounded flex items-center justify-center ${feature.bgClass}`}>
+                <feature.icon className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold font-display text-[#e5e2e1] uppercase">
+                {feature.title}
+              </h3>
+              <p className="text-xs text-[#d6c4ac] leading-relaxed">
+                {feature.desc}
+              </p>
+            </motion.div>
+          ))}
         </div>
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }

@@ -1,5 +1,5 @@
 {
-  "address": "6LRXkhVNdLdFtVYE2LHyVd2Zhjn2FreKEJNSgq4YKKT5",
+  "address": "HdnErNjvwK7dXG7amjZbnMzG3hEHFAS4izqnNW1BkAxQ",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -1389,37 +1389,10 @@
       ],
       "accounts": [
         {
-          "name": "admin",
-          "docs": [
-            "Admin signer — must match `config.admin`."
-          ],
-          "signer": true
-        },
-        {
-          "name": "config",
-          "docs": [
-            "Config PDA — to verify admin identity."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "market",
           "docs": [
-            "Market PDA — must be Open, not already settled."
+            "Permissionless — anyone can trigger settlement for oracle markets.",
+            "No admin required."
           ],
           "writable": true,
           "pda": {
@@ -1439,6 +1412,27 @@
                 "kind": "account",
                 "path": "market.market_id",
                 "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Config PDA — read-only for fee calculation."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
               }
             ]
           }

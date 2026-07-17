@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useProgram } from "@/hooks/useProgram";
+import { GlassPanel } from "@/components/GlassPanel";
 import { ShieldCheck, UserCheck, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,7 +52,7 @@ export default function SecureGateway() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 select-none">
-      <div className="board-panel max-w-2xl w-full p-8 space-y-8 bg-[#131313] border-[#9e8e78] text-center relative board-panel-3d shadow-2xl">
+      <div className="glass-panel max-w-2xl w-full p-8 space-y-8 text-center relative shadow-2xl">
         <div className="absolute top-4 left-4 flex items-center space-x-2">
           <span className="w-2.5 h-2.5 rounded-full bg-[#ffd89c] animate-pulse" />
           <span className="text-[9px] font-mono tracking-widest text-[#ffd89c]">SYSTEM SECURE GATEWAY</span>
@@ -92,7 +93,7 @@ export default function SecureGateway() {
           {/* User Option */}
           <div 
             onClick={() => router.push("/markets")}
-            className="board-panel p-5 bg-[#131313] border-[#9e8e78]/40 hover:border-[#a1d494] transition-colors cursor-pointer group text-left space-y-2 flex flex-col justify-between"
+            className="glass-panel p-5 glass-panel-interactive cursor-pointer group text-left space-y-2 flex flex-col justify-between"
           >
             <div className="flex items-center justify-between text-[#d6c4ac] group-hover:text-[#a1d494] transition-colors">
               <UserCheck className="w-5 h-5" />
@@ -109,7 +110,7 @@ export default function SecureGateway() {
           {/* Admin Control */}
           <div 
             onClick={handleAdminGateClick}
-            className={`board-panel p-5 bg-[#131313] border-[#9e8e78]/40 hover:border-[#ffd89c] transition-colors cursor-pointer group text-left space-y-2 flex flex-col justify-between`}
+            className={`glass-panel p-5 glass-panel-interactive cursor-pointer group text-left space-y-2 flex flex-col justify-between`}
           >
             <div className="flex items-center justify-between text-[#d6c4ac] group-hover:text-[#ffd89c] transition-colors">
               {role === "admin" ? <ShieldCheck className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}

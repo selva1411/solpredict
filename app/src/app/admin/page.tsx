@@ -29,7 +29,11 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConnectWalletGate } from "@/components/dashboard/ConnectWalletGate";
 import { StatTile3D } from "@/components/dashboard/StatTile3D";
 import { DashboardSection, DashboardHero } from "@/components/dashboard/DashboardSection";
+import { GlassPanel } from "@/components/GlassPanel";
+import { useDeviceCapability } from "@/hooks/useDeviceCapability";
+import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
 import { PYTH_FEED_REGISTRY, PythFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
+import { EmptyState } from "@/components/StatePanels";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -69,11 +73,6 @@ interface AdminActivity {
 const cardVariants = {
   hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
-};
-
-const staggerContainer = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
 };
 
 function AdminPage() {
@@ -442,9 +441,8 @@ function AdminPage() {
       await program.methods
         .settleMarket()
         .accounts({
-          admin: wallet.publicKey,
-          config: configPda,
           market: market.publicKey,
+          config: configPda,
           priceUpdate: mockPriceUpdatePda,
         } as any)
         .rpc();
@@ -614,8 +612,8 @@ function AdminPage() {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-10 bg-white/5 border border-[#9e8e78]/30 rounded w-1/3" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-6">
+          {[...Array(5)].map((_, i) => (
             <div key={i} className="h-28 board-panel skeleton-shimmer bg-[#131313]" />
           ))}
         </div>
@@ -641,7 +639,7 @@ function AdminPage() {
                 <div className="text-sm font-bold text-[#e5e2e1]">{settleModal.market.account.question}</div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border-y border-[#9e8e78]/20 py-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-[#9e8e78]/20 py-3">
                 <div className="space-y-0.5">
                   <div className="text-[10px] text-[#9e8e78] uppercase">Target Price:</div>
                   <div className="text-sm font-bold text-[#ffd89c]">
@@ -664,13 +662,11 @@ function AdminPage() {
                   )}
                 </div>
                 <input
-                  type="number"
-                  step="0.01"
-                  value={settleModal.settlePrice}
-                  onChange={(e) => setSettleModal(prev => ({ ...prev, settlePrice: e.target.value }))}
-                  className="w-full board-input py-2 px-3 text-sm font-mono border-[#9e8e78] bg-[#0d0d0d] text-[#ffd89c]"
-                  placeholder="Enter price"
-                  disabled={settleModal.isFetchingPrice}
+                  type="text"
+                  value={settleModal.settlePrice ? `$${settleModal.settlePrice}` : ""}
+                  readOnly
+                  className="w-full board-input py-2 px-3 text-sm font-mono border-[#9e8e78] bg-[#0d0d0d]/50 text-[#ffd89c] cursor-not-allowed opacity-80"
+                  placeholder="Auto-fetched from Pyth oracle"
                 />
               </div>
 
@@ -709,7 +705,8 @@ function AdminPage() {
                 type="button"
                 disabled={isNaN(parseFloat(settleModal.settlePrice)) || settlingId !== null}
                 onClick={async () => {
-                  const price = parseFloat(settleModal.settlePrice);
+                  const raw = settleModal.settlePrice;
+                  const price = parseFloat(raw.startsWith("$") ? raw.slice(1) : raw);
                   if (settleModal.market && !isNaN(price)) {
                     const m = settleModal.market;
                     setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false });
@@ -881,7 +878,7 @@ function AdminPage() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          className="board-panel p-8 space-y-6 border-[#ffd89c]/40 bg-[#131313]"
+          className="glass-panel p-8 space-y-6"
         >
           <div className="flex items-center space-x-3 text-[#ffd89c]">
             <AlertTriangle className="w-6 h-6 animate-pulse" />
@@ -890,7 +887,7 @@ function AdminPage() {
           <p className="text-xs text-[#d6c4ac] leading-relaxed">
             The platform-wide config singleton must be initialized once before markets can be created. The key initialized here will serve as the master Administrator authority.
           </p>
-          <div className="grid sm:grid-cols-2 gap-4 items-end max-w-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end max-w-md">
             <div className="space-y-2">
               <label className="text-xs font-mono text-[#d6c4ac] font-bold">Fee Basis Points (100 = 1%)</label>
               <input
@@ -900,19 +897,19 @@ function AdminPage() {
                 className="w-full board-input text-sm py-2 px-3 border-[#9e8e78]"
               />
             </div>
-            <button onClick={handleInitializeConfig} className="btn-amber py-2 text-xs">
+            <button onClick={handleInitializeConfig} className="btn-amber py-2 text-xs w-full sm:w-auto">
               Initialize Config PDA
             </button>
           </div>
         </motion.section>
       ) : (
         /* 2. Platform Stats Row */
-        <motion.section
-          className="grid grid-cols-2 lg:grid-cols-5 gap-6"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-        >
+          <motion.section
+            className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
           <StatTile3D label="Total Volume" value={platformStats.totalVolume.toFixed(1)} unit="SOL" icon={BarChart3} delay={0} />
           <StatTile3D label="Open Markets" value={String(platformStats.openMarketsCount)} unit="QTY" icon={TrendingUp} accent="green" delay={0.05} />
           <StatTile3D label="Settled Markets" value={String(platformStats.settledMarketsCount)} unit="QTY" accent="neutral" delay={0.1} />
@@ -937,19 +934,19 @@ function AdminPage() {
                   const marketKey = m.publicKey.toBase58();
                   const isOracle = isOracleSettleable(m.account.oracleFeedId);
                   return (
-                    <div key={marketKey} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <div className="text-sm font-bold text-[#e5e2e1]">{m.account.question}</div>
-                        <div className="text-[10px] text-[#d6c4ac] font-mono flex items-center gap-2">
-                          <span>Category: {getCategoryString(m.account.category)}</span>
+                    <div key={marketKey} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                      <div className="space-y-1 min-w-0">
+                        <div className="text-sm font-bold text-[#e5e2e1] truncate">{m.account.question}</div>
+                        <div className="text-[10px] text-[#d6c4ac] font-mono flex flex-wrap items-center gap-2">
+                          <span>{getCategoryString(m.account.category)}</span>
                           {isOracle ? (
-                            <span className="text-[#06b6d4] font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE SETTLED</span>
+                            <span className="text-[#06b6d4] font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE</span>
                           ) : (
-                            <span className="text-[#ffd89c] font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUALLY SETTLED</span>
+                            <span className="text-[#ffd89c] font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUAL</span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           disabled={settlingId !== null}
                           onClick={() => handleSettleButtonClick(m)}
@@ -966,16 +963,16 @@ function AdminPage() {
           )}
 
           {/* Create Market and Manage Table Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
             
             {/* Create Market Form */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div className="flex items-center space-x-2 text-[#ffd89c]">
                 <Plus className="w-5 h-5" />
-                <h2 className="text-lg font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
+                <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
               </div>
 
-              <div className="board-panel p-6 bg-[#131313] border-[#9e8e78]/40 space-y-4 board-panel-3d">
+              <div className="glass-panel p-4 sm:p-6 space-y-4 hover-lift">
                 <form onSubmit={handleCreateMarket} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-[#d6c4ac]">Question Text</label>
@@ -1001,7 +998,7 @@ function AdminPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-[#d6c4ac]">Category</label>
                       <select
@@ -1119,25 +1116,28 @@ function AdminPage() {
             </div>
 
             {/* Manage Markets Table */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="xl:col-span-2 space-y-4 sm:space-y-6">
               <div className="flex items-center space-x-2 text-[#ffd89c]">
                 <Settings className="w-5 h-5" />
-                <h2 className="text-lg font-bold font-display uppercase tracking-wider font-bold">Manage Board</h2>
+                <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Manage Board</h2>
               </div>
 
-              <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
+              <div className="glass-panel overflow-hidden hover-lift">
                 {markets.length === 0 ? (
-                  <p className="text-xs text-[#d6c4ac] text-center py-12">No prediction markets created yet.</p>
+                  <EmptyState
+                    title="No Markets Yet"
+                    description="No prediction markets created yet. Use the form to deploy the first contract."
+                  />
                 ) : (
                   <div className="overflow-x-auto scrollbar-thin">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
                       <thead>
                         <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
-                          <th className="py-4 px-6">ID</th>
-                          <th className="py-4 px-6">Question</th>
-                          <th className="py-4 px-6">Status</th>
-                          <th className="py-4 px-6 text-right">Volume</th>
-                          <th className="py-4 px-6 text-center">Actions</th>
+                          <th className="py-3 sm:py-4 px-3 sm:px-6">ID</th>
+                          <th className="py-3 sm:py-4 px-3 sm:px-6">Question</th>
+                          <th className="py-3 sm:py-4 px-3 sm:px-6">Status</th>
+                          <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Volume</th>
+                          <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
@@ -1150,9 +1150,9 @@ function AdminPage() {
 
                           return (
                             <tr key={marketKey} className="table-row-3d hover:bg-white/5 transition-colors">
-                              <td className="py-4 px-6 text-[#d6c4ac]">#{m.account.marketId.toString()}</td>
-                              <td className="py-4 px-6 text-[#e5e2e1] max-w-xs truncate font-bold">{m.account.question}</td>
-                              <td className="py-4 px-6">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac]">#{m.account.marketId.toString()}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#e5e2e1] max-w-[140px] sm:max-w-xs truncate font-bold">{m.account.question}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 {(() => {
                                   const now = Math.floor(Date.now() / 1000);
                                   const isPast = m.account.resolveTs.toNumber() < now;
@@ -1185,8 +1185,8 @@ function AdminPage() {
                                   );
                                 })()}
                               </td>
-                              <td className="py-4 px-6 text-right text-[#e5e2e1]">{volume.toFixed(2)} SOL</td>
-                              <td className="py-4 px-6 text-center">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-[#e5e2e1]">{volume.toFixed(2)} SOL</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-center">
                                 {status === "Open" && (
                                   <div className="flex items-center justify-center gap-2">
                                     <button
@@ -1238,24 +1238,25 @@ function AdminPage() {
       {/* 4. Admin Activity Log Section */}
       {config && (
         <DashboardSection title="Audit Trail Actions" icon={History} delay={0.15}>
-          <div className="board-panel bg-[#131313] border-[#9e8e78]/40 overflow-hidden board-panel-3d">
+          <div className="glass-panel overflow-hidden hover-lift">
             {activityLoading ? (
               <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono animate-pulse">
                 Fetching action logs...
               </div>
             ) : adminActivity.length === 0 ? (
-              <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono">
-                No admin log updates recorded on-chain.
-              </div>
+              <EmptyState
+                title="No Audit Trail"
+                description="No admin log updates recorded on-chain."
+              />
             ) : (
               <div className="overflow-x-auto scrollbar-thin">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[500px]">
                   <thead>
                     <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
-                      <th className="py-4 px-6">Timestamp</th>
-                      <th className="py-4 px-6">Category</th>
-                      <th className="py-4 px-6">Prediction Market</th>
-                      <th className="py-4 px-6">Execution Detail</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6">Timestamp</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6">Category</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6">Market</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Detail</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
@@ -1268,14 +1269,14 @@ function AdminPage() {
 
                       return (
                         <tr key={idx} className="table-row-3d hover:bg-white/5 transition-colors">
-                          <td className="py-4 px-6 text-[#d6c4ac]">{item.timeStr}</td>
-                          <td className="py-4 px-6">
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac]">{item.timeStr}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${tagClass}`}>
                               {item.type}
                             </span>
                           </td>
-                          <td className="py-4 px-6 text-[#e5e2e1] max-w-sm truncate font-bold">{item.question}</td>
-                          <td className="py-4 px-6 text-[#d6c4ac]">{item.details}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#e5e2e1] max-w-[140px] sm:max-w-sm truncate font-bold">{item.question}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac] hidden sm:table-cell">{item.details}</td>
                         </tr>
                       );
                     })}

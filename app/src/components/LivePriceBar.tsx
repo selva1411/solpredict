@@ -7,7 +7,7 @@ export interface LivePriceBarProps {
   feedIdHex: string;
   category: number;
   livePrice: number | null;
-  liveLoading: boolean;
+  liveLoading?: boolean;
   liveError: string | null;
   targetPrice: number;
   targetExpo: number;

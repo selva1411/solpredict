@@ -24,6 +24,10 @@
 :root {
   --background: #131313;
   --foreground: #e5e2e1;
+  --glass-bg: rgba(19, 19, 19, 0.78);
+  --glass-border: rgba(158, 142, 120, 0.25);
+  --glass-shine: rgba(255, 255, 255, 0.04);
+  --glass-glow: rgba(255, 216, 156, 0.06);
 }
 
 body {
@@ -32,6 +36,37 @@ body {
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* Ambient glow orbs — fixed background decoration */
+.ambient-glow {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -3;
+  filter: blur(80px);
+  opacity: 0.3;
+}
+.ambient-glow-1 {
+  width: 500px;
+  height: 500px;
+  top: -10%;
+  right: -5%;
+  background: radial-gradient(circle, rgba(255, 216, 156, 0.12), transparent 70%);
+}
+.ambient-glow-2 {
+  width: 400px;
+  height: 400px;
+  bottom: -5%;
+  left: -8%;
+  background: radial-gradient(circle, rgba(161, 212, 148, 0.08), transparent 70%);
+}
+.ambient-glow-3 {
+  width: 350px;
+  height: 350px;
+  top: 40%;
+  left: 55%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.06), transparent 70%);
 }
 
 /* Mechanical Board Grid Background Overlay */
@@ -44,6 +79,16 @@ body {
   background-image: 
     linear-gradient(to right, rgba(158, 142, 120, 0.08) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(158, 142, 120, 0.08) 1px, transparent 1px);
+}
+
+/* Dot pattern accent overlay */
+.dot-pattern {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(158, 142, 120, 0.06) 1px, transparent 1px);
+  background-size: 30px 30px;
 }
 
 /* Cinematic film noise filter overlay */
@@ -70,6 +115,8 @@ body {
   opacity: 0.15;
 }
 
+/* ─── Glass Card Design System ─────────────────────────────────────── */
+
 /* Departure Board Panels (Mechanical Inset Cards) */
 .board-panel {
   background-color: #131313;
@@ -95,6 +142,76 @@ body {
 .board-panel-interactive:hover {
   border-color: #ffd89c;
   transform: translateY(-1px);
+}
+
+/* Glass variant — backdrop blur + subtle transparency */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-shine);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s ease, transform 0.25s ease, box-shadow 0.3s ease;
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  pointer-events: none;
+}
+
+.glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 0%, rgba(255, 216, 156, 0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.glass-panel-interactive {
+  transition: border-color 0.3s ease, transform 0.25s ease, box-shadow 0.3s ease;
+}
+
+.glass-panel-interactive:hover {
+  border-color: rgba(255, 216, 156, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-shine), 0 0 30px var(--glass-glow);
+}
+
+/* Motion-safe: disable animations on reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .glass-panel,
+  .glass-panel-interactive,
+  .board-panel,
+  .board-panel-3d,
+  .table-row-3d {
+    transition: none !important;
+    animation: none !important;
+  }
+  .animate-fade-in,
+  .animate-success-flip,
+  .animate-pulse-glow,
+  .animate-float-y,
+  .skeleton-shimmer {
+    animation: none !important;
+  }
+}
+
+/* Low-end device: fallback from glass to solid */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel {
+    background: #131313;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 /* Split-Flap Text Layout Styles */
@@ -304,7 +421,8 @@ body {
     0 0 30px rgba(255, 216, 156, 0.06);
 }
 
-/* Animations */
+/* ─── Animation System ─────────────────────────────────────────────── */
+
 @keyframes success-flip {
   0% { transform: rotateX(0deg); }
   50% { transform: rotateX(-90deg); }
@@ -329,6 +447,16 @@ body {
 @keyframes float-y {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
+}
+
+@keyframes glass-shimmer {
+  0% { background-position: -100% 0; }
+  100% { background-position: 100% 0; }
+}
+
+@keyframes border-pulse {
+  0%, 100% { border-color: rgba(158, 142, 120, 0.25); }
+  50% { border-color: rgba(255, 216, 156, 0.4); }
 }
 
 .animate-success-flip {
@@ -356,6 +484,23 @@ body {
 
 .animate-float-y {
   animation: float-y 3s ease-in-out infinite;
+}
+
+.animate-border-pulse {
+  animation: border-pulse 3s ease-in-out infinite;
+}
+
+/* Shimmer for glass panels */
+.glass-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: glass-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .bg-gradient-radial {
@@ -437,4 +582,124 @@ body {
   padding: 2px 6px;
   border-radius: 2px;
   text-transform: uppercase;
+}
+
+/* ─── WCAG AA Accessibility ────────────────────────────────────────── */
+
+/* Focus-visible ring for all interactive elements */
+/* Gradient text utility */
+.text-gradient-amber {
+  background: linear-gradient(135deg, #ffd89c 0%, #f5a623 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-green {
+  background: linear-gradient(135deg, #a1d494 0%, #6cb660 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Nav link underline animation */
+.nav-link {
+  position: relative;
+  transition: color 0.2s ease;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ffd89c;
+  transform: scaleX(0);
+  transition: transform 0.25s ease;
+  transform-origin: left;
+}
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+.nav-link-active::after {
+  transform: scaleX(1);
+}
+
+/* Subtle scale-on-hover for clickable glass panels */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Animate number counts */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-count-up {
+  animation: count-up 0.4s ease-out forwards;
+}
+
+/* Safe area for mobile bottom nav */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Text truncation utilities */
+.line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Section divider */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(158, 142, 120, 0.4), transparent);
+  margin: 2rem 0;
+}
+
+*:focus-visible {
+  outline: 2px solid #ffd89c;
+  outline-offset: 2px;
+}
+
+/* Remove focus outline for mouse clicks (keep for keyboard) */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Ensure interactive elements have visible focus */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #ffd89c;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Minimum touch target size for mobile */
+@media (pointer: coarse) {
+  button, a, select, input[type="button"], input[type="submit"] {
+    min-height: 44px;
+  }
+}
+
+/* Reduced motion: respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
