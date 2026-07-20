@@ -9,8 +9,9 @@ crate-type = ["cdylib", "lib"]
 name = "solpredict"
 
 [features]
-default = ["test-only"]
+default = []
 test-only = []
+devnet-mock = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

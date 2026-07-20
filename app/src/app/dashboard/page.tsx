@@ -557,7 +557,7 @@ export default function UserDashboard() {
                           </span>
                           <span className="hidden sm:inline">•</span>
                           <span>
-                            Position: {yesShares > 0 ? `${yesShares} YES` : `${noShares} NO`}
+                            Position: {yesShares > 0 && noShares > 0 ? `${yesShares} YES / ${noShares} NO` : yesShares > 0 ? `${yesShares} YES` : `${noShares} NO`}
                           </span>
                         </div>
                       </div>
@@ -627,8 +627,9 @@ export default function UserDashboard() {
                   {openPositions.map((pos) => {
                     const yesShares = pos.account.yesAmount.toNumber() / 1e6;
                     const noShares = pos.account.noAmount.toNumber() / 1e6;
-                    const side = yesShares > 0 ? "YES" : "NO";
-                    const shares = yesShares > 0 ? yesShares : noShares;
+                    const hasBoth = yesShares > 0 && noShares > 0;
+                    const side = hasBoth ? "BOTH" : yesShares > 0 ? "YES" : "NO";
+                    const shares = hasBoth ? `${yesShares} YES / ${noShares} NO` : yesShares > 0 ? yesShares : noShares;
                     const invested = lamportsToSol(pos.account.totalSpentLamports);
                     const marketKey = pos.account.market.toBase58();
 
@@ -642,6 +643,8 @@ export default function UserDashboard() {
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               side === "YES"
                                 ? "bg-[#a1d494]/15 text-[#a1d494] border border-[#a1d494]/30"
+                                : side === "BOTH"
+                                ? "bg-[#d6c4ac]/15 text-[#d6c4ac] border border-[#d6c4ac]/30"
                                 : "bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/30"
                             }`}
                           >

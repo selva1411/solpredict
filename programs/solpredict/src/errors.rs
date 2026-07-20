@@ -89,9 +89,6 @@ pub enum SolPredictError {
     #[msg("Invalid market ID")]
     InvalidMarket,
 
-    #[msg("Market duration too short: minimum 1 hour")]
-    MarketTooShort,
-
     #[msg("Crypto markets must use oracle settlement")]
     CryptoMustUseOracle,
 

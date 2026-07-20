@@ -1,5 +1,5 @@
 {
-  "address": "68q8YshCw4a5kVQpm8WRrqQuT7duFMRfyDu9DsyXirmj",
+  "address": "FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -1287,92 +1287,6 @@
       ]
     },
     {
-      "name": "mock_create_price_update",
-      "docs": [
-        "Create mock Pyth PriceUpdateV2 account data (testing only)."
-      ],
-      "discriminator": [
-        103,
-        162,
-        52,
-        4,
-        77,
-        138,
-        211,
-        58
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "price_update",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  111,
-                  99,
-                  107,
-                  95,
-                  112,
-                  114,
-                  105,
-                  99,
-                  101,
-                  95,
-                  102,
-                  101,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feed_id",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "price",
-          "type": "i64"
-        },
-        {
-          "name": "conf",
-          "type": "u64"
-        },
-        {
-          "name": "exponent",
-          "type": "i32"
-        },
-        {
-          "name": "publish_time",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "settle_market",
       "docs": [
         "Settle a market using a Pyth oracle price (admin-only)."
@@ -1903,16 +1817,11 @@
     },
     {
       "code": 6028,
-      "name": "MarketTooShort",
-      "msg": "Market duration too short: minimum 1 hour"
-    },
-    {
-      "code": 6029,
       "name": "CryptoMustUseOracle",
       "msg": "Crypto markets must use oracle settlement"
     },
     {
-      "code": 6030,
+      "code": 6029,
       "name": "NoFeesToWithdraw",
       "msg": "No fees to withdraw"
     }

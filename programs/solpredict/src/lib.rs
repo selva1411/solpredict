@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("68q8YshCw4a5kVQpm8WRrqQuT7duFMRfyDu9DsyXirmj");
+declare_id!("FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD");
 
 #[program]
 pub mod solpredict {
@@ -86,8 +86,8 @@ pub mod solpredict {
         instructions::withdraw_fees::handler(ctx)
     }
 
-    /// Create mock Pyth PriceUpdateV2 account data (testing only).
-    #[cfg(feature = "test-only")]
+    /// Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet).
+    #[cfg(feature = "devnet-mock")]
     pub fn mock_create_price_update(
         ctx: Context<MockCreatePriceUpdate>,
         feed_id: [u8; 32],

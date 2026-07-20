@@ -16,8 +16,6 @@ export default function SecureGateway() {
       setCountdown((c) => {
         if (c <= 1) {
           clearInterval(timer);
-          if (role === "admin") router.push("/admin");
-          else router.push("/dashboard");
           return 0;
         }
         return c - 1;
@@ -25,7 +23,13 @@ export default function SecureGateway() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [role, isLoading, router]);
+  }, [role, isLoading]);
+
+  useEffect(() => {
+    if (countdown === 0 && role && role !== "disconnected") {
+      router.push(role === "admin" ? "/admin" : "/dashboard");
+    }
+  }, [countdown, role, router]);
 
   return (
     <div className="min-h-screen bg-[#131313] flex items-center justify-center flex-col gap-8 px-4">

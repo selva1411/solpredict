@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "HdnErNjvwK7dXG7amjZbnMzG3hEHFAS4izqnNW1BkAxQ",
+  "address": "FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -1293,92 +1293,6 @@ export type Solpredict = {
       ]
     },
     {
-      "name": "mockCreatePriceUpdate",
-      "docs": [
-        "Create mock Pyth PriceUpdateV2 account data (testing only)."
-      ],
-      "discriminator": [
-        103,
-        162,
-        52,
-        4,
-        77,
-        138,
-        211,
-        58
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "priceUpdate",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  111,
-                  99,
-                  107,
-                  95,
-                  112,
-                  114,
-                  105,
-                  99,
-                  101,
-                  95,
-                  102,
-                  101,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feedId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "price",
-          "type": "i64"
-        },
-        {
-          "name": "conf",
-          "type": "u64"
-        },
-        {
-          "name": "exponent",
-          "type": "i32"
-        },
-        {
-          "name": "publishTime",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "settleMarket",
       "docs": [
         "Settle a market using a Pyth oracle price (admin-only)."
@@ -1886,6 +1800,36 @@ export type Solpredict = {
       "code": 6023,
       "name": "useManualSettlement",
       "msg": "Markets without a price feed must use settle_market_manual"
+    },
+    {
+      "code": 6024,
+      "name": "marketNotEnded",
+      "msg": "Market has not ended yet"
+    },
+    {
+      "code": 6025,
+      "name": "notAWinner",
+      "msg": "User did not win this market"
+    },
+    {
+      "code": 6026,
+      "name": "insufficientShares",
+      "msg": "Insufficient shares to claim"
+    },
+    {
+      "code": 6027,
+      "name": "invalidMarket",
+      "msg": "Invalid market ID"
+    },
+    {
+      "code": 6028,
+      "name": "cryptoMustUseOracle",
+      "msg": "Crypto markets must use oracle settlement"
+    },
+    {
+      "code": 6029,
+      "name": "noFeesToWithdraw",
+      "msg": "No fees to withdraw"
     }
   ],
   "types": [

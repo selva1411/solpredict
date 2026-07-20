@@ -17,9 +17,14 @@ const HERMES_URL = "https://hermes.pyth.network";
 const PYTH_RECEIVER_ID = new PublicKey(
   "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
 );
-const PROGRAM_ID = new PublicKey(
-  "9YukHcQVqnST4SNpnLrdTBHDQU63Lrn93zu6Et3Ubaez"
-);
+const ANCHOR_TOML = path.join(__dirname, "..", "Anchor.toml");
+function readProgramId(): PublicKey {
+  const toml = fs.readFileSync(ANCHOR_TOML, "utf-8");
+  const match = toml.match(/\[programs\.devnet\]\s*\n\s*solpredict\s*=\s*"([^"]+)"/);
+  if (!match) throw new Error("Could not find [programs.devnet] solpredict in Anchor.toml");
+  return new PublicKey(match[1]);
+}
+const PROGRAM_ID = readProgramId();
 const POLL_MS = 15_000;
 const CONFIG_SEED = Buffer.from("config");
 const MARKET_SEED = Buffer.from("market");

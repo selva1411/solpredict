@@ -6,7 +6,7 @@ export const ENV = {
       ?? "https://devnet.helius-rpc.com/?api-key=8a85d3a7-d21b-47d3-8345-b9705f666ce7";
   },
   get programId(): PublicKey {
-    const pubkeyStr = process.env.NEXT_PUBLIC_PROGRAM_ID || "68q8YshCw4a5kVQpm8WRrqQuT7duFMRfyDu9DsyXirmj";
+    const pubkeyStr = process.env.NEXT_PUBLIC_PROGRAM_ID || "FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD";
     return new PublicKey(pubkeyStr);
   },
   get pythProgramId(): PublicKey {

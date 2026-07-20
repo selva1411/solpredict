@@ -1,11 +1,11 @@
 {
   "license": "ISC",
   "scripts": {
-    "build": "anchor build && cp target/idl/solpredict.json app/src/lib/idl/solpredict.json && cp target/types/solpredict.ts app/src/lib/idl/solpredict.ts",
+    "build": "anchor build && npm run program:sync",
     "deploy": "npm run build && anchor deploy",
     "reset": "solana-test-validator --reset --quiet & sleep 3 && npm run deploy",
     "build:frontend": "npm --prefix app run build",
-    "idl:sync": "cp target/idl/solpredict.json app/src/lib/idl/solpredict.json && cp target/types/solpredict.ts app/src/lib/idl/solpredict.ts",
+    "program:sync": "npx tsx scripts/sync-program-id.ts",
     "dev": "npm --prefix app run dev",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"

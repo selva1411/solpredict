@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Connection, PublicKey } from "@solana/web3.js";
-
-const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
-const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID || "9YukHcQVqnST4SNpnLrdTBHDQU63Lrn93zu6Et3Ubaez";
+import { ENV } from "@/lib/env";
 
 interface Props {
   children: React.ReactNode;
@@ -11,7 +9,7 @@ interface Props {
 
 async function parseMarketQuestion(marketPda: PublicKey): Promise<string | null> {
   try {
-    const connection = new Connection(RPC_URL);
+    const connection = new Connection(ENV.rpcUrl);
     const accountInfo = await connection.getAccountInfo(marketPda);
     if (!accountInfo) return null;
 

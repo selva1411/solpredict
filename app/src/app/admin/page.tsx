@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useProgram } from "@/hooks/useProgram";
 import { useUserRole } from "@/hooks/useUserRole";
-import { PublicKey, Keypair } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
@@ -363,7 +363,7 @@ function AdminPage() {
         finalComparison = comparison;
       }
 
-      const endTs = new anchor.BN(Math.floor(Date.now() / 1000) + durationSecs);
+      const endTs = new anchor.BN(Math.floor(Date.now() / 1000) + durationSecs + 30);
       const resolveTs = endTs.add(new anchor.BN(2)); // +2 seconds for immediate local testing settle!
 
       const configPda = getConfigPda(program.programId);
@@ -396,7 +396,7 @@ function AdminPage() {
       setQuestion("");
       setDescription("");
       setTargetPriceVal(250.00);
-      setDurationSecs(300);
+      setDurationSecs(3600);
       
       fetchConfigAndMarkets();
     } catch (err: any) {
@@ -459,7 +459,7 @@ function AdminPage() {
       await program.methods
         .cancelMarket()
         .accounts({
-          authority: wallet.publicKey,
+          admin: wallet.publicKey,
           config: configPda,
           market: marketPda,
         } as any)
@@ -537,10 +537,11 @@ function AdminPage() {
       await program.methods
         .withdrawFees()
         .accounts({
-          authority: wallet.publicKey,
+          admin: wallet.publicKey,
           config: configPda,
           market: market.publicKey,
           treasury: treasuryPda,
+          systemProgram: SystemProgram.programId,
         } as any)
         .rpc();
 
@@ -1080,10 +1081,12 @@ function AdminPage() {
                           <input
                             type="number"
                             required
+                            min={5}
                             value={durationSecs}
                             onChange={(e) => setDurationSecs(Number(e.target.value))}
                             className="w-full board-input text-xs border-[#9e8e78]"
                           />
+                          <p className="text-[10px] text-[#9e8e78]">Minimum: 5s (allow ~30s for tx to land)</p>
                         </div>
                       </div>
                     </>
@@ -1099,10 +1102,12 @@ function AdminPage() {
                         <input
                           type="number"
                           required
+                          min={5}
                           value={durationSecs}
                           onChange={(e) => setDurationSecs(Number(e.target.value))}
                           className="w-full board-input text-xs border-[#9e8e78]"
                         />
+                        <p className="text-[10px] text-[#9e8e78]">Minimum: 5s (allow ~30s for tx to land)</p>
                       </div>
                     </>
                   )}

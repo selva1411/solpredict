@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-solpredict = "68q8YshCw4a5kVQpm8WRrqQuT7duFMRfyDu9DsyXirmj"
+solpredict = "FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD"
 
 [programs.localnet]
-solpredict = "68q8YshCw4a5kVQpm8WRrqQuT7duFMRfyDu9DsyXirmj"
+solpredict = "FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD"
 
 [registry]
 url = "https://api.apr.dev"
