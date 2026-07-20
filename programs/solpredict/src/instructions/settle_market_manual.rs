@@ -40,6 +40,12 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
         SolPredictError::AlreadySettled
     );
 
+    // Must be past end_ts
+    require!(
+        clock.unix_timestamp >= market.end_ts,
+        SolPredictError::MarketNotEnded
+    );
+
     // Must be past resolve_ts
     require!(
         clock.unix_timestamp >= market.resolve_ts,

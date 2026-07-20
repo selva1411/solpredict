@@ -71,33 +71,40 @@ pub struct ClaimRewards<'info> {
 ///
 /// Burns the winner's tokens, computes pro-rata payout via u128 math,
 /// and transfers SOL from treasury to claimer.
+///
+/// FOLLOWS CEI (Checks-Effects-Interactions):
+///   1. CHECK: claimed flag, token balance, payout validity
+///   2. EFFECT: mark claimed = true FIRST (prevents re-entrancy)
+///   3. INTERACT: burn tokens, transfer SOL
 pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
-    // 1. Check not already claimed
+    // ═══════════════ CHECKS ═══════════════
     require!(
         !ctx.accounts.user_position.claimed,
         SolPredictError::AlreadyClaimed
     );
 
-    // 2. Read user's token balance
     let user_tokens = ctx.accounts.claimer_ata.amount;
     require!(user_tokens > 0, SolPredictError::NothingToClaim);
 
-    // 3. Determine winning supply for pro-rata calculation
     let winning_supply = match ctx.accounts.market.winning_outcome {
         WinningOutcome::Yes => ctx.accounts.market.yes_supply,
         WinningOutcome::No => ctx.accounts.market.no_supply,
         WinningOutcome::Unset => return err!(SolPredictError::MarketNotSettled),
     };
 
-    // 4. Calculate pro-rata payout (floor-rounded, u128 intermediate)
     let payout = payout_math::calculate_payout(
         ctx.accounts.market.total_payout_pool,
         user_tokens,
         winning_supply,
     )?;
 
-    // 5. Burn ALL winning tokens from claimer's ATA
-    //    Authority = claimer (user signs for their own tokens)
+    // ═══════════════ EFFECTS (state first) ═══════════════
+    ctx.accounts.user_position.yes_amount = 0;
+    ctx.accounts.user_position.no_amount = 0;
+    ctx.accounts.user_position.claimed = true;
+
+    // ═══════════════ INTERACTIONS ═══════════════
+    // Burn ALL winning tokens from claimer's ATA
     token::burn(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -110,7 +117,7 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         user_tokens,
     )?;
 
-    // 6. Transfer SOL from treasury → claimer via CPI (treasury is a SystemAccount)
+    // Transfer SOL from treasury → claimer via CPI
     let market_key = ctx.accounts.market.key();
     let treasury_bump = ctx.accounts.market.treasury_bump;
     let seeds = &[
@@ -130,20 +137,16 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
     );
     anchor_lang::system_program::transfer(cpi_ctx, payout)?;
 
-    // 7. Defense-in-depth: verify treasury retains rent-exempt minimum or is completely empty
+    // Defense-in-depth: verify treasury retains rent-exempt minimum or is empty
     let treasury_info = ctx.accounts.treasury.to_account_info();
     let rent = Rent::get()?;
-    let min_balance = rent.minimum_balance(0); // treasury has zero data
+    let min_balance = rent.minimum_balance(0);
     let balance = treasury_info.lamports();
     require!(
         balance >= min_balance || balance == 0,
         SolPredictError::TreasuryInsufficient
     );
 
-    // 8. Mark position as claimed (double-claim guard)
-    ctx.accounts.user_position.claimed = true;
-
-    // 9. Emit event
     emit!(RewardsClaimed {
         market_id: ctx.accounts.market.market_id,
         claimer: ctx.accounts.claimer.key(),

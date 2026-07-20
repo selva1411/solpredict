@@ -1,5 +1,5 @@
 {
-  "address": "AvqYt1z2osU3yriCzY64vWK1Y9ZmtLx7fLM1dzfRdroB",
+  "address": "68q8YshCw4a5kVQpm8WRrqQuT7duFMRfyDu9DsyXirmj",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -1880,6 +1880,41 @@
       "code": 6023,
       "name": "UseManualSettlement",
       "msg": "Markets without a price feed must use settle_market_manual"
+    },
+    {
+      "code": 6024,
+      "name": "MarketNotEnded",
+      "msg": "Market has not ended yet"
+    },
+    {
+      "code": 6025,
+      "name": "NotAWinner",
+      "msg": "User did not win this market"
+    },
+    {
+      "code": 6026,
+      "name": "InsufficientShares",
+      "msg": "Insufficient shares to claim"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidMarket",
+      "msg": "Invalid market ID"
+    },
+    {
+      "code": 6028,
+      "name": "MarketTooShort",
+      "msg": "Market duration too short: minimum 1 hour"
+    },
+    {
+      "code": 6029,
+      "name": "CryptoMustUseOracle",
+      "msg": "Crypto markets must use oracle settlement"
+    },
+    {
+      "code": 6030,
+      "name": "NoFeesToWithdraw",
+      "msg": "No fees to withdraw"
     }
   ],
   "types": [

@@ -25,6 +25,7 @@ import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
+import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
 import { OrderBookDepth } from "@/components/OrderBookDepth";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
@@ -352,7 +353,7 @@ export default function MarketDetailPage() {
               buyer: buyer.toBase58(),
               side: sideStr,
               quantity: q.toNumber(),
-              cost: cost.toNumber() / 1e9,
+              cost: lamportsToSol(cost),
               time: timeStr,
             });
           } else if (event.name === "MarketSettled") {
@@ -363,7 +364,7 @@ export default function MarketDetailPage() {
               buyer: "BOARD SETTLEMENT",
               side: "SETTLE",
               quantity: winningOutcome, 
-              cost: settledPrice.toNumber() / 1e9,
+              cost: lamportsToSol(settledPrice),
               time: timeStr,
             });
           } else if (event.name === "RewardsClaimed") {
@@ -374,7 +375,7 @@ export default function MarketDetailPage() {
               buyer: claimer.toBase58(),
               side: "CLAIM",
               quantity: 0,
-              cost: payout.toNumber() / 1e9,
+              cost: lamportsToSol(payout),
               time: timeStr,
             });
           }
@@ -536,7 +537,21 @@ export default function MarketDetailPage() {
   )}`;
 
   const copyShareLink = () => {
-    navigator.clipboard.writeText(shareUrl);
+    const copyToClipboard = async (text: string) => {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+    };
+    copyToClipboard(shareUrl).catch(() => {});
     toast.success("Share link copied to clipboard!");
     setShowShareOptions(false);
   };
@@ -549,14 +564,14 @@ export default function MarketDetailPage() {
   const status = market.status.open ? "Open" : market.status.settled ? "Settled" : "Cancelled";
   const categoryStr = CATEGORIES[market.category] || "Other";
   
-  const yesPool = market.yesPoolLamports.toNumber() / 1e9;
-  const noPool = market.noPoolLamports.toNumber() / 1e9;
+  const yesPool = lamportsToSol(market.yesPoolLamports);
+  const noPool = lamportsToSol(market.noPoolLamports);
   const totalPool = yesPool + noPool;
   
   const yesProb = totalPool > 0 ? Math.round((yesPool / totalPool) * 100) : 50;
   const noProb = 100 - yesProb;
   
-  const sharePriceSol = market.sharePriceLamports.toNumber() / 1e9;
+  const sharePriceSol = lamportsToSol(market.sharePriceLamports);
   const tradeCost = quantity * sharePriceSol;
 
   const getPotentialPayout = (): number => {
@@ -1173,7 +1188,7 @@ export default function MarketDetailPage() {
               <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
                 <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
                 <div className="font-bold text-[#e5e2e1] text-sm pt-1">
-                  {(treasuryBalance / 1e9).toFixed(3)} SOL
+                  {lamportsToSol(treasuryBalance).toFixed(3)} SOL
                 </div>
                 <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Secure Escrow PDA</div>
               </div>

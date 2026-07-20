@@ -7,6 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Clock, Coins, Star, HelpCircle, ArrowRight } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
+import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
 import * as anchor from "@coral-xyz/anchor";
 import { FlipCountdown } from "@/components/FlipCountdown";
@@ -15,7 +16,7 @@ import { getMarketStatusString } from "@/lib/events";
 import { usePythPrices } from "@/hooks/usePythPrices";
 import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
-import { LoadingState, EmptyState } from "@/components/StatePanels";
+import { MarketCardSkeleton, EmptyState } from "@/components/StatePanels";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { cardHover, fadeInUp } from "@/lib/motion-variants";
@@ -105,11 +106,11 @@ export default function MarketExplorer() {
         return matchesSearch && matchesCat && matchesStatus && matchesWatch;
       })
       .sort((a, b) => {
-        const volA = a.account.yesPoolLamports.toNumber() + a.account.noPoolLamports.toNumber();
-        const volB = b.account.yesPoolLamports.toNumber() + b.account.noPoolLamports.toNumber();
+        const volA = bnToNum(a.account.yesPoolLamports) + bnToNum(a.account.noPoolLamports);
+        const volB = bnToNum(b.account.yesPoolLamports) + bnToNum(b.account.noPoolLamports);
         if (sortBy === "volume") return volB - volA;
-        if (sortBy === "ends") return a.account.endTs.toNumber() - b.account.endTs.toNumber();
-        if (sortBy === "newest") return b.account.marketId.toNumber() - a.account.marketId.toNumber();
+        if (sortBy === "ends") return bnToNum(a.account.endTs) - bnToNum(b.account.endTs);
+        if (sortBy === "newest") return bnToNum(b.account.marketId) - bnToNum(a.account.marketId);
         return volB - volA;
       });
   }, [markets, search, selectedCategory, selectedStatus, watchlistOnly, watchlist, sortBy]);
@@ -208,22 +209,27 @@ export default function MarketExplorer() {
           </button>
 
           {/* Status Selection */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="board-input text-[10px] sm:text-xs bg-board-panel border-board-border py-1 px-2 sm:px-3"
-          >
-            <option value="Open">OPEN</option>
-            <option value="Settled">SETTLED</option>
-            <option value="Cancelled">CANCELLED</option>
-            <option value="All">ALL</option>
-          </select>
+          <div className="flex items-center gap-1">
+            {(["Open", "Settled", "Cancelled", "All"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSelectedStatus(s)}
+                className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded ${
+                  selectedStatus === s ? "mechanical-switch-active" : "mechanical-switch-inactive"
+                }`}
+              >
+                {s.toUpperCase()}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Markets Grid */}
       {loading ? (
-        <LoadingState count={6} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+          {[...Array(6)].map((_, i) => <MarketCardSkeleton key={i} />)}
+        </div>
       ) : sortedAndFiltered.length === 0 ? (
         <EmptyState
           icon={HelpCircle}
@@ -236,8 +242,8 @@ export default function MarketExplorer() {
             const key = market.publicKey.toBase58();
             const status = getMarketStatusString(market.account.status);
             const isWatched = watchlist.includes(key);
-            const yesPool = market.account.yesPoolLamports.toNumber() / 1e9;
-            const noPool = market.account.noPoolLamports.toNumber() / 1e9;
+            const yesPool = lamportsToSol(market.account.yesPoolLamports);
+            const noPool = lamportsToSol(market.account.noPoolLamports);
             const totalVolume = yesPool + noPool;
             const yesPercent = totalVolume > 0 ? Math.round((yesPool / totalVolume) * 100) : 50;
 

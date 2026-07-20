@@ -50,6 +50,20 @@ pub struct WithdrawFees<'info> {
 /// Transfers `market.fee_collected` lamports from treasury to admin.
 /// Sets `fee_withdrawn = true` to prevent double withdrawal.
 pub fn handler(ctx: Context<WithdrawFees>) -> Result<()> {
+    // — handler-level guards (defense in depth beyond account constraints) —
+    require!(
+        !ctx.accounts.market.fee_withdrawn,
+        SolPredictError::FeeAlreadyWithdrawn
+    );
+    require!(
+        ctx.accounts.market.fee_collected > 0,
+        SolPredictError::NoFeesToWithdraw
+    );
+    require!(
+        ctx.accounts.market.status == MarketStatus::Settled,
+        SolPredictError::MarketNotSettled
+    );
+
     let fee_amount = ctx.accounts.market.fee_collected;
 
     // Transfer fee lamports treasury → admin via CPI (treasury is a SystemAccount)

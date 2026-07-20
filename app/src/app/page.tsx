@@ -7,6 +7,7 @@ import { motion, type Variants } from "framer-motion";
 import { GlassPanel } from "@/components/GlassPanel";
 import { Coins, ArrowRight, Activity, Award, BarChart3 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
+import { lamportsToSol } from "@/lib/format";
 import { toast } from "sonner";
 import { getMarketStatusString } from "@/lib/events";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -149,7 +150,7 @@ export default function LandingPage() {
       const uniqueTraders = new Set(allPositions.map((p) => p.account.owner.toBase58())).size;
 
       setStats({
-        volume: totalVolumeLamports / 1e9,
+        volume: lamportsToSol(totalVolumeLamports),
         open: openCount,
         settled: settledCount,
         traders: uniqueTraders,

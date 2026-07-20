@@ -7,6 +7,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { useUserRole } from "@/hooks/useUserRole";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
+import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { 
@@ -94,7 +95,7 @@ function AdminPage() {
   const [selectedAssetKey, setSelectedAssetKey] = useState<string>("");
   const [targetPriceVal, setTargetPriceVal] = useState<number>(250.00);
   const [comparison, setComparison] = useState<number>(0); 
-  const [durationSecs, setDurationSecs] = useState<number>(300); 
+  const [durationSecs, setDurationSecs] = useState<number>(3600); 
   
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [settlePrices, setSettlePrices] = useState<Map<string, number>>(new Map());
@@ -291,7 +292,7 @@ function AdminPage() {
               type: "WITHDRAW",
               question: questionText || `ID #${marketId.toString()}`,
               timeStr,
-              details: `Withdrawn ${ (event.data.amount.toNumber() / 1e9).toFixed(4) } SOL to admin`
+              details: `Withdrawn ${ lamportsToSol(event.data.amount).toFixed(4) } SOL to admin`
             });
           }
         }
@@ -565,8 +566,8 @@ function AdminPage() {
     });
 
     return {
-      totalVolume: totalVolumeLamports / 1e9,
-      totalFeesCollected: totalFeesCollectedLamports / 1e9,
+      totalVolume: lamportsToSol(totalVolumeLamports),
+      totalFeesCollected: lamportsToSol(totalFeesCollectedLamports),
       openMarketsCount: openCount,
       settledMarketsCount: settledCount,
     };
@@ -743,13 +744,13 @@ function AdminPage() {
                   <div className="space-y-0.5">
                     <div className="text-[10px] text-[#9e8e78] uppercase">YES Pool:</div>
                     <div className="text-sm font-bold text-[#a1d494]">
-                      {(manualSettleModal.market.account.yesPoolLamports.toNumber() / 1e9).toFixed(2)} SOL
+                      {(lamportsToSol(manualSettleModal.market.account.yesPoolLamports)).toFixed(2)} SOL
                     </div>
                   </div>
                   <div className="space-y-0.5">
                     <div className="text-[10px] text-[#9e8e78] uppercase">NO Pool:</div>
                     <div className="text-sm font-bold text-[#ffb4ab]">
-                      {(manualSettleModal.market.account.noPoolLamports.toNumber() / 1e9).toFixed(2)} SOL
+                      {(lamportsToSol(manualSettleModal.market.account.noPoolLamports)).toFixed(2)} SOL
                     </div>
                   </div>
                 </div>
@@ -809,7 +810,11 @@ function AdminPage() {
                     share holders.
                   </p>
                   <p className="text-[10px] text-[#9e8e78]">
-                    Protocol fee collected: {((manualSettleModal.market.account.yesPoolLamports.toNumber() + manualSettleModal.market.account.noPoolLamports.toNumber() - getPayoutPoolSol(manualSettleModal.market, manualSettleModal.outcome! || 1) * 1e9) / 1e9).toFixed(3)} SOL
+                    Protocol fee collected: {lamportsToSol(
+                      bnToNum(manualSettleModal.market.account.yesPoolLamports) +
+                      bnToNum(manualSettleModal.market.account.noPoolLamports) -
+                      getPayoutPoolSol(manualSettleModal.market, manualSettleModal.outcome! || 1) * 1e9
+                    ).toFixed(3)} SOL
                   </p>
                 </div>
 
@@ -1138,8 +1143,8 @@ function AdminPage() {
                         {markets.map((m) => {
                           const status = getStatusString(m.account.status);
                           const marketKey = m.publicKey.toBase58();
-                          const yesPool = m.account.yesPoolLamports.toNumber() / 1e9;
-                          const noPool = m.account.noPoolLamports.toNumber() / 1e9;
+                          const yesPool = lamportsToSol(m.account.yesPoolLamports);
+                          const noPool = lamportsToSol(m.account.noPoolLamports);
                           const volume = yesPool + noPool;
 
                           return (
@@ -1207,7 +1212,7 @@ function AdminPage() {
                                         onClick={() => handleWithdrawFees(m)}
                                         className="px-2.5 py-1 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/30 rounded text-[9px] text-[#ffd89c] font-bold cursor-pointer uppercase"
                                       >
-                                        Withdraw Fees ({ (m.account.feeCollected.toNumber() / 1e9).toFixed(3) } SOL)
+                                        Withdraw Fees ({ lamportsToSol(m.account.feeCollected).toFixed(3) } SOL)
                                       </button>
                                     )}
                                   </div>

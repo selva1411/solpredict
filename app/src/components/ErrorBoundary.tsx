@@ -1,35 +1,38 @@
-"use client";
-
-import { Component, ReactNode } from "react";
+'use client'
+import { Component, ReactNode } from 'react'
 
 interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
+  children: ReactNode
+  label?: string
 }
 
 interface State {
-  hasError: boolean;
-  error?: Error;
+  hasError: boolean
+  message: string
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false };
+  state: State = { hasError: false, message: '' }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(e: Error) {
+    return { hasError: true, message: e.message }
   }
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback ?? (
-        <div className="flex items-center justify-center h-40 border border-[#353534] rounded font-mono text-[#9e8e78] text-sm">
-          <div className="text-center">
-            <div className="text-[#ffb4ab] mb-2">⚠ Component Error</div>
-            <div className="text-xs">{this.state.error?.message}</div>
+      return (
+        <div className="flex items-center justify-center h-32 border border-[#353534] font-mono text-xs text-[#9e8e78]">
+          <div className="text-center space-y-1">
+            <div className="text-[#ffb4ab]">
+              ⚠ {this.props.label ?? 'Component'} failed to render
+            </div>
+            <div className="text-[#353534] text-[10px]">
+              {this.state.message}
+            </div>
           </div>
         </div>
-      );
+      )
     }
-    return this.props.children;
+    return this.props.children
   }
 }

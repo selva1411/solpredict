@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 // Dynamically import the wallet multi button with SSR disabled so it only renders on client
 const WalletMultiButton = dynamic(
@@ -14,18 +14,17 @@ const WalletMultiButton = dynamic(
 export function ClientWalletButton() {
   const { connected, publicKey } = useWallet();
   const router = useRouter();
-  const pathname = usePathname();
-  const prevConnectedRef = useRef(false);
+  const hasRoutedRef = useRef(false);
 
   useEffect(() => {
-    const isNowConnected = connected && publicKey !== null;
-    if (isNowConnected && !prevConnectedRef.current) {
-      if (pathname === "/") {
-        router.push("/gateway");
-      }
+    if (connected && publicKey && !hasRoutedRef.current) {
+      hasRoutedRef.current = true;
+      router.push('/gateway');
     }
-    prevConnectedRef.current = !!connected;
-  }, [connected, publicKey, pathname, router]);
+    if (!connected) {
+      hasRoutedRef.current = false;
+    }
+  }, [connected, publicKey, router]);
 
   return (
     <div className="wallet-button-wrapper">

@@ -76,4 +76,25 @@ pub enum SolPredictError {
 
     #[msg("Markets without a price feed must use settle_market_manual")]
     UseManualSettlement,
+
+    #[msg("Market has not ended yet")]
+    MarketNotEnded,
+
+    #[msg("User did not win this market")]
+    NotAWinner,
+
+    #[msg("Insufficient shares to claim")]
+    InsufficientShares,
+
+    #[msg("Invalid market ID")]
+    InvalidMarket,
+
+    #[msg("Market duration too short: minimum 1 hour")]
+    MarketTooShort,
+
+    #[msg("Crypto markets must use oracle settlement")]
+    CryptoMustUseOracle,
+
+    #[msg("No fees to withdraw")]
+    NoFeesToWithdraw,
 }

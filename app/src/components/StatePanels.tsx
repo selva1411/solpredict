@@ -11,6 +11,37 @@ interface LoadingStateProps {
   count?: number;
 }
 
+export function MarketCardSkeleton() {
+  return (
+    <div className="glass-panel p-4 sm:p-5 flex flex-col justify-between h-76 border-[var(--glass-border)] animate-pulse">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1.5">
+            <div className="w-16 h-4 bg-white/5 rounded skeleton-shimmer" />
+            <div className="w-12 h-4 bg-white/5 rounded skeleton-shimmer" />
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-white/5 rounded skeleton-shimmer" />
+            <div className="w-2.5 h-2.5 rounded-full bg-white/5 skeleton-shimmer" />
+            <div className="w-10 h-3 bg-white/5 rounded skeleton-shimmer" />
+          </div>
+        </div>
+        <div className="w-full h-4 bg-white/5 rounded skeleton-shimmer" />
+        <div className="w-3/4 h-4 bg-white/5 rounded skeleton-shimmer" />
+      </div>
+      <div className="space-y-1.5">
+        <div className="w-full h-3 bg-white/5 rounded skeleton-shimmer" />
+        <div className="w-full h-3 bg-white/5 rounded skeleton-shimmer" />
+      </div>
+      <div className="pt-3 border-t border-[var(--glass-border)] flex items-center justify-between">
+        <div className="w-20 h-3 bg-white/5 rounded skeleton-shimmer" />
+        <div className="w-16 h-3 bg-white/5 rounded skeleton-shimmer" />
+      </div>
+      <div className="w-full h-8 bg-white/5 rounded skeleton-shimmer" />
+    </div>
+  );
+}
+
 export function LoadingState({ title, height = "h-76", count = 6 }: LoadingStateProps) {
   if (title) {
     return (

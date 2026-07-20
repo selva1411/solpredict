@@ -8,6 +8,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
+import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -117,7 +118,7 @@ export default function UserDashboard() {
     const status = getMarketStatusString(pos.marketAccount.status);
     if (status !== "Settled") return null;
 
-    const spent = pos.account.totalSpentLamports.toNumber() / 1e9;
+    const spent = lamportsToSol(pos.account.totalSpentLamports);
     const winningOutcome = pos.marketAccount.winningOutcome;
     const yesShares = pos.account.yesAmount.toNumber() / 1e6;
     const noShares = pos.account.noAmount.toNumber() / 1e6;
@@ -126,7 +127,7 @@ export default function UserDashboard() {
 
     if (!userWon) return { pnl: -spent, pnlPercent: -100 };
 
-    const totalPayoutPool = pos.marketAccount.totalPayoutPool.toNumber() / 1e9;
+    const totalPayoutPool = lamportsToSol(pos.marketAccount.totalPayoutPool);
     const winningShares = winningOutcome.yes ? yesShares : noShares;
     const totalWinningSupply = winningOutcome.yes
       ? pos.marketAccount.yesSupply.toNumber() / 1e6
@@ -219,14 +220,14 @@ export default function UserDashboard() {
               type: side.yes !== undefined ? "BUY_YES" : "BUY_NO",
               question,
               amount: (event.data.quantity as anchor.BN).toNumber() / 1e6,
-              costOrPayout: (event.data.cost as anchor.BN).toNumber() / 1e9,
+              costOrPayout: lamportsToSol(event.data.cost as anchor.BN),
               timeStr,
             });
           } else if (
             event.name === "RewardsClaimed" &&
             (event.data.claimer as PublicKey).toBase58() === walletKey
           ) {
-            const payout = (event.data.payout as anchor.BN).toNumber() / 1e9;
+            const payout = lamportsToSol(event.data.payout as anchor.BN);
             claimedTotal += payout;
             items.push({
               signature: sig.signature,
@@ -240,7 +241,7 @@ export default function UserDashboard() {
             event.name === "RefundClaimed" &&
             (event.data.user as PublicKey).toBase58() === walletKey
           ) {
-            const refund = (event.data.refund as anchor.BN).toNumber() / 1e9;
+            const refund = lamportsToSol(event.data.refund as anchor.BN);
             claimedTotal += refund;
             items.push({
               signature: sig.signature,
@@ -363,7 +364,7 @@ export default function UserDashboard() {
     let winCount = 0;
 
     positions.forEach((p) => {
-      const invested = p.account.totalSpentLamports.toNumber() / 1e9;
+      const invested = lamportsToSol(p.account.totalSpentLamports);
       totalInvested += invested;
 
       const status = getMarketStatusString(p.marketAccount.status);
@@ -423,7 +424,7 @@ export default function UserDashboard() {
     let total = 0;
 
     positions.forEach((p) => {
-      const invested = p.account.totalSpentLamports.toNumber() / 1e9;
+      const invested = lamportsToSol(p.account.totalSpentLamports);
       const cat = getCategoryString(p.marketAccount.category) as keyof typeof breakdown;
       if (breakdown[cat] !== undefined) breakdown[cat] += invested;
       else breakdown.Other += invested;
@@ -628,7 +629,7 @@ export default function UserDashboard() {
                     const noShares = pos.account.noAmount.toNumber() / 1e6;
                     const side = yesShares > 0 ? "YES" : "NO";
                     const shares = yesShares > 0 ? yesShares : noShares;
-                    const invested = pos.account.totalSpentLamports.toNumber() / 1e9;
+                    const invested = lamportsToSol(pos.account.totalSpentLamports);
                     const marketKey = pos.account.market.toBase58();
 
                     return (
