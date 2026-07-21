@@ -41,7 +41,7 @@ pub struct BuyShares<'info> {
         mut,
         seeds = [YES_MINT_SEED, market.key().as_ref()],
         bump,
-        constraint = yes_mint.key() == market.yes_mint @ SolPredictError::InvalidOracleFeed,
+        constraint = yes_mint.key() == market.yes_mint @ SolPredictError::InvalidMint,
     )]
     pub yes_mint: Account<'info, Mint>,
 
@@ -50,7 +50,7 @@ pub struct BuyShares<'info> {
         mut,
         seeds = [NO_MINT_SEED, market.key().as_ref()],
         bump,
-        constraint = no_mint.key() == market.no_mint @ SolPredictError::InvalidOracleFeed,
+        constraint = no_mint.key() == market.no_mint @ SolPredictError::InvalidMint,
     )]
     pub no_mint: Account<'info, Mint>,
 

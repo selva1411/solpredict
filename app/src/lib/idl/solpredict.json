@@ -1,5 +1,5 @@
 {
-  "address": "FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD",
+  "address": "7u8AKzykURmgChg8Ez4uihUnAPcVR6XcvL953pmbXZPA",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -813,6 +813,7 @@
           "docs": [
             "Market — must be Settled."
           ],
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1287,6 +1288,358 @@
       ]
     },
     {
+      "name": "sell_shares",
+      "docs": [
+        "Sell YES or NO shares back to the pool before market expiry."
+      ],
+      "discriminator": [
+        184,
+        164,
+        169,
+        16,
+        231,
+        158,
+        199,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yes_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "no_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller_yes_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "seller"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "yes_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "seller_no_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "seller"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "no_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "user_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "seller"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": {
+            "defined": {
+              "name": "Side"
+            }
+          }
+        },
+        {
+          "name": "quantity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "settle_market",
       "docs": [
         "Settle a market using a Pyth oracle price (admin-only)."
@@ -1672,6 +2025,19 @@
         47,
         22
       ]
+    },
+    {
+      "name": "SharesSold",
+      "discriminator": [
+        35,
+        231,
+        5,
+        53,
+        228,
+        158,
+        113,
+        251
+      ]
     }
   ],
   "errors": [
@@ -1737,91 +2103,96 @@
     },
     {
       "code": 6012,
+      "name": "InvalidMint",
+      "msg": "Provided mint does not match market's configured mint"
+    },
+    {
+      "code": 6013,
       "name": "MathOverflow",
       "msg": "Arithmetic overflow or underflow detected"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "InvalidQuantity",
       "msg": "Quantity must be greater than zero and within limits"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "QuestionTooLong",
       "msg": "Question text exceeds maximum length"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "DescriptionTooLong",
       "msg": "Description text exceeds maximum length"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "InvalidEndTime",
       "msg": "End time must be in the future"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "SharePriceTooLow",
       "msg": "Share price is below the minimum allowed"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "TreasuryInsufficient",
       "msg": "Treasury balance insufficient for payout"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "FeeTooHigh",
       "msg": "Fee percentage exceeds maximum allowed (10%)"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "FeeAlreadyWithdrawn",
       "msg": "Protocol fee has already been withdrawn"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "UseOracleSettlement",
       "msg": "Price-backed markets must use settle_market with oracle price feed"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "InvalidOutcome",
       "msg": "Invalid outcome: must be 1 (Yes) or 2 (No)"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "UseManualSettlement",
       "msg": "Markets without a price feed must use settle_market_manual"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "MarketNotEnded",
       "msg": "Market has not ended yet"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "NotAWinner",
       "msg": "User did not win this market"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "InsufficientShares",
       "msg": "Insufficient shares to claim"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "InvalidMarket",
       "msg": "Invalid market ID"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "CryptoMustUseOracle",
       "msg": "Crypto markets must use oracle settlement"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "NoFeesToWithdraw",
       "msg": "No fees to withdraw"
     }
@@ -2123,6 +2494,13 @@
             "type": "bool"
           },
           {
+            "name": "total_claimed",
+            "docs": [
+              "Total lamports already claimed by winners (prevents treasury over-drain)."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "settled_price",
             "docs": [
               "Oracle price used for settlement (stored for transparency/auditability)."
@@ -2341,6 +2719,41 @@
           },
           {
             "name": "new_no_pool",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SharesSold",
+      "docs": [
+        "Emitted when a user sells shares back to the pool before expiry."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": {
+              "defined": {
+                "name": "Side"
+              }
+            }
+          },
+          {
+            "name": "quantity",
+            "type": "u64"
+          },
+          {
+            "name": "refund",
             "type": "u64"
           }
         ]

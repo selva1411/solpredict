@@ -178,6 +178,7 @@ pub fn handler(
     market.total_payout_pool = 0;
     market.fee_collected = 0;
     market.fee_withdrawn = false;
+    market.total_claimed = 0;
     market.settled_price = 0;
     market.settled_expo = 0;
     market.settled_at = 0;

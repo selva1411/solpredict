@@ -41,6 +41,9 @@ pub enum SolPredictError {
     #[msg("Oracle price confidence interval too wide")]
     LowOracleConfidence,         // 6011
 
+    #[msg("Provided mint does not match market's configured mint")]
+    InvalidMint,
+
     #[msg("Arithmetic overflow or underflow detected")]
     MathOverflow,                // 6012
 

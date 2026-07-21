@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("FNLixfQFTWZNFd9YuPk4c6VwcUs4nC2Z7FzhJkhHL9eD");
+declare_id!("7u8AKzykURmgChg8Ez4uihUnAPcVR6XcvL953pmbXZPA");
 
 #[program]
 pub mod solpredict {
@@ -54,6 +54,11 @@ pub mod solpredict {
     /// Buy YES or NO shares on a market.
     pub fn buy_shares(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()> {
         instructions::buy_shares::handler(ctx, side, quantity)
+    }
+
+    /// Sell YES or NO shares back to the pool before market expiry.
+    pub fn sell_shares(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()> {
+        instructions::sell_shares::handler(ctx, side, quantity)
     }
 
     /// Settle a market using a Pyth oracle price (admin-only).

@@ -246,6 +246,11 @@ export default function MarketDetailPage() {
   const [showShareOptions, setShowShareOptions] = useState<boolean>(false);
   const [feeBps, setFeeBps] = useState<number | null>(null);
   const [treasuryBalance, setTreasuryBalance] = useState<number>(0);
+  const [userYesBalance, setUserYesBalance] = useState<number>(0);
+  const [userNoBalance, setUserNoBalance] = useState<number>(0);
+  const [sellQuantity, setSellQuantity] = useState<number>(10);
+  const [sellSide, setSellSide] = useState<"YES" | "NO">("YES");
+  const [showSellSection, setShowSellSection] = useState<boolean>(false);
 
   const MAX_POINTS = 120;
   const priceHistoryRef = useRef<{ time: number; price: number }[]>([]);
@@ -274,6 +279,24 @@ export default function MarketDetailPage() {
   const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
   const marketPda = new PublicKey(id as string);
 
+  const fetchUserBalances = async () => {
+    if (!wallet?.publicKey) return;
+    try {
+      const yesMintPda = getYesMintPda(marketPda, program.programId);
+      const noMintPda = getNoMintPda(marketPda, program.programId);
+      const yesAta = getAssociatedTokenAddressSync(yesMintPda, wallet.publicKey);
+      const noAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
+      const [yesAcc, noAcc] = await Promise.all([
+        connection.getTokenAccountBalance(yesAta).catch(() => null),
+        connection.getTokenAccountBalance(noAta).catch(() => null),
+      ]);
+      setUserYesBalance(yesAcc ? yesAcc.value.uiAmount ?? 0 : 0);
+      setUserNoBalance(noAcc ? noAcc.value.uiAmount ?? 0 : 0);
+    } catch (e) {
+      console.error("Error fetching user balances:", e);
+    }
+  };
+
   // Fetch market details and transactions
   const fetchMarket = async () => {
     try {
@@ -295,6 +318,7 @@ export default function MarketDetailPage() {
       }
       setTreasuryBalance(treasuryBal);
 
+      fetchUserBalances();
     } catch (err: unknown) {
       console.error("Error fetching market:", err);
       toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
@@ -646,6 +670,47 @@ export default function MarketDetailPage() {
     }
   };
 
+  const handleSell = async () => {
+    if (!wallet?.publicKey) {
+      toast.error("Please connect your wallet first.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const sideParam: { yes?: Record<string, never>; no?: Record<string, never> } = sellSide === "YES" ? { yes: {} } : { no: {} };
+      const yesMintPda = getYesMintPda(marketPda, program.programId);
+      const noMintPda = getNoMintPda(marketPda, program.programId);
+      const treasuryPda = getTreasuryPda(marketPda, program.programId);
+      const sellerYesAta = getAssociatedTokenAddressSync(yesMintPda, wallet.publicKey);
+      const sellerNoAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
+      const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
+
+      await program.methods
+        .sellShares(sideParam, new anchor.BN(sellQuantity))
+        .accounts({
+          seller: wallet.publicKey,
+          market: marketPda,
+          treasury: treasuryPda,
+          yesMint: yesMintPda,
+          noMint: noMintPda,
+          sellerYesAta,
+          sellerNoAta,
+          userPosition: userPositionPda,
+        } as Record<string, unknown>)
+        .rpc();
+
+      toast.success(`Sold ${sellQuantity} ${sellSide} shares!`);
+      fetchMarket();
+      fetchActivity();
+      fetchUserBalances();
+    } catch (err: unknown) {
+      console.error("Sell shares error:", err);
+      toast.error(`Sell failed: ${getFriendlyErrorMessage(err)}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatTargetPrice = (price: anchor.BN, expo: number): string => {
     const raw = price.toNumber();
     const divider = Math.pow(10, Math.abs(expo));
@@ -783,6 +848,77 @@ export default function MarketDetailPage() {
               ✗ Transaction failed. Check console.
             </div>
           )}
+
+          {/* ─── Sell Section ─── */}
+          <div className="pt-6 mt-6 border-t border-[#9e8e78]/30">
+            <button
+              onClick={() => setShowSellSection(!showSellSection)}
+              className="w-full flex items-center justify-between text-xs font-mono uppercase tracking-widest text-[#d6c4ac] hover:text-[#e5e2e1] transition-colors cursor-pointer"
+            >
+              <span>Sell Shares</span>
+              {showSellSection ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+            {showSellSection && (
+              <div className="mt-4 space-y-4">
+                <div className="flex gap-2 text-[10px] font-mono text-[#d6c4ac]">
+                  <span>Your YES: <span className="text-[#a1d494] font-bold">{userYesBalance.toFixed(2)}</span></span>
+                  <span>Your NO: <span className="text-[#ffb4ab] font-bold">{userNoBalance.toFixed(2)}</span></span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setSellSide("YES")}
+                    className={`py-2 text-xs font-bold uppercase tracking-wider rounded border cursor-pointer transition-all ${
+                      sellSide === "YES"
+                        ? "bg-[#a1d494] border-[#9e8e78] text-[#131313]"
+                        : "bg-[#0d0d0d] border-[#9e8e78]/30 text-[#d6c4ac]"
+                    }`}
+                  >
+                    Sell YES
+                  </button>
+                  <button
+                    onClick={() => setSellSide("NO")}
+                    className={`py-2 text-xs font-bold uppercase tracking-wider rounded border cursor-pointer transition-all ${
+                      sellSide === "NO"
+                        ? "bg-[#ffb4ab] border-[#9e8e78] text-[#131313]"
+                        : "bg-[#0d0d0d] border-[#9e8e78]/30 text-[#d6c4ac]"
+                    }`}
+                  >
+                    Sell NO
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
+                    className="w-8 h-8 rounded bg-[#0d0d0d] border border-[#9e8e78]/40 text-[#e5e2e1] text-sm font-mono cursor-pointer"
+                  >-</button>
+                  <input
+                    type="number"
+                    value={sellQuantity}
+                    onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
+                    className="flex-1 board-input text-center text-sm border-[#9e8e78]"
+                  />
+                  <button
+                    onClick={() => setSellQuantity(sellQuantity + 5)}
+                    className="w-8 h-8 rounded bg-[#0d0d0d] border border-[#9e8e78]/40 text-[#e5e2e1] text-sm font-mono cursor-pointer"
+                  >+</button>
+                </div>
+                <div className="text-[10px] font-mono text-[#d6c4ac] text-right">
+                  Refund: {(sellQuantity * sharePriceSol).toFixed(4)} SOL
+                </div>
+                <button
+                  disabled={submitting || (sellSide === "YES" ? userYesBalance < sellQuantity : userNoBalance < sellQuantity)}
+                  onClick={handleSell}
+                  className={`w-full py-2.5 rounded text-xs font-bold uppercase tracking-widest cursor-pointer transition-all ${
+                    sellSide === "YES"
+                      ? "bg-[#a1d494]/20 text-[#a1d494] border border-[#a1d494]/40 hover:bg-[#a1d494]/30"
+                      : "bg-[#ffb4ab]/20 text-[#ffb4ab] border border-[#ffb4ab]/40 hover:bg-[#ffb4ab]/30"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {submitting ? "Processing..." : `Sell ${sellQuantity} ${sellSide}`}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

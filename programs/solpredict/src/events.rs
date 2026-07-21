@@ -61,3 +61,13 @@ pub struct FeesWithdrawn {
     pub market_id: u64,
     pub amount: u64,
 }
+
+/// Emitted when a user sells shares back to the pool before expiry.
+#[event]
+pub struct SharesSold {
+    pub market_id: u64,
+    pub seller: Pubkey,
+    pub side: Side,
+    pub quantity: u64,
+    pub refund: u64,
+}

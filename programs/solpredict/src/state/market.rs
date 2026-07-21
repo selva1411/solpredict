@@ -125,6 +125,9 @@ pub struct Market {
     /// Double-withdraw guard for admin fee withdrawal.
     pub fee_withdrawn: bool,
 
+    /// Total lamports already claimed by winners (prevents treasury over-drain).
+    pub total_claimed: u64,
+
     /// Oracle price used for settlement (stored for transparency/auditability).
     pub settled_price: i64,
 
@@ -169,6 +172,7 @@ impl Market {
     /// 8  total_payout_pool (u64)
     /// 8  fee_collected (u64)
     /// 1  fee_withdrawn (bool)
+    /// 8  total_claimed (u64)
     /// 8  settled_price (i64)
     /// 4  settled_expo (i32)
     /// 8  settled_at (i64)
@@ -198,6 +202,7 @@ impl Market {
         + 8                     // total_payout_pool
         + 8                     // fee_collected
         + 1                     // fee_withdrawn
+        + 8                     // total_claimed
         + 8                     // settled_price
         + 4                     // settled_expo
         + 8                     // settled_at

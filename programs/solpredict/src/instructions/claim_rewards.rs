@@ -20,6 +20,7 @@ pub struct ClaimRewards<'info> {
 
     /// Market — must be Settled.
     #[account(
+        mut,
         seeds = [MARKET_SEED, market.market_id.to_le_bytes().as_ref()],
         bump = market.bump,
         constraint = market.status == MarketStatus::Settled @ SolPredictError::MarketNotSettled,
@@ -137,13 +138,23 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
     );
     anchor_lang::system_program::transfer(cpi_ctx, payout)?;
 
-    // Defense-in-depth: verify treasury retains rent-exempt minimum or is empty
-    let treasury_info = ctx.accounts.treasury.to_account_info();
+    // Track total claimed — prevents over-draining the treasury
+    let market = &mut ctx.accounts.market;
+    market.total_claimed = market
+        .total_claimed
+        .checked_add(payout)
+        .ok_or(SolPredictError::MathOverflow)?;
+
+    // Verify treasury still has enough to cover remaining unclaimed payouts
+    let remaining = market
+        .total_payout_pool
+        .checked_sub(market.total_claimed)
+        .ok_or(SolPredictError::MathOverflow)?;
+    let treasury_balance = ctx.accounts.treasury.to_account_info().lamports();
     let rent = Rent::get()?;
     let min_balance = rent.minimum_balance(0);
-    let balance = treasury_info.lamports();
     require!(
-        balance >= min_balance || balance == 0,
+        treasury_balance >= remaining + min_balance,
         SolPredictError::TreasuryInsufficient
     );
 

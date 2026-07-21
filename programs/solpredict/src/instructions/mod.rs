@@ -1,6 +1,7 @@
 pub mod initialize_config;
 pub mod initialize_market;
 pub mod buy_shares;
+pub mod sell_shares;
 pub mod settle_market;
 pub mod claim_rewards;
 pub mod cancel_market;
@@ -13,6 +14,7 @@ pub mod settle_market_manual;
 pub use initialize_config::*;
 pub use initialize_market::*;
 pub use buy_shares::*;
+pub use sell_shares::*;
 pub use settle_market::*;
 pub use claim_rewards::*;
 pub use cancel_market::*;
