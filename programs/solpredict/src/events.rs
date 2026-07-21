@@ -71,3 +71,11 @@ pub struct SharesSold {
     pub quantity: u64,
     pub refund: u64,
 }
+
+/// Emitted when a user closes their position account to reclaim rent.
+#[event]
+pub struct PositionClosed {
+    pub market_id: u64,
+    pub user: Pubkey,
+    pub rent_reclaimed: u64,
+}

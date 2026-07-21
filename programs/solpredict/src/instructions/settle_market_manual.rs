@@ -28,9 +28,11 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // Block price-backed markets (non-zero oracle_feed_id) — they must use settle_market
+    // Block price-backed markets unless the oracle is unresponsive past the 24h fallback window
+    let is_oracle_market = market.oracle_feed_id != [0u8; 32];
+    let is_oracle_fallback = clock.unix_timestamp >= market.resolve_ts.saturating_add(86400); // 24-hour grace period
     require!(
-        market.oracle_feed_id == [0u8; 32],
+        !is_oracle_market || is_oracle_fallback,
         SolPredictError::UseOracleSettlement
     );
 

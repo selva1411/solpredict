@@ -1,5 +1,5 @@
 {
-  "address": "7u8AKzykURmgChg8Ez4uihUnAPcVR6XcvL953pmbXZPA",
+  "address": "CAiuXi4n3uMFQKEuG8HCV3KZeBsCE91BPaMFJR8RP51T",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -744,7 +744,7 @@
         {
           "name": "user_position",
           "docs": [
-            "UserPosition PDA — double-refund guard."
+            "UserPosition PDA — double-refund guard and rent recovery."
           ],
           "writable": true,
           "pda": {
@@ -966,7 +966,7 @@
         {
           "name": "user_position",
           "docs": [
-            "UserPosition PDA — double-claim guard."
+            "UserPosition PDA — double-claim guard and rent recovery."
           ],
           "writable": true,
           "pda": {
@@ -998,6 +998,95 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_position",
+      "docs": [
+        "Close UserPosition PDA after market resolution and reclaim ~0.0015 SOL rent deposit."
+      ],
+      "discriminator": [
+        123,
+        134,
+        81,
+        0,
+        49,
+        68,
+        98,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "docs": [
+            "Position owner reclaiming rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market — must NOT be Open (trading must be ended/settled/cancelled)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_position",
+          "docs": [
+            "UserPosition PDA — closed and rent sent back to user."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
@@ -1284,6 +1373,92 @@
         {
           "name": "share_price_lamports",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "mock_create_price_update",
+      "docs": [
+        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
+      ],
+      "discriminator": [
+        103,
+        162,
+        52,
+        4,
+        77,
+        138,
+        211,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "price_update",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  99,
+                  107,
+                  95,
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  102,
+                  101,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feed_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "type": "i64"
+        },
+        {
+          "name": "conf",
+          "type": "u64"
+        },
+        {
+          "name": "exponent",
+          "type": "i32"
+        },
+        {
+          "name": "publish_time",
+          "type": "i64"
         }
       ]
     },
@@ -1988,6 +2163,19 @@
       ]
     },
     {
+      "name": "PositionClosed",
+      "discriminator": [
+        157,
+        163,
+        227,
+        228,
+        13,
+        97,
+        138,
+        121
+      ]
+    },
+    {
       "name": "RefundClaimed",
       "discriminator": [
         136,
@@ -2630,6 +2818,29 @@
           },
           {
             "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionClosed",
+      "docs": [
+        "Emitted when a user closes their position account to reclaim rent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_reclaimed",
+            "type": "u64"
           }
         ]
       }

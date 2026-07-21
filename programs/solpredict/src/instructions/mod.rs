@@ -10,6 +10,7 @@ pub mod withdraw_fees;
 #[cfg(feature = "devnet-mock")]
 pub mod mock_create_price_update;
 pub mod settle_market_manual;
+pub mod close_position;
 
 pub use initialize_config::*;
 pub use initialize_market::*;
@@ -23,3 +24,4 @@ pub use withdraw_fees::*;
 #[cfg(feature = "devnet-mock")]
 pub use mock_create_price_update::*;
 pub use settle_market_manual::*;
+pub use close_position::*;

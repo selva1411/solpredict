@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("7u8AKzykURmgChg8Ez4uihUnAPcVR6XcvL953pmbXZPA");
+declare_id!("CAiuXi4n3uMFQKEuG8HCV3KZeBsCE91BPaMFJR8RP51T");
 
 #[program]
 pub mod solpredict {
@@ -89,6 +89,11 @@ pub mod solpredict {
     /// Withdraw collected protocol fees from a settled market (admin-only).
     pub fn withdraw_fees(ctx: Context<WithdrawFees>) -> Result<()> {
         instructions::withdraw_fees::handler(ctx)
+    }
+
+    /// Close UserPosition PDA after market resolution and reclaim ~0.0015 SOL rent deposit.
+    pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
+        instructions::close_position::handler(ctx)
     }
 
     /// Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet).

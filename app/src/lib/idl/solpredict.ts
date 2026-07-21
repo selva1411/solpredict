@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "7u8AKzykURmgChg8Ez4uihUnAPcVR6XcvL953pmbXZPA",
+  "address": "CAiuXi4n3uMFQKEuG8HCV3KZeBsCE91BPaMFJR8RP51T",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -750,7 +750,7 @@ export type Solpredict = {
         {
           "name": "userPosition",
           "docs": [
-            "UserPosition PDA — double-refund guard."
+            "UserPosition PDA — double-refund guard and rent recovery."
           ],
           "writable": true,
           "pda": {
@@ -972,7 +972,7 @@ export type Solpredict = {
         {
           "name": "userPosition",
           "docs": [
-            "UserPosition PDA — double-claim guard."
+            "UserPosition PDA — double-claim guard and rent recovery."
           ],
           "writable": true,
           "pda": {
@@ -1004,6 +1004,95 @@ export type Solpredict = {
         {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closePosition",
+      "docs": [
+        "Close UserPosition PDA after market resolution and reclaim ~0.0015 SOL rent deposit."
+      ],
+      "discriminator": [
+        123,
+        134,
+        81,
+        0,
+        49,
+        68,
+        98,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "docs": [
+            "Position owner reclaiming rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "docs": [
+            "Market — must NOT be Open (trading must be ended/settled/cancelled)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "userPosition",
+          "docs": [
+            "UserPosition PDA — closed and rent sent back to user."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
         },
         {
           "name": "systemProgram",
@@ -1290,6 +1379,92 @@ export type Solpredict = {
         {
           "name": "sharePriceLamports",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "mockCreatePriceUpdate",
+      "docs": [
+        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
+      ],
+      "discriminator": [
+        103,
+        162,
+        52,
+        4,
+        77,
+        138,
+        211,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "priceUpdate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  99,
+                  107,
+                  95,
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  102,
+                  101,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feedId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "type": "i64"
+        },
+        {
+          "name": "conf",
+          "type": "u64"
+        },
+        {
+          "name": "exponent",
+          "type": "i32"
+        },
+        {
+          "name": "publishTime",
+          "type": "i64"
         }
       ]
     },
@@ -1994,6 +2169,19 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "positionClosed",
+      "discriminator": [
+        157,
+        163,
+        227,
+        228,
+        13,
+        97,
+        138,
+        121
+      ]
+    },
+    {
       "name": "refundClaimed",
       "discriminator": [
         136,
@@ -2636,6 +2824,29 @@ export type Solpredict = {
           },
           {
             "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "positionClosed",
+      "docs": [
+        "Emitted when a user closes their position account to reclaim rent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": "u64"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "rentReclaimed",
+            "type": "u64"
           }
         ]
       }

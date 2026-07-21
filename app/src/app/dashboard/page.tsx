@@ -357,6 +357,29 @@ export default function UserDashboard() {
     }
   };
 
+  const handleClosePosition = async (pos: PositionWithMarket) => {
+    if (!wallet?.publicKey) return;
+    try {
+      setClaimingId(pos.publicKey.toBase58());
+      await program.methods
+        .closePosition()
+        .accounts({
+          user: wallet.publicKey,
+          market: pos.account.market,
+          userPosition: pos.publicKey,
+        } as any)
+        .rpc();
+
+      toast.success("Position closed & rent (~0.0015 SOL) reclaimed!");
+      fetchDashboardData();
+      fetchPersonalActivity();
+    } catch (err: any) {
+      toast.error(`Failed to close position: ${getFriendlyErrorMessage(err)}`);
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   const stats = useMemo(() => {
     let totalInvested = 0;
     let activeCount = 0;
@@ -579,9 +602,13 @@ export default function UserDashboard() {
                             {claimingId === posKey ? "Claiming..." : "Claim Rewards"}
                           </button>
                         ) : (
-                          <span className="text-xs text-[#d6c4ac] font-mono italic">
-                            No payout claimable (lost)
-                          </span>
+                          <button
+                            onClick={() => handleClosePosition(pos)}
+                            disabled={claimingId === posKey}
+                            className="glass-panel text-xs py-1.5 px-3 text-[#ffd89c] hover:bg-[#353534] transition cursor-pointer disabled:opacity-50 w-full sm:w-auto font-mono font-semibold"
+                          >
+                            {claimingId === posKey ? "Reclaiming..." : "Reclaim Rent (~0.0015 SOL)"}
+                          </button>
                         )}
                       </div>
                     </motion.div>

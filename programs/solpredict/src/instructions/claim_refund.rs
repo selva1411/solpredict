@@ -64,9 +64,10 @@ pub struct ClaimRefund<'info> {
     )]
     pub claimer_no_ata: Account<'info, TokenAccount>,
 
-    /// UserPosition PDA — double-refund guard.
+    /// UserPosition PDA — double-refund guard and rent recovery.
     #[account(
         mut,
+        close = claimer,
         seeds = [POSITION_SEED, market.key().as_ref(), claimer.key().as_ref()],
         bump = user_position.bump,
         constraint = user_position.owner == claimer.key() @ SolPredictError::Unauthorized,
@@ -99,7 +100,10 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         SolPredictError::NothingToClaim
     );
 
-    // 3. Calculate refund: (yes_tokens + no_tokens) * share_price_lamports / BASE_UNITS_PER_SHARE
+    // 3. Mark user position as claimed FIRST (Checks-Effects-Interactions)
+    ctx.accounts.user_position.claimed = true;
+
+    // 4. Calculate refund: (yes_tokens + no_tokens) * share_price_lamports / BASE_UNITS_PER_SHARE
     //    user gets back EXACTLY what they paid, no fee taken on cancellation.
     let total_tokens = yes_tokens
         .checked_add(no_tokens)
@@ -111,7 +115,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         .ok_or(SolPredictError::MathOverflow)?;
     let refund_u64 = u64::try_from(refund).map_err(|_| SolPredictError::MathOverflow)?;
 
-    // 4. Burn YES tokens if non-zero
+    // 5. Burn YES tokens if non-zero
     if yes_tokens > 0 {
         token::burn(
             CpiContext::new(
@@ -126,7 +130,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         )?;
     }
 
-    // 5. Burn NO tokens if non-zero
+    // 6. Burn NO tokens if non-zero
     if no_tokens > 0 {
         token::burn(
             CpiContext::new(
@@ -141,7 +145,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         )?;
     }
 
-    // 6. Transfer refund lamports treasury → user via CPI (treasury is a SystemAccount)
+    // 7. Transfer refund lamports treasury → user via CPI (treasury is a SystemAccount)
     let market_key = ctx.accounts.market.key();
     let treasury_bump = ctx.accounts.market.treasury_bump;
     let seeds = &[
@@ -161,7 +165,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
     );
     anchor_lang::system_program::transfer(cpi_ctx, refund_u64)?;
 
-    // 7. Verify treasury retains rent-exempt minimum or is completely empty
+    // 8. Verify treasury retains rent-exempt minimum or is completely empty
     let treasury_info = ctx.accounts.treasury.to_account_info();
     let rent = Rent::get()?;
     let min_balance = rent.minimum_balance(0);
@@ -170,8 +174,6 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         balance >= min_balance || balance == 0,
         SolPredictError::TreasuryInsufficient
     );
-
-    ctx.accounts.user_position.claimed = true;
 
     // 9. Emit event
     emit!(RefundClaimed {

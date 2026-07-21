@@ -126,6 +126,7 @@ pub fn compare_prices(
         // Oracle has more precision (more negative exponent)
         // Scale target UP to match oracle's precision
         let diff = (target_expo - oracle_expo) as u32;
+        require!(diff <= 12, SolPredictError::MathOverflow);
         let scale = 10i128
             .checked_pow(diff)
             .ok_or(SolPredictError::MathOverflow)?;
@@ -137,6 +138,7 @@ pub fn compare_prices(
         // Target has more precision
         // Scale oracle UP to match target's precision
         let diff = (oracle_expo - target_expo) as u32;
+        require!(diff <= 12, SolPredictError::MathOverflow);
         let scale = 10i128
             .checked_pow(diff)
             .ok_or(SolPredictError::MathOverflow)?;

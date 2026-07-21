@@ -54,9 +54,10 @@ pub struct ClaimRewards<'info> {
     )]
     pub claimer_ata: Account<'info, TokenAccount>,
 
-    /// UserPosition PDA — double-claim guard.
+    /// UserPosition PDA — double-claim guard and rent recovery.
     #[account(
         mut,
+        close = claimer,
         seeds = [POSITION_SEED, market.key().as_ref(), claimer.key().as_ref()],
         bump = user_position.bump,
         constraint = user_position.owner == claimer.key() @ SolPredictError::Unauthorized,
@@ -151,10 +152,8 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         .checked_sub(market.total_claimed)
         .ok_or(SolPredictError::MathOverflow)?;
     let treasury_balance = ctx.accounts.treasury.to_account_info().lamports();
-    let rent = Rent::get()?;
-    let min_balance = rent.minimum_balance(0);
     require!(
-        treasury_balance >= remaining + min_balance,
+        treasury_balance >= remaining,
         SolPredictError::TreasuryInsufficient
     );
 
