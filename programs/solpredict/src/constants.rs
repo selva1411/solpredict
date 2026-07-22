@@ -23,6 +23,9 @@ pub const YES_MINT_SEED: &[u8] = b"yes_mint";
 #[constant]
 pub const NO_MINT_SEED: &[u8] = b"no_mint";
 
+#[constant]
+pub const ORDER_SEED: &[u8] = b"order";
+
 // ============================================================================
 // Market Constraints
 // ============================================================================

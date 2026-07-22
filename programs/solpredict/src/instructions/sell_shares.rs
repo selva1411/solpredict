@@ -1,11 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
+use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount};
 
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::SharesSold;
 use crate::state::{Market, MarketStatus, Side, UserPosition};
+use crate::utils::payout_math;
 
 #[derive(Accounts)]
 pub struct SellShares<'info> {
@@ -41,14 +43,16 @@ pub struct SellShares<'info> {
     pub no_mint: Account<'info, Mint>,
 
     #[account(
-        mut,
+        init_if_needed,
+        payer = seller,
         associated_token::mint = yes_mint,
         associated_token::authority = seller,
     )]
     pub seller_yes_ata: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
+        init_if_needed,
+        payer = seller,
         associated_token::mint = no_mint,
         associated_token::authority = seller,
     )]
@@ -64,6 +68,7 @@ pub struct SellShares<'info> {
     pub user_position: Account<'info, UserPosition>,
 
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -89,34 +94,55 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
     let mint_amount = (quantity as u128)
         .checked_mul(BASE_UNITS_PER_SHARE as u128)
         .ok_or(SolPredictError::MathOverflow)?;
-    let mint_amount_u64 = u64::try_from(mint_amount).map_err(|_| SolPredictError::MathOverflow)?;
+    let mint_amount_u64 = u64::try_from(mint_amount).map_err(|_| error!(SolPredictError::MathOverflow))?;
 
-    let (mint, ata) = match side {
-        Side::Yes => (&ctx.accounts.yes_mint, &ctx.accounts.seller_yes_ata),
-        Side::No => (&ctx.accounts.no_mint, &ctx.accounts.seller_no_ata),
+    // Choose mint and ATA based on side
+    let (ata_amount, is_yes) = match side {
+        Side::Yes => (ctx.accounts.seller_yes_ata.amount, true),
+        Side::No  => (ctx.accounts.seller_no_ata.amount, false),
     };
 
-    require!(
-        ata.amount >= mint_amount_u64,
-        SolPredictError::InsufficientShares
-    );
+    require!(ata_amount >= mint_amount_u64, SolPredictError::InsufficientShares);
+
+    // Snapshot pool values before mutation
+    let side_pool = if is_yes { market.yes_pool_lamports } else { market.no_pool_lamports };
+    let total_pool = market.yes_pool_lamports.saturating_add(market.no_pool_lamports);
+    let treasury_balance = ctx.accounts.treasury.lamports();
+    let share_price = market.share_price_lamports;
+    let market_id = market.market_id;
+
+    // Calculate safe refund using inverse CPMM (never drains treasury)
+    let refund = payout_math::calculate_sell_refund(
+        quantity,
+        share_price,
+        side_pool,
+        total_pool,
+        treasury_balance,
+    )?;
+
+    require!(refund > 0, SolPredictError::MathOverflow);
+    require!(refund < treasury_balance, SolPredictError::MathOverflow);
+
+    // Burn tokens first
+    let (mint_info, ata_info) = if is_yes {
+        (ctx.accounts.yes_mint.to_account_info(), ctx.accounts.seller_yes_ata.to_account_info())
+    } else {
+        (ctx.accounts.no_mint.to_account_info(), ctx.accounts.seller_no_ata.to_account_info())
+    };
 
     token::burn(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             Burn {
-                mint: mint.to_account_info(),
-                from: ata.to_account_info(),
+                mint: mint_info,
+                from: ata_info,
                 authority: ctx.accounts.seller.to_account_info(),
             },
         ),
         mint_amount_u64,
     )?;
 
-    let refund = quantity
-        .checked_mul(market.share_price_lamports)
-        .ok_or(SolPredictError::MathOverflow)?;
-
+    // Transfer SOL refund from treasury to seller
     let market_key = ctx.accounts.market.key();
     let treasury_bump = ctx.accounts.market.treasury_bump;
     let seeds = &[TREASURY_SEED, market_key.as_ref(), &[treasury_bump]];
@@ -134,52 +160,28 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
         refund,
     )?;
 
+    // Update market pool accounting
     let market = &mut ctx.accounts.market;
-    match side {
-        Side::Yes => {
-            market.yes_pool_lamports = market
-                .yes_pool_lamports
-                .checked_sub(refund)
-                .ok_or(SolPredictError::MathOverflow)?;
-            market.yes_supply = market
-                .yes_supply
-                .checked_sub(mint_amount_u64)
-                .ok_or(SolPredictError::MathOverflow)?;
-        }
-        Side::No => {
-            market.no_pool_lamports = market
-                .no_pool_lamports
-                .checked_sub(refund)
-                .ok_or(SolPredictError::MathOverflow)?;
-            market.no_supply = market
-                .no_supply
-                .checked_sub(mint_amount_u64)
-                .ok_or(SolPredictError::MathOverflow)?;
-        }
+    if is_yes {
+        market.yes_pool_lamports = market.yes_pool_lamports.saturating_sub(refund);
+        market.yes_supply = market.yes_supply.saturating_sub(mint_amount_u64);
+    } else {
+        market.no_pool_lamports = market.no_pool_lamports.saturating_sub(refund);
+        market.no_supply = market.no_supply.saturating_sub(mint_amount_u64);
     }
 
+    // Update user position — use saturating_sub to prevent underflow on position accounting
     let position = &mut ctx.accounts.user_position;
-    match side {
-        Side::Yes => {
-            position.yes_amount = position
-                .yes_amount
-                .checked_sub(mint_amount_u64)
-                .ok_or(SolPredictError::MathOverflow)?;
-        }
-        Side::No => {
-            position.no_amount = position
-                .no_amount
-                .checked_sub(mint_amount_u64)
-                .ok_or(SolPredictError::MathOverflow)?;
-        }
+    if is_yes {
+        position.yes_amount = position.yes_amount.saturating_sub(mint_amount_u64);
+    } else {
+        position.no_amount = position.no_amount.saturating_sub(mint_amount_u64);
     }
-    position.total_spent_lamports = position
-        .total_spent_lamports
-        .checked_sub(refund)
-        .ok_or(SolPredictError::MathOverflow)?;
+    // total_spent_lamports tracks net cost — use saturating sub to avoid underflow
+    position.total_spent_lamports = position.total_spent_lamports.saturating_sub(refund);
 
     emit!(SharesSold {
-        market_id: market.market_id,
+        market_id,
         seller: ctx.accounts.seller.key(),
         side,
         quantity,

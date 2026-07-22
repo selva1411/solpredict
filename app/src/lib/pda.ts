@@ -66,3 +66,21 @@ export function getMockPriceUpdatePda(payer: PublicKey, programId: PublicKey): P
   );
   return pda;
 }
+
+export function getOrderPda(
+  marketPda: PublicKey,
+  makerPubkey: PublicKey,
+  orderId: anchor.BN,
+  programId: PublicKey
+): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("order"),
+      marketPda.toBuffer(),
+      makerPubkey.toBuffer(),
+      orderId.toArrayLike(Buffer, "le", 8),
+    ],
+    programId
+  );
+  return pda;
+}

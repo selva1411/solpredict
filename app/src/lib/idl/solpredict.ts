@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "CAiuXi4n3uMFQKEuG8HCV3KZeBsCE91BPaMFJR8RP51T",
+  "address": "BtFo8oXYmyhpFg8JSZzY6WkeTuhNnEDBn6Vp4Xmbfmp",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -465,6 +465,100 @@ export type Solpredict = {
               }
             ]
           }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancelOrder",
+      "docs": [
+        "Cancel an open limit order and reclaim escrowed SOL or tokens."
+      ],
+      "discriminator": [
+        95,
+        129,
+        237,
+        240,
+        8,
+        49,
+        223,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "account",
+                "path": "order.order_id",
+                "account": "order"
+              }
+            ]
+          }
+        },
+        {
+          "name": "makerTokenAta",
+          "writable": true
+        },
+        {
+          "name": "orderTokenEscrow",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1102,6 +1196,113 @@ export type Solpredict = {
       "args": []
     },
     {
+      "name": "fillOrder",
+      "docs": [
+        "Match/fill an open limit order (P2P trade)."
+      ],
+      "discriminator": [
+        232,
+        122,
+        115,
+        25,
+        199,
+        143,
+        136,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "taker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "account",
+                "path": "order.order_id",
+                "account": "order"
+              }
+            ]
+          }
+        },
+        {
+          "name": "takerTokenAta",
+          "writable": true
+        },
+        {
+          "name": "makerTokenAta",
+          "writable": true
+        },
+        {
+          "name": "orderTokenEscrow",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "quantity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initializeConfig",
       "docs": [
         "One-time program bootstrap. Sets admin and fee percentage."
@@ -1469,6 +1670,125 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "placeOrder",
+      "docs": [
+        "Place an on-chain limit order (Bid or Ask) for a prediction outcome."
+      ],
+      "discriminator": [
+        51,
+        194,
+        155,
+        175,
+        109,
+        130,
+        96,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "arg",
+                "path": "orderId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "makerTokenAta",
+          "writable": true
+        },
+        {
+          "name": "orderTokenEscrow",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "orderId",
+          "type": "u64"
+        },
+        {
+          "name": "side",
+          "type": {
+            "defined": {
+              "name": "side"
+            }
+          }
+        },
+        {
+          "name": "isBuy",
+          "type": "bool"
+        },
+        {
+          "name": "priceBps",
+          "type": "u64"
+        },
+        {
+          "name": "quantity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "sellShares",
       "docs": [
         "Sell YES or NO shares back to the pool before market expiry."
@@ -1801,6 +2121,10 @@ export type Solpredict = {
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -2102,6 +2426,19 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "order",
+      "discriminator": [
+        134,
+        173,
+        223,
+        185,
+        77,
+        86,
+        28,
+        51
+      ]
+    },
+    {
       "name": "userPosition",
       "discriminator": [
         251,
@@ -2389,6 +2726,26 @@ export type Solpredict = {
       "code": 6030,
       "name": "noFeesToWithdraw",
       "msg": "No fees to withdraw"
+    },
+    {
+      "code": 6031,
+      "name": "invalidPriceBps",
+      "msg": "Limit price basis points must be between 1 and 9999"
+    },
+    {
+      "code": 6032,
+      "name": "orderAlreadyFilled",
+      "msg": "Order is already filled"
+    },
+    {
+      "code": 6033,
+      "name": "orderCancelled",
+      "msg": "Order is already cancelled"
+    },
+    {
+      "code": 6034,
+      "name": "selfTradingNotAllowed",
+      "msg": "Cannot match trade against your own order"
     }
   ],
   "types": [
@@ -2829,6 +3186,116 @@ export type Solpredict = {
       }
     },
     {
+      "name": "order",
+      "docs": [
+        "Order PDA — represents an on-chain limit order (Bid or Ask) for a market.",
+        "Seeds: [\"order\", market.key(), maker.key(), order_id.to_le_bytes()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "docs": [
+              "Market account this order belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "maker",
+            "docs": [
+              "Order maker address."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "orderId",
+            "docs": [
+              "Unique order ID per user."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "side",
+            "docs": [
+              "Outcome side: YES or NO."
+            ],
+            "type": {
+              "defined": {
+                "name": "side"
+              }
+            }
+          },
+          {
+            "name": "isBuy",
+            "docs": [
+              "Order side: true = Buy (Bid), false = Sell (Ask)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "priceBps",
+            "docs": [
+              "Limit price in basis points (1 to 9999 representing 0.0001 to 0.9999 SOL per share)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "quantity",
+            "docs": [
+              "Total quantity of shares in base units (shares * 10^6)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "filledQuantity",
+            "docs": [
+              "Quantity already filled."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current order status."
+            ],
+            "type": {
+              "defined": {
+                "name": "orderStatus"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Order PDA canonical bump."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "orderStatus",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "open"
+          },
+          {
+            "name": "filled"
+          },
+          {
+            "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
       "name": "positionClosed",
       "docs": [
         "Emitted when a user closes their position account to reclaim rent."
@@ -3097,6 +3564,11 @@ export type Solpredict = {
       "name": "noMintSeed",
       "type": "bytes",
       "value": "[110, 111, 95, 109, 105, 110, 116]"
+    },
+    {
+      "name": "orderSeed",
+      "type": "bytes",
+      "value": "[111, 114, 100, 101, 114]"
     },
     {
       "name": "positionSeed",

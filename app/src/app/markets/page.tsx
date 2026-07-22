@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
-import { motion, AnimatePresence } from "framer-motion";
-import { Search, Clock, Coins, Star, HelpCircle, ArrowRight } from "lucide-react";
+import { motion, type Variants } from "framer-motion";
+import { Search, Clock, TrendingUp, Star, Flame, Zap, BarChart2 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
@@ -17,10 +17,7 @@ import { usePythPrices } from "@/hooks/usePythPrices";
 import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
 import { MarketCardSkeleton, EmptyState } from "@/components/StatePanels";
-import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
-import { cardHover, fadeInUp } from "@/lib/motion-variants";
-import dynamic from "next/dynamic";
 
 interface Market {
   publicKey: PublicKey;
@@ -42,15 +39,21 @@ interface Market {
 }
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
-
-const staggerContainer = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
+const CATEGORY_ICONS: Record<string, string> = {
+  Crypto: "₿",
+  Sports: "⚽",
+  Politics: "🗳",
+  Tech: "💻",
+  Other: "🌐",
 };
 
-const scaleIn = {
-  hidden: { opacity: 0, scale: 0.98 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeOut" as const } },
+const fadeIn: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.3, delay: i * 0.04, ease: "easeOut" as const },
+  }),
 };
 
 export default function MarketExplorer() {
@@ -75,7 +78,7 @@ export default function MarketExplorer() {
       setMarkets(allMarkets);
     } catch (err: unknown) {
       console.error(err);
-      toast.error(`Failed to load Explorer: ${getFriendlyErrorMessage(err)}`);
+      toast.error(`Failed to load markets: ${getFriendlyErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -95,7 +98,7 @@ export default function MarketExplorer() {
   const sortedAndFiltered = useMemo(() => {
     return markets
       .filter((m) => {
-        const matchesSearch = 
+        const matchesSearch =
           m.account.question.toLowerCase().includes(search.toLowerCase()) ||
           m.account.description.toLowerCase().includes(search.toLowerCase());
         const catName = CATEGORIES[m.account.category] || "Other";
@@ -115,15 +118,12 @@ export default function MarketExplorer() {
       });
   }, [markets, search, selectedCategory, selectedStatus, watchlistOnly, watchlist, sortBy]);
 
-  // Collect all feed IDs for live price fetching
   const allFeedHexes = useMemo(() => {
     const hexes: string[] = [];
     for (const m of sortedAndFiltered) {
       if (isOracleCategory(m.account.category) && m.account.oracleFeedId) {
         const hex = feedIdBytesToHex(m.account.oracleFeedId);
-        if (lookupFeedEntry(hex)) {
-          hexes.push(hex);
-        }
+        if (lookupFeedEntry(hex)) hexes.push(hex);
       }
     }
     return hexes;
@@ -131,114 +131,139 @@ export default function MarketExplorer() {
 
   const livePrices = usePythPrices(allFeedHexes);
 
-  return (
-    <div className="space-y-8 animate-fade-in font-sans">
-      <div className="border-b border-[#9e8e78]/30 pb-4">
-        <h1 className="text-3xl font-bold font-display text-[#e5e2e1] uppercase tracking-wide">
-          [■] EXPLORER DEPARTURES
-        </h1>
-        <p className="text-xs text-[#d6c4ac]">
-          Filter and query active prediction boards validated by trustless decentralized feeds.
-        </p>
-      </div>
+  // Stats banner
+  const openCount = markets.filter(m => m.account.status && "open" in m.account.status).length;
+  const totalVol = markets.reduce((acc, m) => acc + lamportsToSol(m.account.yesPoolLamports) + lamportsToSol(m.account.noPoolLamports), 0);
 
-      {/* Explorer Controls Form */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-end">
-        <div className="md:col-span-2 space-y-2">
-          <label className="text-[10px] uppercase font-mono font-bold text-[#d6c4ac]">Search Question</label>
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d6c4ac]" />
-            <input
-              type="text"
-              placeholder="SEARCH QUESTIONS..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-2.5 board-input text-xs tracking-wider border-board-border bg-board-panel"
-            />
+  return (
+    <div className="space-y-6 animate-fade-in font-sans">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-white/8">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-[#e5e2e1] tracking-tight">
+            Markets
+          </h1>
+          <p className="text-sm text-[#9e8e78] mt-1">
+            Trade on real-world outcomes · Powered by Solana
+          </p>
+        </div>
+        {/* Quick stats */}
+        <div className="flex items-center gap-4 text-[11px] font-mono">
+          <div className="text-center">
+            <div className="font-bold text-[#e5e2e1] text-base">{openCount}</div>
+            <div className="text-[#9e8e78]">Open markets</div>
+          </div>
+          <div className="w-px h-8 bg-white/10" />
+          <div className="text-center">
+            <div className="font-bold text-[#22c55e] text-base">{totalVol.toFixed(1)} SOL</div>
+            <div className="text-[#9e8e78]">Total volume</div>
           </div>
         </div>
-
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase font-mono font-bold text-[#d6c4ac]">Sort By</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "trending" | "volume" | "ends" | "newest")}
-            className="w-full board-input text-xs bg-board-panel border-board-border h-[38px]"
-          >
-            <option value="trending">Trending Volume</option>
-            <option value="volume">Highest Volume</option>
-            <option value="ends">Ending Soon</option>
-            <option value="newest">Newest Markets</option>
-          </select>
-        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 border-b border-[#9e8e78]/20 pb-4">
-        {/* Categories list */}
-        <div className="flex items-center space-x-1.5 sm:space-x-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-none">
-          <button
-            onClick={() => setSelectedCategory("All")}
-            className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded shrink-0 ${
-              selectedCategory === "All" ? "mechanical-switch-active" : "mechanical-switch-inactive"
-            }`}
-          >
-            ALL
-          </button>
-          {CATEGORIES.map((cat) => (
+      {/* Search + Sort Row */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9e8e78]" />
+          <input
+            type="text"
+            placeholder="Search markets..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0d] border border-[#9e8e78]/25 rounded-lg text-sm text-[#e5e2e1] placeholder-[#9e8e78]/60 focus:outline-none focus:border-[#ffd89c]/50 transition-colors"
+          />
+        </div>
+        <div className="flex gap-2">
+          {(["trending", "volume", "ends", "newest"] as const).map((s) => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded shrink-0 ${
-                selectedCategory === cat ? "mechanical-switch-active" : "mechanical-switch-inactive"
+              key={s}
+              onClick={() => setSortBy(s)}
+              className={`px-3 py-2 rounded-lg text-[11px] font-semibold capitalize cursor-pointer transition-all border ${
+                sortBy === s
+                  ? "bg-[#ffd89c]/10 border-[#ffd89c]/40 text-[#ffd89c]"
+                  : "bg-[#0d0d0d] border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1] hover:border-[#9e8e78]/40"
               }`}
             >
-              {cat.toUpperCase()}
+              {s === "trending" ? <Flame className="w-3 h-3 inline mr-1" /> : null}
+              {s === "volume" ? <BarChart2 className="w-3 h-3 inline mr-1" /> : null}
+              {s === "ends" ? <Clock className="w-3 h-3 inline mr-1" /> : null}
+              {s === "newest" ? <Zap className="w-3 h-3 inline mr-1" /> : null}
+              {s === "trending" ? "Hot" : s === "ends" ? "Ending" : s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="flex items-center gap-2 sm:gap-4">
-          {/* Watchlist Toggle Switch */}
+      {/* Category Tabs */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none border-b border-white/8">
+        {["All", ...CATEGORIES].map((cat) => (
           <button
-            onClick={() => setWatchlistOnly(!watchlistOnly)}
-            className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded ${
-              watchlistOnly ? "mechanical-switch-active" : "mechanical-switch-inactive"
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all border ${
+              selectedCategory === cat
+                ? "bg-white text-[#131313] border-transparent font-bold"
+                : "bg-transparent border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1] hover:border-[#9e8e78]/40"
             }`}
           >
-            ⭐ WATCHLIST
+            {cat !== "All" && <span className="mr-1">{CATEGORY_ICONS[cat]}</span>}
+            {cat}
           </button>
+        ))}
 
-          {/* Status Selection */}
-          <div className="flex items-center gap-1">
-            {(["Open", "Settled", "Cancelled", "All"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setSelectedStatus(s)}
-                className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded ${
-                  selectedStatus === s ? "mechanical-switch-active" : "mechanical-switch-inactive"
-                }`}
-              >
-                {s.toUpperCase()}
-              </button>
-            ))}
-          </div>
+        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setWatchlistOnly(!watchlistOnly)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold cursor-pointer transition-all border ${
+              watchlistOnly
+                ? "bg-[#ffd89c]/10 border-[#ffd89c]/40 text-[#ffd89c]"
+                : "bg-transparent border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1]"
+            }`}
+          >
+            <Star className={`w-3 h-3 ${watchlistOnly ? "fill-current" : ""}`} />
+            Watchlist
+          </button>
+          {(["Open", "Settled", "All"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSelectedStatus(s)}
+              className={`px-3 py-2 rounded-full text-xs font-semibold cursor-pointer transition-all border ${
+                selectedStatus === s
+                  ? s === "Open"
+                    ? "bg-[#22c55e]/10 border-[#22c55e]/40 text-[#22c55e]"
+                    : "bg-[#9e8e78]/10 border-[#9e8e78]/40 text-[#9e8e78]"
+                  : "bg-transparent border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1]"
+              }`}
+            >
+              {s === "Open" && <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] inline-block mr-1.5" />}
+              {s}
+            </button>
+          ))}
         </div>
       </div>
 
+      {/* Results count */}
+      {!loading && (
+        <p className="text-[11px] text-[#9e8e78] font-mono">
+          Showing {sortedAndFiltered.length} market{sortedAndFiltered.length !== 1 ? "s" : ""}
+          {selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}
+        </p>
+      )}
+
       {/* Markets Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => <MarketCardSkeleton key={i} />)}
         </div>
       ) : sortedAndFiltered.length === 0 ? (
         <EmptyState
-          icon={HelpCircle}
-          title="No matching boards"
-          description="Adjust your search parameters or check the filter categories."
+          icon={TrendingUp}
+          title="No markets found"
+          description="Try adjusting your search or filters."
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-          {sortedAndFiltered.map((market) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {sortedAndFiltered.map((market, i) => {
             const key = market.publicKey.toBase58();
             const status = getMarketStatusString(market.account.status);
             const isWatched = watchlist.includes(key);
@@ -246,204 +271,129 @@ export default function MarketExplorer() {
             const noPool = lamportsToSol(market.account.noPoolLamports);
             const totalVolume = yesPool + noPool;
             const yesPercent = totalVolume > 0 ? Math.round((yesPool / totalVolume) * 100) : 50;
+            const noPercent = 100 - yesPercent;
+            const feedHex = isOracleCategory(market.account.category) && market.account.oracleFeedId
+              ? feedIdBytesToHex(market.account.oracleFeedId)
+              : null;
+            const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
+            const catName = CATEGORIES[market.account.category] || "Other";
+            const endTs = market.account.endTs.toNumber();
+            const now = Math.floor(Date.now() / 1000);
+            const isEndingSoon = endTs - now < 3600 && status === "Open";
 
             return (
-              <MarketCard
+              <motion.div
                 key={key}
-                market={market}
-                marketKey={key}
-                isWatched={isWatched}
-                handleToggleWatch={handleToggleWatch}
-                status={status}
-                yesPercent={yesPercent}
-                totalVolume={totalVolume}
-                livePrices={livePrices}
-              />
+                custom={i}
+                variants={fadeIn}
+                initial="hidden"
+                animate="visible"
+                className="group relative bg-[#111111] border border-white/8 rounded-xl overflow-hidden hover:border-white/18 transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col"
+              >
+                {/* Status ribbon */}
+                {status === "Open" && (
+                  <div className={`absolute top-0 left-0 right-0 h-0.5 ${
+                    isEndingSoon ? "bg-gradient-to-r from-[#ef4444] to-[#f97316]" : "bg-gradient-to-r from-[#22c55e]/0 via-[#22c55e]/40 to-[#22c55e]/0"
+                  }`} />
+                )}
+
+                <div className="p-4 flex flex-col gap-3 flex-1">
+                  {/* Top row: category + status + watchlist */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/6 text-[#9e8e78] border border-white/8">
+                        {CATEGORY_ICONS[catName]} {catName}
+                      </span>
+                      {isEndingSoon && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20 animate-pulse">
+                          Ending soon
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`flex items-center gap-1 text-[9px] font-bold ${
+                        status === "Open" ? "text-[#22c55e]" : status === "Settled" ? "text-[#9e8e78]" : "text-[#ef4444]"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          status === "Open" ? "bg-[#22c55e] animate-pulse" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ef4444]"
+                        }`} />
+                        {status}
+                      </span>
+                      <button
+                        onClick={() => handleToggleWatch(key)}
+                        className="text-[#9e8e78] hover:text-[#ffd89c] cursor-pointer transition-colors"
+                      >
+                        <Star className={`w-3.5 h-3.5 ${isWatched ? "text-[#ffd89c] fill-[#ffd89c]" : ""}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Live price if oracle */}
+                  {priceData && feedHex && (
+                    <div className="text-[10px]">
+                      <LivePriceBar
+                        feedIdHex={feedHex}
+                        category={market.account.category}
+                        livePrice={priceData.price}
+                        liveError={priceData.error}
+                        targetPrice={market.account.targetPrice.toNumber()}
+                        targetExpo={market.account.targetExpo}
+                        comparison={market.account.comparison}
+                        compact
+                      />
+                    </div>
+                  )}
+
+                  {/* Question */}
+                  <Link href={`/market/${key}`} className="flex-1">
+                    <h3 className="text-sm font-semibold text-[#e5e2e1] group-hover:text-white transition-colors leading-snug line-clamp-3 cursor-pointer">
+                      {market.account.question}
+                    </h3>
+                  </Link>
+
+                  {/* Probability display — Polymarket style */}
+                  <div className="space-y-2 mt-auto">
+                    <div className="flex items-center justify-between text-[11px] font-bold font-mono">
+                      <span className="text-[#22c55e]">Yes {yesPercent}%</span>
+                      <span className="text-[#ef4444]">{noPercent}% No</span>
+                    </div>
+                    <div className="relative h-1.5 w-full bg-[#ef4444]/20 rounded-full overflow-hidden">
+                      <div
+                        className="absolute left-0 top-0 h-full bg-[#22c55e] rounded-full transition-all duration-500"
+                        style={{ width: `${yesPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-4 py-3 border-t border-white/6 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-[10px] font-mono text-[#9e8e78]">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      <FlipCountdown endTs={endTs} compact />
+                    </span>
+                    <span className="flex items-center gap-1 text-[#ffd89c]/80">
+                      <TrendingUp className="w-3 h-3" />
+                      {totalVolume.toFixed(2)} SOL
+                    </span>
+                  </div>
+
+                  <Link href={`/market/${key}`}>
+                    <button className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                      status === "Open"
+                        ? "bg-white text-[#131313] hover:bg-white/90 shadow-sm"
+                        : "bg-white/6 text-[#9e8e78] hover:bg-white/10 border border-white/10"
+                    }`}>
+                      {status === "Open" ? "Trade" : "View"}
+                    </button>
+                  </Link>
+                </div>
+              </motion.div>
             );
           })}
         </div>
       )}
     </div>
-  );
-}
-
-interface MarketCardProps {
-  market: Market;
-  marketKey: string;
-  isWatched: boolean;
-  handleToggleWatch: (key: string) => void;
-  status: string;
-  yesPercent: number;
-  totalVolume: number;
-  livePrices: Record<string, any>;
-}
-
-function MiniSparkline({ history }: { history: number[] }) {
-  if (history.length < 2) return null;
-  const width = 50;
-  const height = 14;
-  const min = Math.min(...history);
-  const max = Math.max(...history);
-  const range = max - min;
-
-  const points = history
-    .map((val, idx) => {
-      const x = (idx / (history.length - 1)) * width;
-      const y = range === 0 ? height / 2 : height - ((val - min) / range) * height;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  const isUp = history[history.length - 1] >= history[0];
-  const color = isUp ? "#a1d494" : "#ffb4ab";
-
-  return (
-    <svg width={width} height={height} className="overflow-visible select-none inline-block align-middle ml-1" style={{ minWidth: width }}>
-      <polyline
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-    </svg>
-  );
-}
-
-function MarketCard({
-  market,
-  marketKey,
-  isWatched,
-  handleToggleWatch,
-  status,
-  yesPercent,
-  totalVolume,
-  livePrices,
-}: MarketCardProps) {
-  const { lowEndDevice, prefersReducedMotion } = useDeviceCapability();
-  const feedHex = isOracleCategory(market.account.category) && market.account.oracleFeedId
-    ? feedIdBytesToHex(market.account.oracleFeedId)
-    : null;
-  const feedEntry = feedHex ? lookupFeedEntry(feedHex) : null;
-  const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
-
-  const [priceHistory, setPriceHistory] = useState<number[]>([]);
-
-  useEffect(() => {
-    if (priceData && priceData.price !== null) {
-      setPriceHistory((prev) => {
-        if (prev.length > 0 && prev[prev.length - 1] === priceData.price) {
-          return prev;
-        }
-        const next = [...prev, priceData.price];
-        if (next.length > 10) next.shift();
-        return next;
-      });
-    }
-  }, [priceData?.price]);
-
-  const sparklineHistory = useMemo(() => {
-    if (priceData && priceData.price !== null) {
-      if (priceHistory.length >= 2) {
-        return priceHistory;
-      }
-      const p = priceData.price;
-      return [p * 0.998, p * 1.001, p * 0.999, p];
-    }
-    return [];
-  }, [priceHistory, priceData?.price]);
-
-  return (
-    <motion.div
-      variants={prefersReducedMotion ? {} : fadeInUp}
-      {...(!prefersReducedMotion ? cardHover : {})}
-      className="glass-panel glass-panel-interactive p-4 sm:p-5 flex flex-col justify-between h-76 border-[var(--glass-border)]"
-    >
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-1.5">
-            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-white/5 border border-[var(--glass-border)] text-[#d6c4ac]">
-              {CATEGORIES[market.account.category] || "Other"}
-            </span>
-            {isOracleCategory(market.account.category) ? (
-              <span className="text-[9px] font-mono text-[#06b6d4] font-bold" title="Oracle-settled via Pyth Network">🔮 Oracle</span>
-            ) : (
-              <span className="text-[9px] font-mono text-[#ffd89c] font-bold" title="Admin-manually settled">⚖️ Manual</span>
-            )}
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => handleToggleWatch(marketKey)}
-              className="text-[#d6c4ac] hover:text-[#ffd89c] cursor-pointer bg-transparent border-0 p-1"
-              aria-label={isWatched ? "Remove from watchlist" : "Add to watchlist"}
-            >
-              <Star className={`w-4 h-4 ${isWatched ? "text-[#ffd89c] fill-[#ffd89c]" : ""}`} />
-            </button>
-            <span className={`w-2.5 h-2.5 rounded-full ${
-              status === "Open" ? "bg-[#a1d494]" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ffb4ab]"
-            }`} />
-            <span className="text-[9px] font-mono font-bold uppercase text-[#e5e2e1]">{status}</span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between min-h-[22px]">
-          {feedEntry && priceData ? (
-            <div className="flex items-center gap-1.5">
-              <LivePriceBar
-                feedIdHex={feedHex!}
-                category={market.account.category}
-                livePrice={priceData.price}
-                liveError={priceData.error}
-                targetPrice={market.account.targetPrice.toNumber()}
-                targetExpo={market.account.targetExpo}
-                comparison={market.account.comparison}
-                compact
-              />
-              <MiniSparkline history={sparklineHistory} />
-            </div>
-          ) : feedHex && feedEntry && !priceData ? (
-            <span className="text-[10px] font-mono text-[#d6c4ac] skeleton-shimmer px-2 py-0.5 rounded">Loading price...</span>
-          ) : (
-            <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-[#ffd89c]/10 border border-[#ffd89c]/20 text-[#ffd89c] inline-flex items-center gap-1">
-              ⚖️ Manually resolved
-            </span>
-          )}
-        </div>
-
-        <Link href={`/market/${marketKey}`} className="block group">
-          <h3 className="text-sm font-bold font-display text-[#e5e2e1] group-hover:text-[#ffd89c] transition-colors line-clamp-2 leading-snug">
-            {market.account.question}
-          </h3>
-        </Link>
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-[10px] font-mono font-bold">
-          <span className="text-[#a1d494]">YES: {yesPercent}%</span>
-          <span className="text-[#ffb4ab]">NO: {100 - yesPercent}%</span>
-        </div>
-        <div className="w-full h-3 bg-[#ffb4ab]/20 flex border border-black/40 overflow-hidden rounded-sm">
-          <div className="h-full bg-[#a1d494] transition-all duration-500" style={{ width: `${yesPercent}%` }} />
-        </div>
-      </div>
-
-      <div className="pt-3 border-t border-[var(--glass-border)] flex items-center justify-between text-[10px] font-mono">
-        <div className="flex items-center space-x-1.5 text-[#d6c4ac]">
-          <Clock className="w-3.5 h-3.5" />
-          <FlipCountdown endTs={market.account.endTs.toNumber()} compact />
-        </div>
-        <div className="flex items-center space-x-1 text-[#ffd89c] font-bold">
-          <Coins className="w-3.5 h-3.5" />
-          <span>{totalVolume.toFixed(2)} SOL</span>
-        </div>
-      </div>
-
-      <Link href={`/market/${marketKey}`} className="w-full pt-1">
-        <button className="w-full py-2 bg-white/5 hover:bg-white/10 border border-[var(--glass-border)] text-[10px] font-bold uppercase tracking-wider font-display rounded text-[#e5e2e1] hover:border-[#ffd89c]/50 transition-all cursor-pointer">
-          Inspect Specs
-        </button>
-      </Link>
-    </motion.div>
   );
 }

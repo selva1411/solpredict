@@ -97,4 +97,16 @@ pub enum SolPredictError {
 
     #[msg("No fees to withdraw")]
     NoFeesToWithdraw,
+
+    #[msg("Limit price basis points must be between 1 and 9999")]
+    InvalidPriceBps,
+
+    #[msg("Order is already filled")]
+    OrderAlreadyFilled,
+
+    #[msg("Order is already cancelled")]
+    OrderCancelled,
+
+    #[msg("Cannot match trade against your own order")]
+    SelfTradingNotAllowed,
 }

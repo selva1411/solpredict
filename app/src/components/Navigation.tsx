@@ -69,13 +69,14 @@ export function Navigation() {
               {role === "admin" && (
                 <Link
                   href="/admin"
-                  className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 ${
+                  className={`nav-link px-3 py-1.5 text-xs font-bold uppercase tracking-wider font-display rounded-md transition-all flex items-center gap-1.5 border ${
                     isActive("/admin")
-                      ? "text-[#ffd89c] nav-link-active"
-                      : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                      ? "bg-[#ffd89c]/15 text-[#ffd89c] border-[#ffd89c]/50 shadow-[0_0_12px_rgba(255,216,156,0.15)]"
+                      : "bg-[#0d0d0d] text-[#ffd89c] border-[#ffd89c]/30 hover:bg-[#ffd89c]/10"
                   }`}
                 >
-                  Admin
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Admin Panel</span>
                 </Link>
               )}
             </nav>

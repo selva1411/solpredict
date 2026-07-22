@@ -251,6 +251,11 @@ export default function MarketDetailPage() {
   const [sellQuantity, setSellQuantity] = useState<number>(10);
   const [sellSide, setSellSide] = useState<"YES" | "NO">("YES");
   const [showSellSection, setShowSellSection] = useState<boolean>(false);
+  const [tradeTab, setTradeTab] = useState<"buy" | "sell">("buy");
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [limitPriceSol, setLimitPriceSol] = useState<number>(0.5);
+  const [isLimitOrder, setIsLimitOrder] = useState<boolean>(false);
+  const [userOrders, setUserOrders] = useState<any[]>([]);
 
   const MAX_POINTS = 120;
   const priceHistoryRef = useRef<{ time: number; price: number }[]>([]);
@@ -319,12 +324,167 @@ export default function MarketDetailPage() {
       setTreasuryBalance(treasuryBal);
 
       fetchUserBalances();
+      fetchUserOrders();
     } catch (err: unknown) {
       console.error("Error fetching market:", err);
       toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
       router.push("/markets");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserOrders = async () => {
+    if (!wallet?.publicKey || !program) return;
+    try {
+      const allOrders = await (program.account as any).order.all();
+      const myOrders = allOrders.filter(
+        (o: any) => {
+          const isMarketMatch = o.account.market.equals(marketPda);
+          const isMakerMatch = o.account.maker.equals(wallet.publicKey);
+          const status = o.account.status;
+          const isOpen = typeof status === "object" && status !== null ? "open" in status : status === 0;
+          return isMarketMatch && isMakerMatch && isOpen;
+        }
+      );
+      setUserOrders(myOrders);
+    } catch (err) {
+      console.error("Error fetching user orders:", err);
+    }
+  };
+
+  const handlePlaceLimitOrder = async (isBuy: boolean = true) => {
+    if (!wallet || !wallet.publicKey) {
+      toast.error("Please connect your wallet first.");
+      return;
+    }
+    if (limitPriceSol <= 0 || limitPriceSol >= 1) {
+      toast.error("Limit price must be between 0.01 and 0.99 SOL per share");
+      return;
+    }
+    const targetSide = isBuy ? tradeSide : sellSide;
+    const targetQty = isBuy ? quantity : sellQuantity;
+
+    if (!isBuy) {
+      const currentHoldings = targetSide === "YES" ? userYesBalance : userNoBalance;
+      if (currentHoldings < targetQty) {
+        toast.error(`Insufficient ${targetSide} shares to place limit sell order (have ${currentHoldings.toFixed(1)}, need ${targetQty})`);
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+      setTxState("signing");
+      const orderId = new anchor.BN(Date.now() % 1_000_000_000 + Math.floor(Math.random() * 1000));
+      const priceBps = new anchor.BN(Math.round(limitPriceSol * 10000));
+      const qtyBN = new anchor.BN(targetQty);
+
+      const [orderPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("order"), marketPda.toBuffer(), wallet.publicKey.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],
+        program.programId
+      );
+
+      const isYes = targetSide === "YES";
+      const sideParam = isYes ? { yes: {} } : { no: {} };
+      const yesMintPda = getYesMintPda(marketPda, program.programId);
+      const noMintPda = getNoMintPda(marketPda, program.programId);
+      const chosenMint = isYes ? yesMintPda : noMintPda;
+      const makerTokenAta = getAssociatedTokenAddressSync(chosenMint, wallet.publicKey);
+      const orderTokenEscrow = getAssociatedTokenAddressSync(chosenMint, orderPda, true);
+
+      setTxState("confirming");
+      const sig = await program.methods
+        .placeOrder(orderId, sideParam, isBuy, priceBps, qtyBN)
+        .accounts({
+          maker: wallet.publicKey,
+          market: marketPda,
+          order: orderPda,
+          makerTokenAta,
+          orderTokenEscrow,
+        } as any)
+        .rpc();
+
+      setTxState("success");
+      setTxSig(sig);
+      toast.success(`Limit ${isBuy ? "Buy Bid" : "Sell Ask"} placed! (Sig: ${sig.slice(0, 8)}...)`);
+      fetchMarket();
+      fetchUserOrders();
+      fetchUserBalances();
+    } catch (err: any) {
+      setTxState("error");
+      toast.error(`Order Placement Failed: ${getFriendlyErrorMessage(err)}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFillOrder = async (orderAccount: any, fillQty: number) => {
+    if (!wallet?.publicKey) {
+      toast.error("Please connect your wallet first.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const ord = orderAccount.account;
+      const isYes = typeof ord.side === "object" && "yes" in ord.side;
+      const mint = isYes ? getYesMintPda(marketPda, program.programId) : getNoMintPda(marketPda, program.programId);
+
+      const takerTokenAta = getAssociatedTokenAddressSync(mint, wallet.publicKey);
+      const makerTokenAta = getAssociatedTokenAddressSync(mint, ord.maker);
+      const orderTokenEscrow = getAssociatedTokenAddressSync(mint, orderAccount.publicKey, true);
+
+      const sig = await program.methods
+        .fillOrder(new anchor.BN(fillQty))
+        .accounts({
+          taker: wallet.publicKey,
+          maker: ord.maker,
+          market: marketPda,
+          order: orderAccount.publicKey,
+          takerTokenAta,
+          makerTokenAta,
+          orderTokenEscrow,
+        } as any)
+        .rpc();
+
+      toast.success(`Filled ${fillQty} shares order! (Sig: ${sig.slice(0, 8)}...)`);
+      fetchMarket();
+      fetchUserOrders();
+      fetchUserBalances();
+    } catch (err: any) {
+      toast.error(`Fill Order Failed: ${getFriendlyErrorMessage(err)}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelOrder = async (orderAccount: any) => {
+    if (!wallet?.publicKey || !program) return;
+    try {
+      setSubmitting(true);
+      const isYes = "yes" in orderAccount.account.side;
+      const chosenMint = isYes ? getYesMintPda(marketPda, program.programId) : getNoMintPda(marketPda, program.programId);
+      const makerTokenAta = getAssociatedTokenAddressSync(chosenMint, wallet.publicKey);
+      const orderTokenEscrow = getAssociatedTokenAddressSync(chosenMint, orderAccount.publicKey, true);
+
+      const sig = await program.methods
+        .cancelOrder()
+        .accounts({
+          maker: wallet.publicKey,
+          market: marketPda,
+          order: orderAccount.publicKey,
+          makerTokenAta,
+          orderTokenEscrow,
+        } as any)
+        .rpc();
+
+      toast.success(`Limit Order cancelled! (Sig: ${sig.slice(0, 8)}...)`);
+      fetchMarket();
+      fetchUserOrders();
+    } catch (err: any) {
+      toast.error(`Cancel Order Failed: ${getFriendlyErrorMessage(err)}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -718,8 +878,19 @@ export default function MarketDetailPage() {
     return `$${normalized.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   };
 
-  const renderTradingDashboard = () => (
-    <div className="space-y-6">
+  const renderTradingDashboard = () => {
+    // Probability prices as cents (0-100)
+    const yesPrice = yesProb; // e.g. 67¢
+    const noPrice = noProb;   // e.g. 33¢
+
+    // Dynamic cost with current price
+    const effectivePrice = isLimitOrder ? limitPriceSol : sharePriceSol;
+    const totalCost = quantity * effectivePrice;
+    const avgPricePct = tradeSide === "YES" ? yesPrice : noPrice;
+    const potReturn = totalCost > 0 ? (quantity / (totalCost / 1)) : 0;
+
+    return (
+    <div className="space-y-0">
       {status !== "Open" ? (
         <div className="py-8 text-center space-y-4">
           <div className="mx-auto w-12 h-12 bg-[#ffd89c]/10 text-[#ffd89c] rounded flex items-center justify-center border border-[#ffd89c]/25">
@@ -733,196 +904,344 @@ export default function MarketDetailPage() {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* YES/NO buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setTradeSide("YES")}
-              className={`py-3 text-xs font-bold uppercase tracking-wider font-display rounded transition-all cursor-pointer border ${
-                tradeSide === "YES"
-                  ? "bg-[#a1d494] border-[#9e8e78] text-[#131313] shadow-lg font-bold"
-                  : "bg-[#0d0d0d] border-[#9e8e78]/30 text-[#d6c4ac] hover:text-[#e5e2e1]"
-              }`}
-            >
-              Predict YES
-            </button>
-            <button
-              onClick={() => setTradeSide("NO")}
-              className={`py-3 text-xs font-bold uppercase tracking-wider font-display rounded transition-all cursor-pointer border ${
-                tradeSide === "NO"
-                  ? "bg-[#ffb4ab] border-[#9e8e78] text-[#131313] shadow-lg font-bold"
-                  : "bg-[#0d0d0d] border-[#9e8e78]/30 text-[#d6c4ac] hover:text-[#e5e2e1]"
-              }`}
-            >
-              Predict NO
-            </button>
+        <div className="space-y-0">
+
+          {/* ── Buy / Sell Tabs ── */}
+          <div className="flex border-b border-[#9e8e78]/20">
+            {(["buy", "sell"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setTradeTab(tab)}
+                className={`flex-1 py-3 text-sm font-bold uppercase tracking-widest transition-all cursor-pointer ${
+                  tradeTab === tab
+                    ? "border-b-2 border-[#ffd89c] text-[#ffd89c]"
+                    : "text-[#9e8e78] hover:text-[#d6c4ac]"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
 
-          {/* Stepper qty */}
-          <div className="space-y-2">
-            <label className="text-xs text-[#d6c4ac] uppercase font-display font-bold">Share Quantity</label>
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => setQuantity(Math.max(1, quantity - 5))}
-                className="w-10 h-10 rounded bg-[#0d0d0d] border border-[#9e8e78]/40 hover:bg-[#1c1c1c] text-[#e5e2e1] flex items-center justify-center font-mono font-bold text-lg cursor-pointer"
-              >
-                -
-              </button>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                className="flex-1 board-input text-center text-sm border-[#9e8e78]"
-              />
-              <button 
-                onClick={() => setQuantity(quantity + 5)}
-                className="w-10 h-10 rounded bg-[#0d0d0d] border border-[#9e8e78]/40 hover:bg-[#1c1c1c] text-[#e5e2e1] flex items-center justify-center font-mono font-bold text-lg cursor-pointer"
-              >
-                +
-              </button>
-            </div>
-            
-            {/* Quick chips */}
-            <div className="grid grid-cols-4 gap-2 pt-1 font-mono">
-              {[10, 50, 100, 250].map((val) => (
+          {tradeTab === "buy" ? (
+            <div className="space-y-4 pt-4">
+
+              {/* Outcome Buttons — Polymarket style with probability prices */}
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  key={val}
-                  onClick={() => setQuantity(val)}
-                  className="py-1 bg-[#0d0d0d] hover:bg-[#1c1c1c] border border-[#9e8e78]/30 rounded text-[10px] text-[#d6c4ac] hover:text-[#e5e2e1] cursor-pointer transition-all"
+                  onClick={() => setTradeSide("YES")}
+                  className={`group relative flex flex-col items-center justify-center py-4 rounded-lg border-2 transition-all cursor-pointer ${
+                    tradeSide === "YES"
+                      ? "border-[#22c55e] bg-[#22c55e]/12 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
+                      : "border-[#9e8e78]/25 bg-[#0d0d0d] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/5"
+                  }`}
                 >
-                  {val}
+                  <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
+                    tradeSide === "YES" ? "text-[#22c55e]" : "text-[#9e8e78] group-hover:text-[#22c55e]"
+                  }`}>Yes</span>
+                  <span className={`text-2xl font-black font-mono ${
+                    tradeSide === "YES" ? "text-[#22c55e]" : "text-[#e5e2e1]"
+                  }`}>{yesProb}¢</span>
+                  <span className="text-[9px] text-[#9e8e78] mt-0.5 font-mono">{yesPool.toFixed(2)} SOL pool</span>
                 </button>
-              ))}
-            </div>
-          </div>
+                <button
+                  onClick={() => setTradeSide("NO")}
+                  className={`group relative flex flex-col items-center justify-center py-4 rounded-lg border-2 transition-all cursor-pointer ${
+                    tradeSide === "NO"
+                      ? "border-[#ef4444] bg-[#ef4444]/12 shadow-[0_0_20px_rgba(239,68,68,0.15)]"
+                      : "border-[#9e8e78]/25 bg-[#0d0d0d] hover:border-[#ef4444]/50 hover:bg-[#ef4444]/5"
+                  }`}
+                >
+                  <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
+                    tradeSide === "NO" ? "text-[#ef4444]" : "text-[#9e8e78] group-hover:text-[#ef4444]"
+                  }`}>No</span>
+                  <span className={`text-2xl font-black font-mono ${
+                    tradeSide === "NO" ? "text-[#ef4444]" : "text-[#e5e2e1]"
+                  }`}>{noProb}¢</span>
+                  <span className="text-[9px] text-[#9e8e78] mt-0.5 font-mono">{noPool.toFixed(2)} SOL pool</span>
+                </button>
+              </div>
 
-          {/* Cost layout */}
-          <div className="space-y-2 pt-4 border-t border-[#9e8e78]/20 font-mono text-[11px] text-[#d6c4ac]">
-            <div className="flex justify-between">
-              <span>Price per share:</span>
-              <span className="text-[#e5e2e1]">{sharePriceSol.toFixed(2)} SOL</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Transaction cost:</span>
-              <span className="text-[#e5e2e1]">{tradeCost.toFixed(2)} SOL</span>
-            </div>
-            <div className="flex justify-between font-sans font-bold text-xs pt-1 text-[#a1d494]">
-              <span>Win Payout:</span>
-              <span className="font-mono">{potentialPayout.toFixed(2)} SOL</span>
-            </div>
-          </div>
-
-          <button
-            disabled={submitting}
-            onClick={handleBuy}
-            className={`w-full py-3.5 mt-2 rounded text-xs font-bold uppercase tracking-widest font-display cursor-pointer transition-all ${
-              tradeSide === "YES" ? "btn-yes-mechanical" : "btn-no-mechanical"
-            }`}
-          >
-            {submitting ? (
-              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin inline-block mr-2 align-middle"></span>
-            ) : null}
-            Confirm Prediction
-          </button>
-
-          {txState === "signing" && (
-            <div className="font-mono text-xs text-[#ffd89c] mt-2 text-center">
-              ⏳ Approve in wallet...
-            </div>
-          )}
-          {txState === "confirming" && (
-            <div className="font-mono text-xs text-[#ffd89c] animate-pulse mt-2 text-center">
-              ⛓ Confirming on Solana...
-            </div>
-          )}
-          {txState === "success" && txSig && (
-            <div className="font-mono text-xs text-[#a1d494] mt-2 text-center">
-              ✓ Success —
-              <a href={`https://solscan.io/tx/${txSig}?cluster=devnet`}
-                target="_blank" rel="noopener noreferrer"
-                className="underline ml-1">View tx</a>
-            </div>
-          )}
-          {txState === "error" && (
-            <div className="font-mono text-xs text-[#ffb4ab] mt-2 text-center">
-              ✗ Transaction failed. Check console.
-            </div>
-          )}
-
-          {/* ─── Sell Section ─── */}
-          <div className="pt-6 mt-6 border-t border-[#9e8e78]/30">
-            <button
-              onClick={() => setShowSellSection(!showSellSection)}
-              className="w-full flex items-center justify-between text-xs font-mono uppercase tracking-widest text-[#d6c4ac] hover:text-[#e5e2e1] transition-colors cursor-pointer"
-            >
-              <span>Sell Shares</span>
-              {showSellSection ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-            {showSellSection && (
-              <div className="mt-4 space-y-4">
-                <div className="flex gap-2 text-[10px] font-mono text-[#d6c4ac]">
-                  <span>Your YES: <span className="text-[#a1d494] font-bold">{userYesBalance.toFixed(2)}</span></span>
-                  <span>Your NO: <span className="text-[#ffb4ab] font-bold">{userNoBalance.toFixed(2)}</span></span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setSellSide("YES")}
-                    className={`py-2 text-xs font-bold uppercase tracking-wider rounded border cursor-pointer transition-all ${
-                      sellSide === "YES"
-                        ? "bg-[#a1d494] border-[#9e8e78] text-[#131313]"
-                        : "bg-[#0d0d0d] border-[#9e8e78]/30 text-[#d6c4ac]"
-                    }`}
-                  >
-                    Sell YES
-                  </button>
-                  <button
-                    onClick={() => setSellSide("NO")}
-                    className={`py-2 text-xs font-bold uppercase tracking-wider rounded border cursor-pointer transition-all ${
-                      sellSide === "NO"
-                        ? "bg-[#ffb4ab] border-[#9e8e78] text-[#131313]"
-                        : "bg-[#0d0d0d] border-[#9e8e78]/30 text-[#d6c4ac]"
-                    }`}
-                  >
-                    Sell NO
-                  </button>
+              {/* Amount input */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-[#9e8e78] uppercase tracking-wider">Amount (Shares)</label>
+                  {wallet?.publicKey && (
+                    <span className="text-[10px] font-mono text-[#9e8e78]">
+                      {tradeSide === "YES" ? `${userYesBalance.toFixed(1)} YES` : `${userNoBalance.toFixed(1)} NO`} held
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
-                    className="w-8 h-8 rounded bg-[#0d0d0d] border border-[#9e8e78]/40 text-[#e5e2e1] text-sm font-mono cursor-pointer"
-                  >-</button>
+                    onClick={() => setQuantity(Math.max(1, quantity - 10))}
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 hover:border-[#9e8e78]/60 text-[#e5e2e1] font-mono font-bold text-base cursor-pointer transition-all"
+                  >−</button>
                   <input
                     type="number"
-                    value={sellQuantity}
-                    onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 board-input text-center text-sm border-[#9e8e78]"
+                    value={quantity}
+                    min={1}
+                    onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                    className="flex-1 bg-[#0d0d0d] border border-[#9e8e78]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60"
                   />
                   <button
-                    onClick={() => setSellQuantity(sellQuantity + 5)}
-                    className="w-8 h-8 rounded bg-[#0d0d0d] border border-[#9e8e78]/40 text-[#e5e2e1] text-sm font-mono cursor-pointer"
+                    onClick={() => setQuantity(quantity + 10)}
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 hover:border-[#9e8e78]/60 text-[#e5e2e1] font-mono font-bold text-base cursor-pointer transition-all"
                   >+</button>
                 </div>
-                <div className="text-[10px] font-mono text-[#d6c4ac] text-right">
-                  Refund: {(sellQuantity * sharePriceSol).toFixed(4)} SOL
+                <div className="grid grid-cols-5 gap-1">
+                  {[10, 25, 50, 100, 250].map((v) => (
+                    <button key={v} onClick={() => setQuantity(v)}
+                      className={`py-1 rounded text-[10px] font-mono cursor-pointer transition-all border ${
+                        quantity === v
+                          ? "border-[#ffd89c]/60 bg-[#ffd89c]/10 text-[#ffd89c]"
+                          : "border-[#9e8e78]/20 bg-[#0d0d0d] text-[#9e8e78] hover:text-[#e5e2e1] hover:border-[#9e8e78]/40"
+                      }`}>{v}</button>
+                  ))}
                 </div>
-                <button
-                  disabled={submitting || (sellSide === "YES" ? userYesBalance < sellQuantity : userNoBalance < sellQuantity)}
-                  onClick={handleSell}
-                  className={`w-full py-2.5 rounded text-xs font-bold uppercase tracking-widest cursor-pointer transition-all ${
-                    sellSide === "YES"
-                      ? "bg-[#a1d494]/20 text-[#a1d494] border border-[#a1d494]/40 hover:bg-[#a1d494]/30"
-                      : "bg-[#ffb4ab]/20 text-[#ffb4ab] border border-[#ffb4ab]/40 hover:bg-[#ffb4ab]/30"
-                  } disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  {submitting ? "Processing..." : `Sell ${sellQuantity} ${sellSide}`}
-                </button>
               </div>
-            )}
-          </div>
+
+              {/* Advanced: Limit Order toggle */}
+              <div className="border border-[#9e8e78]/20 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#9e8e78] hover:text-[#d6c4ac] cursor-pointer transition-colors bg-[#0d0d0d]"
+                >
+                  <span>Advanced: Limit Order</span>
+                  <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
+                </button>
+                {showAdvanced && (
+                  <div className="px-3 pb-3 pt-2 bg-[#0d0d0d] space-y-3 border-t border-[#9e8e78]/15">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsLimitOrder(!isLimitOrder)}
+                        className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
+                          isLimitOrder ? "bg-[#ffd89c]" : "bg-[#353534]"
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
+                          isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
+                        }`} />
+                      </button>
+                      <span className="text-[11px] text-[#d6c4ac]">Place as limit order</span>
+                    </div>
+                    {isLimitOrder && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[#9e8e78] uppercase tracking-wider">Limit Price (SOL/share)</label>
+                        <input
+                          type="number" step="0.01" min="0.01" max="0.99"
+                          value={limitPriceSol}
+                          onChange={(e) => setLimitPriceSol(Math.max(0.01, Math.min(0.99, Number(e.target.value))))}
+                          className="w-full bg-[#131313] border border-[#9e8e78]/40 rounded px-3 py-1.5 text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Order Summary */}
+              <div className="bg-[#0d0d0d] rounded-lg border border-[#9e8e78]/20 p-3 space-y-2 text-[11px] font-mono">
+                <div className="flex justify-between text-[#9e8e78]">
+                  <span>Avg price</span>
+                  <span className="text-[#e5e2e1]">{isLimitOrder ? `${limitPriceSol.toFixed(2)} SOL` : `${sharePriceSol.toFixed(2)} SOL`}</span>
+                </div>
+                <div className="flex justify-between text-[#9e8e78]">
+                  <span>Shares</span>
+                  <span className="text-[#e5e2e1]">{quantity}</span>
+                </div>
+                <div className="flex justify-between text-[#9e8e78]">
+                  <span>Total cost</span>
+                  <span className="text-[#e5e2e1]">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
+                </div>
+                <div className="flex justify-between border-t border-[#9e8e78]/15 pt-2">
+                  <span className="text-[#9e8e78]">Potential return</span>
+                  <span className={`font-bold ${
+                    tradeSide === "YES" ? "text-[#22c55e]" : "text-[#ef4444]"
+                  }`}>{potentialPayout.toFixed(3)} SOL</span>
+                </div>
+              </div>
+
+              {/* CTA Button */}
+              <button
+                disabled={submitting}
+                onClick={isLimitOrder ? () => handlePlaceLimitOrder(true) : handleBuy}
+                className={`w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                  tradeSide === "YES"
+                    ? "bg-[#22c55e] hover:bg-[#16a34a] text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)]"
+                    : "bg-[#ef4444] hover:bg-[#dc2626] text-white shadow-[0_4px_14px_rgba(239,68,68,0.3)]"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                {isLimitOrder
+                  ? `Place Limit ${tradeSide} Order`
+                  : `Buy ${tradeSide}`
+                }
+              </button>
+
+              {/* Tx status */}
+              {txState === "signing" && <p className="text-center text-xs font-mono text-[#ffd89c] animate-pulse">⏳ Approve in wallet...</p>}
+              {txState === "confirming" && <p className="text-center text-xs font-mono text-[#ffd89c] animate-pulse">⛓ Confirming on-chain...</p>}
+              {txState === "success" && txSig && (
+                <p className="text-center text-xs font-mono text-[#22c55e]">
+                  ✓ Done —{" "}
+                  <a href={`https://solscan.io/tx/${txSig}?cluster=localnet`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a>
+                </p>
+              )}
+              {txState === "error" && <p className="text-center text-xs font-mono text-[#ef4444]">✗ Transaction failed</p>}
+
+              {/* Active limit orders */}
+              {userOrders.length > 0 && (
+                <div className="pt-2 border-t border-[#9e8e78]/20 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#9e8e78]">Your Open Orders</p>
+                  {userOrders.map((ordAcc, idx) => {
+                    const ord = ordAcc.account;
+                    const sideStr = "yes" in ord.side ? "YES" : "NO";
+                    const priceSol = (ord.priceBps.toNumber() / 10000).toFixed(2);
+                    const qty2 = ord.quantity.toNumber();
+                    const filled = ord.filledQuantity.toNumber();
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-[#0d0d0d] border border-[#9e8e78]/20 text-[10px] font-mono">
+                        <div>
+                          <span className={ord.isBuy ? "text-[#22c55e] font-bold" : "text-[#ef4444] font-bold"}>
+                            {ord.isBuy ? "BUY" : "SELL"} {sideStr}
+                          </span>
+                          <span className="text-[#9e8e78] ml-2">@ {priceSol} SOL</span>
+                          <span className="text-[#9e8e78] ml-2">{filled}/{qty2} filled</span>
+                        </div>
+                        <button
+                          onClick={() => handleCancelOrder(ordAcc)}
+                          className="text-[#ef4444] hover:text-[#ff6b6b] cursor-pointer underline"
+                        >Cancel</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── Sell Tab ── */
+            <div className="space-y-4 pt-4">
+              {/* User balances */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 rounded-lg bg-[#0d0d0d] border border-[#22c55e]/20 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-[#9e8e78] font-bold">YES Shares</div>
+                  <div className="text-lg font-black font-mono text-[#22c55e] mt-0.5">{userYesBalance.toFixed(1)}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-[#0d0d0d] border border-[#ef4444]/20 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-[#9e8e78] font-bold">NO Shares</div>
+                  <div className="text-lg font-black font-mono text-[#ef4444] mt-0.5">{userNoBalance.toFixed(1)}</div>
+                </div>
+              </div>
+
+              {/* Which side to sell */}
+              <div className="grid grid-cols-2 gap-2">
+                {(["YES", "NO"] as const).map((s) => (
+                  <button key={s} onClick={() => setSellSide(s)}
+                    className={`py-2.5 rounded-lg border-2 text-sm font-bold uppercase tracking-wide cursor-pointer transition-all ${
+                      sellSide === s
+                        ? s === "YES"
+                          ? "border-[#22c55e] bg-[#22c55e]/10 text-[#22c55e]"
+                          : "border-[#ef4444] bg-[#ef4444]/10 text-[#ef4444]"
+                        : "border-[#9e8e78]/25 bg-[#0d0d0d] text-[#9e8e78]"
+                    }`}
+                  >{s}</button>
+                ))}
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-[#9e8e78] uppercase tracking-wider">Sell Quantity</label>
+                  <button
+                    onClick={() => setSellQuantity(Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance))}
+                    className="text-[10px] text-[#ffd89c] hover:underline cursor-pointer font-mono font-bold"
+                  >
+                    MAX ({Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance)})
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 text-[#e5e2e1] font-mono font-bold cursor-pointer">−</button>
+                  <input type="number" value={sellQuantity} min={1}
+                    onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
+                    className="flex-1 bg-[#0d0d0d] border border-[#9e8e78]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60" />
+                  <button onClick={() => setSellQuantity(sellQuantity + 5)}
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 text-[#e5e2e1] font-mono font-bold cursor-pointer">+</button>
+                </div>
+              </div>
+
+              {/* Advanced: Limit Sell Ask toggle */}
+              <div className="border border-[#9e8e78]/20 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#9e8e78] hover:text-[#d6c4ac] cursor-pointer transition-colors bg-[#0d0d0d]"
+                >
+                  <span>Advanced: Limit Sell (Ask)</span>
+                  <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
+                </button>
+                {showAdvanced && (
+                  <div className="px-3 pb-3 pt-2 bg-[#0d0d0d] space-y-3 border-t border-[#9e8e78]/15">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsLimitOrder(!isLimitOrder)}
+                        className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
+                          isLimitOrder ? "bg-[#ffd89c]" : "bg-[#353534]"
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
+                          isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
+                        }`} />
+                      </button>
+                      <span className="text-[11px] text-[#d6c4ac]">Place as limit sell (ask)</span>
+                    </div>
+                    {isLimitOrder && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-[#9e8e78] uppercase tracking-wider">Min Sell Price (SOL/share)</label>
+                        <input
+                          type="number" step="0.01" min="0.01" max="0.99"
+                          value={limitPriceSol}
+                          onChange={(e) => setLimitPriceSol(Math.max(0.01, Math.min(0.99, Number(e.target.value))))}
+                          className="w-full bg-[#131313] border border-[#9e8e78]/40 rounded px-3 py-1.5 text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Summary */}
+              <div className="bg-[#0d0d0d] rounded-lg border border-[#9e8e78]/20 p-3 space-y-2 text-[11px] font-mono">
+                <div className="flex justify-between">
+                  <span className="text-[#9e8e78]">Shares to sell</span>
+                  <span className="text-[#e5e2e1]">{sellQuantity} {sellSide}</span>
+                </div>
+                <div className="flex justify-between border-t border-[#9e8e78]/15 pt-2">
+                  <span className="text-[#9e8e78]">Est. payout</span>
+                  <span className="text-[#22c55e] font-bold">
+                    {isLimitOrder ? (sellQuantity * limitPriceSol).toFixed(4) : (sellQuantity * sharePriceSol).toFixed(4)} SOL
+                  </span>
+                </div>
+              </div>
+
+              <button
+                disabled={submitting || (sellSide === "YES" ? userYesBalance < sellQuantity : userNoBalance < sellQuantity)}
+                onClick={isLimitOrder ? () => handlePlaceLimitOrder(false) : handleSell}
+                className={`w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all ${
+                  sellSide === "YES"
+                    ? "bg-[#22c55e]/15 text-[#22c55e] border-2 border-[#22c55e]/40 hover:bg-[#22c55e]/25"
+                    : "bg-[#ef4444]/15 text-[#ef4444] border-2 border-[#ef4444]/40 hover:bg-[#ef4444]/25"
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                {submitting ? "Processing..." : isLimitOrder ? `Place Limit Sell Ask (${sellQuantity} ${sellSide})` : `Instant Sell ${sellQuantity} ${sellSide} Shares`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-8 font-sans">
@@ -1231,7 +1550,7 @@ export default function MarketDetailPage() {
           </motion.div>
 
           {/* YES vs NO Pool Liquidity Depth */}
-          <OrderBookDepth yesPoolLamports={market.yesPoolLamports.toNumber()} noPoolLamports={market.noPoolLamports.toNumber()} />
+          <OrderBookDepth yesPoolLamports={market.yesPoolLamports.toNumber()} noPoolLamports={market.noPoolLamports.toNumber()} marketPda={marketPda.toBase58()} onFillOrder={handleFillOrder} />
 
           {/* Decoded On-chain Activity logs */}
           <motion.div
@@ -1373,9 +1692,17 @@ export default function MarketDetailPage() {
             transition={{ duration: 0.3, delay: 0.1 }}
             className={`glass-panel p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
           >
-            <h3 className="text-sm font-bold uppercase tracking-wider font-display border-b border-[#9e8e78]/30 pb-3 text-[#ffd89c]">
-              [■] Prediction Desk
-            </h3>
+            <div className="border-b border-[#9e8e78]/20 pb-3 mb-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold font-display text-[#e5e2e1]">
+                  Trade
+                </h3>
+                <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
+                  <span className="text-[#9e8e78]">Live · {yesProb}% YES</span>
+                </div>
+              </div>
+            </div>
             {renderTradingDashboard()}
           </motion.div>
         </section>

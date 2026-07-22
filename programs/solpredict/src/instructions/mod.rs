@@ -11,6 +11,9 @@ pub mod withdraw_fees;
 pub mod mock_create_price_update;
 pub mod settle_market_manual;
 pub mod close_position;
+pub mod place_order;
+pub mod cancel_order;
+pub mod fill_order;
 
 pub use initialize_config::*;
 pub use initialize_market::*;
@@ -25,3 +28,6 @@ pub use withdraw_fees::*;
 pub use mock_create_price_update::*;
 pub use settle_market_manual::*;
 pub use close_position::*;
+pub use place_order::*;
+pub use cancel_order::*;
+pub use fill_order::*;

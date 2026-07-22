@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("CAiuXi4n3uMFQKEuG8HCV3KZeBsCE91BPaMFJR8RP51T");
+declare_id!("BtFo8oXYmyhpFg8JSZzY6WkeTuhNnEDBn6Vp4Xmbfmp");
 
 #[program]
 pub mod solpredict {
@@ -94,6 +94,28 @@ pub mod solpredict {
     /// Close UserPosition PDA after market resolution and reclaim ~0.0015 SOL rent deposit.
     pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
         instructions::close_position::handler(ctx)
+    }
+
+    /// Place an on-chain limit order (Bid or Ask) for a prediction outcome.
+    pub fn place_order(
+        ctx: Context<PlaceOrder>,
+        order_id: u64,
+        side: Side,
+        is_buy: bool,
+        price_bps: u64,
+        quantity: u64,
+    ) -> Result<()> {
+        instructions::place_order::handler(ctx, order_id, side, is_buy, price_bps, quantity)
+    }
+
+    /// Cancel an open limit order and reclaim escrowed SOL or tokens.
+    pub fn cancel_order(ctx: Context<CancelOrder>) -> Result<()> {
+        instructions::cancel_order::handler(ctx)
+    }
+
+    /// Match/fill an open limit order (P2P trade).
+    pub fn fill_order(ctx: Context<FillOrder>, quantity: u64) -> Result<()> {
+        instructions::fill_order::handler(ctx, quantity)
     }
 
     /// Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet).

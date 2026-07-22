@@ -115,8 +115,18 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         SolPredictError::InvalidQuantity
     );
 
-    // 4. Calculate cost in lamports (checked multiplication)
-    let cost = payout_math::calculate_cost(quantity, market.share_price_lamports)?;
+    // 4. Calculate cost dynamically based on CPMM pool ratio
+    let side_pool = match side {
+        Side::Yes => market.yes_pool_lamports,
+        Side::No => market.no_pool_lamports,
+    };
+    let total_pool = market.yes_pool_lamports.saturating_add(market.no_pool_lamports);
+    let cost = payout_math::calculate_dynamic_cost(
+        quantity,
+        market.share_price_lamports,
+        side_pool,
+        total_pool,
+    )?;
 
     // 5. CPI: Transfer SOL from buyer → treasury
     system_program::transfer(
