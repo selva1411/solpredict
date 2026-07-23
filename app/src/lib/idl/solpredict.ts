@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "C6WBNdceYBWR2V1sixjVB34nn7kNSoDhJ8CABPX9Ci5q",
+  "address": "B7iciCdfA2Jw3yrQVrYtZMMdbehaqr2XS8kF89ageCWU",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -467,7 +467,12 @@ export type Solpredict = {
           }
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "cancelOrder",
@@ -2506,6 +2511,19 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "marketSettledManual",
+      "discriminator": [
+        190,
+        239,
+        153,
+        183,
+        91,
+        104,
+        213,
+        11
+      ]
+    },
+    {
       "name": "positionClosed",
       "discriminator": [
         157,
@@ -2746,6 +2764,91 @@ export type Solpredict = {
       "code": 6034,
       "name": "selfTradingNotAllowed",
       "msg": "Cannot match trade against your own order"
+    },
+    {
+      "code": 6035,
+      "name": "endTimeTooSoon",
+      "msg": "Market end time must be at least 1 hour in the future"
+    },
+    {
+      "code": 6036,
+      "name": "endTimeTooFar",
+      "msg": "Market end time too far (max 1 year)"
+    },
+    {
+      "code": 6037,
+      "name": "resolveTooSoon",
+      "msg": "Resolution time must be >= end time"
+    },
+    {
+      "code": 6038,
+      "name": "invalidQuestion",
+      "msg": "Question must be 10-200 characters"
+    },
+    {
+      "code": 6039,
+      "name": "invalidDescription",
+      "msg": "Description must be ≤ 400 characters"
+    },
+    {
+      "code": 6040,
+      "name": "emptyPool",
+      "msg": "Pool is empty"
+    },
+    {
+      "code": 6041,
+      "name": "bettingClosed",
+      "msg": "Betting period has ended"
+    },
+    {
+      "code": 6042,
+      "name": "insufficientFunds",
+      "msg": "Insufficient funds"
+    },
+    {
+      "code": 6043,
+      "name": "alreadyInitialized",
+      "msg": "Market config already initialized"
+    },
+    {
+      "code": 6044,
+      "name": "nothingToRefund",
+      "msg": "Nothing to refund"
+    },
+    {
+      "code": 6045,
+      "name": "noWinningTokens",
+      "msg": "No winning tokens to claim"
+    },
+    {
+      "code": 6046,
+      "name": "outcomeNotSet",
+      "msg": "Outcome not set"
+    },
+    {
+      "code": 6047,
+      "name": "zeroSupply",
+      "msg": "Zero winning supply"
+    },
+    {
+      "code": 6048,
+      "name": "zeroPayout",
+      "msg": "Zero payout calculated"
+    },
+    {
+      "code": 6049,
+      "name": "oracleFeedMismatch",
+      "msg": "Pyth price feed ID mismatch"
+    },
+    {
+      "code": 6050,
+      "name": "stalePrice",
+      "msg": "Pyth price is stale (older than 60 seconds)"
+    },
+    {
+      "code": 6051,
+      "name": "usePythForCrypto",
+      "msg": "Use Pyth oracle to settle Crypto markets"
     }
   ],
   "types": [
@@ -3107,6 +3210,14 @@ export type Solpredict = {
           {
             "name": "marketId",
             "type": "u64"
+          },
+          {
+            "name": "cancelledBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": "string"
           }
         ]
       }
@@ -3138,7 +3249,7 @@ export type Solpredict = {
     {
       "name": "marketSettled",
       "docs": [
-        "Emitted when a market is settled via `settle_market`."
+        "Emitted when a market is settled via `settle_market` (Pyth oracle)."
       ],
       "type": {
         "kind": "struct",
@@ -3158,6 +3269,41 @@ export type Solpredict = {
           {
             "name": "totalPayoutPool",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketSettledManual",
+      "docs": [
+        "Emitted when a market is settled manually (non-crypto markets)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": "u64"
+          },
+          {
+            "name": "winningOutcome",
+            "type": "u8"
+          },
+          {
+            "name": "feeCollected",
+            "type": "u64"
+          },
+          {
+            "name": "totalPayoutPool",
+            "type": "u64"
+          },
+          {
+            "name": "settledBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "settledAt",
+            "type": "i64"
           }
         ]
       }

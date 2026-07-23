@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("C6WBNdceYBWR2V1sixjVB34nn7kNSoDhJ8CABPX9Ci5q");
+declare_id!("B7iciCdfA2Jw3yrQVrYtZMMdbehaqr2XS8kF89ageCWU");
 
 #[program]
 pub mod solpredict {
@@ -77,8 +77,8 @@ pub mod solpredict {
     }
 
     /// Cancel an open market (admin-only).
-    pub fn cancel_market(ctx: Context<CancelMarket>) -> Result<()> {
-        instructions::cancel_market::handler(ctx)
+    pub fn cancel_market(ctx: Context<CancelMarket>, reason: String) -> Result<()> {
+        instructions::cancel_market::handler(ctx, reason)
     }
 
     /// Claim a full refund on a cancelled market.

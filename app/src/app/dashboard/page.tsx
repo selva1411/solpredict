@@ -109,6 +109,8 @@ export default function UserDashboard() {
   const [activity, setActivity] = useState<PersonalActivity[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [lifetimeClaimedFromEvents, setLifetimeClaimedFromEvents] = useState(0);
+  const [fromDb, setFromDb] = useState(false);
+  const [dbPositions, setDbPositions] = useState<any[]>([]);
 
   useEffect(() => {
     setWatchlistKeys(getWatchlist());
@@ -150,23 +152,39 @@ export default function UserDashboard() {
         { memcmp: { offset: 8, bytes: wallet.publicKey.toBase58() } },
       ]);
 
-      const positionData: PositionWithMarket[] = [];
-      for (const pos of allPositions) {
-        try {
-          const marketAccount = await program.account.market.fetch(pos.account.market);
-          positionData.push({
-            publicKey: pos.publicKey,
-            account: pos.account as any,
-            marketAccount: marketAccount as any,
-          });
-        } catch (err) {
-          console.error("Error fetching market for position:", pos.publicKey.toBase58(), err);
+      if (allPositions.length > 0) {
+        const positionData: PositionWithMarket[] = [];
+        for (const pos of allPositions) {
+          try {
+            const marketAccount = await program.account.market.fetch(pos.account.market);
+            positionData.push({
+              publicKey: pos.publicKey,
+              account: pos.account as any,
+              marketAccount: marketAccount as any,
+            });
+          } catch (err) {
+            console.error("Error fetching market for position:", pos.publicKey.toBase58(), err);
+          }
         }
-      }
-      setPositions(positionData);
+        setPositions(positionData);
+        setFromDb(false);
+        setDbPositions([]);
 
-      const markets = await program.account.market.all();
-      setAllMarkets(markets);
+        const markets = await program.account.market.all();
+        setAllMarkets(markets);
+      } else {
+        // Fallback: fetch from DB trades table
+        try {
+          const res = await fetch(`/api/user/positions?wallet=${wallet.publicKey.toBase58()}`);
+          const data = await res.json();
+          if (data.positions && data.positions.length > 0) {
+            setDbPositions(data.positions);
+            setFromDb(true);
+          }
+        } catch {}
+        const markets = await program.account.market.all();
+        setAllMarkets(markets);
+      }
     } catch (err: any) {
       console.error("Error loading dashboard data:", err);
       toast.error(`Dashboard update failed: ${getFriendlyErrorMessage(err)}`);
@@ -381,43 +399,41 @@ export default function UserDashboard() {
   };
 
   const stats = useMemo(() => {
+    if (fromDb) {
+      const totalSpent = dbPositions.reduce((s, p) => s + (p.totalSpentLamports || 0) / 1e9, 0);
+      const activeCount = dbPositions.filter((p) => {
+        const st = (p.status || '').toLowerCase();
+        return st === 'open' && ((p.yesAmount || 0) > 0 || (p.noAmount || 0) > 0);
+      }).length;
+      return { totalSpent, activePositions: activeCount, winRate: null, lifetimeClaimed: 0 };
+    }
     let totalInvested = 0;
     let activeCount = 0;
     let settledCount = 0;
     let winCount = 0;
-
     positions.forEach((p) => {
       const invested = lamportsToSol(p.account.totalSpentLamports);
       totalInvested += invested;
-
       const status = getMarketStatusString(p.marketAccount.status);
       const yesShares = p.account.yesAmount.toNumber() / 1e6;
       const noShares = p.account.noAmount.toNumber() / 1e6;
       if (status === "Open" && (yesShares > 0 || noShares > 0)) activeCount++;
-
       const pnlResult = calculatePnL(p);
-      if (pnlResult) {
-        settledCount++;
-        if (pnlResult.pnl > 0) winCount++;
-      }
+      if (pnlResult) { settledCount++; if (pnlResult.pnl > 0) winCount++; }
     });
-
     return {
       totalSpent: totalInvested,
       activePositions: activeCount,
       winRate: settledCount > 0 ? Math.round((winCount / settledCount) * 100) : null,
       lifetimeClaimed: lifetimeClaimedFromEvents,
     };
-  }, [positions, lifetimeClaimedFromEvents]);
+  }, [positions, dbPositions, fromDb, lifetimeClaimedFromEvents]);
 
-  const needsAttention = useMemo(
-    () =>
-      positions.filter((p) => {
-        const status = getMarketStatusString(p.marketAccount.status);
-        return !p.account.claimed && (status === "Settled" || status === "Cancelled");
-      }),
-    [positions]
-  );
+  const needsAttention = useMemo(() =>
+    positions.filter((p) => {
+      const status = getMarketStatusString(p.marketAccount.status);
+      return !p.account.claimed && (status === "Settled" || status === "Cancelled");
+    }), [positions]);
 
   const openPositions = useMemo(
     () =>
@@ -500,6 +516,44 @@ export default function UserDashboard() {
         badgeLabel="CONNECTED AS:"
       />
 
+      {/* DB Fallback Notice */}
+      {fromDb && (
+        <div
+          style={{
+            background: "var(--color-surface-variant)",
+            border: "1px solid var(--color-crypto)",
+            borderRadius: "8px",
+            padding: "16px",
+            fontFamily: "var(--font-mono)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <p style={{ color: "var(--color-crypto)", fontSize: "13px", fontWeight: 600 }}>
+              {dbPositions.length} position{dbPositions.length !== 1 ? "s" : ""} found from database
+            </p>
+            <p style={{ color: "var(--color-text-secondary)", fontSize: "11px", marginTop: "4px" }}>
+              On-chain data unavailable (validator may have been reset). Showing cached trade history.
+            </p>
+          </div>
+          <Link
+            href="/portfolio"
+            style={{
+              color: "var(--color-primary)",
+              border: "1px solid var(--color-primary)",
+              borderRadius: "6px",
+              padding: "8px 16px",
+              fontSize: "12px",
+              textDecoration: "none",
+            }}
+          >
+            View Full Portfolio
+          </Link>
+        </div>
+      )}
+
       {/* Stats row */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
         <StatTile3D label="Total Spent" value={stats.totalSpent.toFixed(2)} unit="SOL" icon={Coins} delay={0} />
@@ -529,13 +583,54 @@ export default function UserDashboard() {
           useSplitFlap={false}
         />
       </section>
-
-      {/* PnL sparkline from activity history */}
-      {activity.length >= 2 && <PnLSparklineSection activity={activity} />}
-
-      {/* Needs attention */}
-      <AnimatePresence>
-        {needsAttention.length > 0 && (
+      {fromDb && (
+        <section className="space-y-4">
+          {dbPositions.map((pos, idx) => (
+            <Link
+              key={pos.marketPubkey || idx}
+              href={`/market/${pos.marketPubkey || ''}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <div
+                style={{
+                  background: 'var(--color-surface-variant)',
+                  border: '1px solid var(--color-outline)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '14px', color: 'var(--color-text-primary)', marginBottom: '6px' }}>
+                    {pos.question || `Market ${pos.marketPubkey?.slice(0, 8) || ''}...`}
+                  </p>
+                  <div style={{ display: 'flex', gap: '12px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                    <span>YES: <span style={{ color: 'var(--color-yes)' }}>{pos.yesAmount || 0}</span></span>
+                    <span>NO: <span style={{ color: 'var(--color-no)' }}>{pos.noAmount || 0}</span></span>
+                    <span>Spent: <span style={{ color: 'var(--color-text-primary)' }}>{((pos.totalSpentLamports || 0) / 1e9).toFixed(4)} SOL</span></span>
+                    <span>{pos.category || ''}</span>
+                    <span style={{ color: 'var(--color-outline)' }}>(from DB)</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+                  <span style={{ color: pos.status === 'open' ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                    {pos.status}
+                  </span>
+                </div>
+              </div>
+            </Link>
+          ))}
+          {dbPositions.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
+              No cached positions found.
+            </div>
+          )}
+        </section>
+      )}
+      <div style={{ display: fromDb ? 'none' : 'block' }}>
           <DashboardSection
             title="Needs Your Attention"
             subtitle="These markets have settled or cancelled — execute your claims to retrieve payouts."
@@ -616,9 +711,7 @@ export default function UserDashboard() {
               })}
             </motion.div>
           </DashboardSection>
-        )}
-      </AnimatePresence>
-
+      
       {/* Open positions */}
       <DashboardSection
         title="Open Positions"
@@ -845,7 +938,7 @@ export default function UserDashboard() {
             </div>
           )}
         </div>
-      </DashboardSection>
+      </DashboardSection></div>
     </div>
   );
 }

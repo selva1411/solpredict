@@ -97,25 +97,34 @@ pub fn handler(
 
     // ---- Input Validation ----
 
-    // 1. End time must be in the future
-    require!(end_ts > clock.unix_timestamp, SolPredictError::InvalidEndTime);
-
-    // 2. Resolve time must be >= end time
-    require!(resolve_ts >= end_ts, SolPredictError::InvalidEndTime);
-
-    // 3. Question length validation
+    // 1. End time must be at least 1 hour in the future
     require!(
-        !question.is_empty() && question.len() <= MAX_QUESTION_LEN,
-        SolPredictError::QuestionTooLong
+        end_ts > clock.unix_timestamp + 3600,
+        SolPredictError::EndTimeTooSoon
     );
 
-    // 4. Description length validation
+    // 2. Maximum market duration: 1 year
+    require!(
+        end_ts <= clock.unix_timestamp + 365 * 24 * 3600,
+        SolPredictError::EndTimeTooFar
+    );
+
+    // 3. Resolve time must be >= end time
+    require!(resolve_ts >= end_ts, SolPredictError::ResolveTooSoon);
+
+    // 4. Question length validation (10-200 characters)
+    require!(
+        question.len() >= 10 && question.len() <= MAX_QUESTION_LEN,
+        SolPredictError::InvalidQuestion
+    );
+
+    // 5. Description length validation
     require!(
         description.len() <= MAX_DESCRIPTION_LEN,
-        SolPredictError::DescriptionTooLong
+        SolPredictError::InvalidDescription
     );
 
-    // 5. Share price minimum (0.001 SOL = 1_000_000 lamports)
+    // 6. Share price minimum (0.001 SOL = 1_000_000 lamports)
     require!(
         share_price_lamports >= MIN_SHARE_PRICE,
         SolPredictError::SharePriceTooLow

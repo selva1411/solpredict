@@ -36,15 +36,19 @@ pub struct CancelMarket<'info> {
 ///
 /// Transitions market from Open → Cancelled. Users can then use
 /// `claim_refund` to get their exact stake back (no fee taken on cancellation).
-pub fn handler(ctx: Context<CancelMarket>) -> Result<()> {
+pub fn handler(ctx: Context<CancelMarket>, reason: String) -> Result<()> {
+    require!(reason.len() <= MAX_DESCRIPTION_LEN, SolPredictError::InvalidDescription);
+
     let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Cancelled;
 
     emit!(MarketCancelled {
         market_id: market.market_id,
+        cancelled_by: ctx.accounts.admin.key(),
+        reason: reason.clone(),
     });
 
-    msg!("Market {} cancelled by admin", market.market_id);
+    msg!("Market {} cancelled by admin. Reason: {}", market.market_id, reason);
 
     Ok(())
 }

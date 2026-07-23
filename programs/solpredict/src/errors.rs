@@ -109,4 +109,55 @@ pub enum SolPredictError {
 
     #[msg("Cannot match trade against your own order")]
     SelfTradingNotAllowed,
+
+    #[msg("Market end time must be at least 1 hour in the future")]
+    EndTimeTooSoon,
+
+    #[msg("Market end time too far (max 1 year)")]
+    EndTimeTooFar,
+
+    #[msg("Resolution time must be >= end time")]
+    ResolveTooSoon,
+
+    #[msg("Question must be 10-200 characters")]
+    InvalidQuestion,
+
+    #[msg("Description must be ≤ 400 characters")]
+    InvalidDescription,
+
+    #[msg("Pool is empty")]
+    EmptyPool,
+
+    #[msg("Betting period has ended")]
+    BettingClosed,
+
+    #[msg("Insufficient funds")]
+    InsufficientFunds,
+
+    #[msg("Market config already initialized")]
+    AlreadyInitialized,
+
+    #[msg("Nothing to refund")]
+    NothingToRefund,
+
+    #[msg("No winning tokens to claim")]
+    NoWinningTokens,
+
+    #[msg("Outcome not set")]
+    OutcomeNotSet,
+
+    #[msg("Zero winning supply")]
+    ZeroSupply,
+
+    #[msg("Zero payout calculated")]
+    ZeroPayout,
+
+    #[msg("Pyth price feed ID mismatch")]
+    OracleFeedMismatch,
+
+    #[msg("Pyth price is stale (older than 60 seconds)")]
+    StalePrice,
+
+    #[msg("Use Pyth oracle to settle Crypto markets")]
+    UsePythForCrypto,
 }

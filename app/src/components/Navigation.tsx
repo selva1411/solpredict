@@ -4,10 +4,12 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { MobileNav } from "@/components/MobileNav";
 import { useProgram } from "@/hooks/useProgram";
-import { Activity, Briefcase, Trophy, Settings } from "lucide-react";
+import { getWatchlist } from "@/lib/watchlist";
+import { Activity, Briefcase, Trophy, Settings, Star, List } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/markets", label: "Explorer", icon: Activity },
@@ -17,10 +19,18 @@ const NAV_ITEMS = [
 
 export function Navigation() {
   const { role } = useUserRole();
+  const { publicKey } = useWallet();
   const pathname = usePathname();
   const { connection } = useProgram();
+  const [watchlistCount, setWatchlistCount] = useState(0);
 
   const [healthStatus, setHealthStatus] = useState<"checking" | "online" | "offline">("checking");
+
+  useEffect(() => {
+    setWatchlistCount(getWatchlist().length);
+    const interval = setInterval(() => setWatchlistCount(getWatchlist().length), 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -76,9 +86,57 @@ export function Navigation() {
                   }`}
                 >
                   <Settings className="w-3.5 h-3.5" />
-                  <span>Admin Panel</span>
+                  <span>Admin</span>
                 </Link>
               )}
+              {publicKey && (
+                <Link
+                  href="/portfolio"
+                  className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 ${
+                    isActive("/portfolio")
+                      ? "text-[#ffd89c] nav-link-active"
+                      : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                  }`}
+                >
+                  Portfolio
+                </Link>
+              )}
+              <Link
+                href="/activity"
+                className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 ${
+                  isActive("/activity")
+                    ? "text-[#ffd89c] nav-link-active"
+                    : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                }`}
+              >
+                Activity
+              </Link>
+              <Link
+                href="/watchlist"
+                className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 flex items-center gap-1 ${
+                  isActive("/watchlist")
+                    ? "text-[#ffd89c] nav-link-active"
+                    : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                }`}
+              >
+                <Star className="w-3 h-3" />
+                Watchlist
+                {watchlistCount > 0 && (
+                  <span
+                    style={{
+                      background: "var(--color-primary)",
+                      color: "#131313",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      borderRadius: "8px",
+                      padding: "1px 6px",
+                      lineHeight: "14px",
+                    }}
+                  >
+                    {watchlistCount}
+                  </span>
+                )}
+              </Link>
             </nav>
           </div>
 
@@ -156,6 +214,38 @@ export function Navigation() {
             {isActive("/admin") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
           </Link>
         )}
+        {publicKey && (
+          <Link
+            href="/portfolio"
+            className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
+              isActive("/portfolio") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+            }`}
+          >
+            <List className="w-5 h-5" />
+            <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Portfolio</span>
+            {isActive("/portfolio") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+          </Link>
+        )}
+        <Link
+          href="/activity"
+          className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
+            isActive("/activity") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+          }`}
+        >
+          <Activity className="w-5 h-5" />
+          <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Activity</span>
+          {isActive("/activity") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+        </Link>
+        <Link
+          href="/watchlist"
+          className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
+            isActive("/watchlist") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+          }`}
+        >
+          <Star className="w-5 h-5" />
+          <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Watchlist</span>
+          {isActive("/watchlist") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+        </Link>
       </div>
     </>
   );

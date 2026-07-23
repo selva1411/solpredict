@@ -105,6 +105,8 @@ function LeaderboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<"volume" | "wins" | "positions">("volume");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [leaderboardFallback, setLeaderboardFallback] = useState<any[]>([]);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   const fetchLeaderboard = async () => {
     try {
@@ -117,7 +119,16 @@ function LeaderboardPage() {
       setMarkets(allMarkets);
     } catch (err: unknown) {
       console.error("Error fetching leaderboard:", err);
-      toast.error(`Failed to load leaderboard: ${getFriendlyErrorMessage(err)}`);
+      try {
+        const res = await fetch('/api/leaderboard');
+        const data = await res.json();
+        if (data.ok && data.leaderboard?.length > 0) {
+          setLeaderboardFallback(data.leaderboard);
+          setUsingFallback(true);
+        }
+      } catch {
+        toast.error(`Failed to load leaderboard: ${getFriendlyErrorMessage(err)}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -281,7 +292,22 @@ function LeaderboardPage() {
         </motion.section>
       )}
 
+      {/* DB Fallback Notice */}
+      {usingFallback && (
+        <div className="glass-panel p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[#ffd89c] text-xs font-mono font-bold">
+              {leaderboardFallback.length} traders loaded from database cache
+            </p>
+            <p className="text-[#d6c4ac]/60 text-[10px] font-mono mt-1">
+              On-chain data unavailable (validator may have been reset).
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Aggregate stats summary row */}
+      {!usingFallback && (
       <section className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         <StatTile3D
           label={`Total Volume (${selectedCategory})`}
@@ -306,10 +332,52 @@ function LeaderboardPage() {
           accent="neutral"
           delay={0.1}
         />
-      </section>
+      </section>)}
+
+      {usingFallback && (
+        <section className="space-y-3">
+          <AnimatePresence mode="popLayout">
+            {leaderboardFallback.map((trader: any, index: number) => {
+              const rank = index + 1;
+              return (
+                <motion.div
+                  key={trader.wallet}
+                  layout
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.25, delay: Math.min(index * 0.02, 0.2) }}
+                  className="glass-panel p-3 sm:p-4 flex items-center justify-between gap-2 sm:gap-4 hover-lift"
+                >
+                  <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                    <RankBadge rank={rank} />
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs sm:text-sm font-bold text-[#e5e2e1] truncate flex items-center gap-2">
+                        {trader.wallet.slice(0, 6)}...{trader.wallet.slice(-6)}
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#22c55e]/15 border border-[#22c55e]/30 text-[#22c55e] font-bold">
+                          PAS: {trader.pasScore}
+                        </span>
+                      </div>
+                      <div className="text-[10px] sm:text-[11px] text-[#d6c4ac] font-mono">
+                        {trader.marketsTraded} MARKET{trader.marketsTraded !== 1 ? "S" : ""} · {trader.winRate}% WIN RATE
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 font-mono">
+                    <div className="font-bold text-[#e5e2e1] text-xs sm:text-sm">
+                      {trader.totalWagered.toFixed(2)} SOL
+                    </div>
+                    <div className="text-[8px] sm:text-[9px] text-[#d6c4ac] uppercase tracking-wider font-display">Volume</div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </section>
+      )}
 
       {/* Sort controls */}
-      <div className="flex items-center space-x-2 border-b border-[#9e8e78]/20 pb-3">
+      <div hidden={usingFallback} className="flex items-center space-x-2 border-b border-[#9e8e78]/20 pb-3">
         <Filter className="w-3.5 h-3.5 text-[#d6c4ac]" />
         {[
           { key: "volume", label: "By Volume" },

@@ -6,6 +6,7 @@ import { WalletContextProvider } from "@/components/WalletContextProvider";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { Navigation } from "@/components/Navigation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ToastProvider } from "@/components/NotificationToast";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -63,9 +64,11 @@ export default function RootLayout({
 
             <Navigation />
 
-            <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 sm:pb-8 flex flex-col">
-              {children}
-            </main>
+            <ToastProvider>
+              <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 sm:pb-8 flex flex-col">
+                {children}
+              </main>
+            </ToastProvider>
 
             <footer className="w-full border-t border-[#9e8e78]/20 bg-[#131313]/80 backdrop-blur-sm py-6 mt-auto text-xs text-[#d6c4ac] hidden sm:block">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono">

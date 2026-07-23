@@ -24,13 +24,24 @@ pub struct SharesPurchased {
     pub new_no_pool: u64,
 }
 
-/// Emitted when a market is settled via `settle_market`.
+/// Emitted when a market is settled via `settle_market` (Pyth oracle).
 #[event]
 pub struct MarketSettled {
     pub market_id: u64,
     pub winning_outcome: u8,
     pub settled_price: i64,
     pub total_payout_pool: u64,
+}
+
+/// Emitted when a market is settled manually (non-crypto markets).
+#[event]
+pub struct MarketSettledManual {
+    pub market_id: u64,
+    pub winning_outcome: u8,
+    pub fee_collected: u64,
+    pub total_payout_pool: u64,
+    pub settled_by: Pubkey,
+    pub settled_at: i64,
 }
 
 /// Emitted when a winner claims their rewards via `claim_rewards`.
@@ -45,6 +56,8 @@ pub struct RewardsClaimed {
 #[event]
 pub struct MarketCancelled {
     pub market_id: u64,
+    pub cancelled_by: Pubkey,
+    pub reason: String,
 }
 
 /// Emitted when a user claims a refund on a cancelled market.

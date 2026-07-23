@@ -1,5 +1,5 @@
 {
-  "address": "C6WBNdceYBWR2V1sixjVB34nn7kNSoDhJ8CABPX9Ci5q",
+  "address": "B7iciCdfA2Jw3yrQVrYtZMMdbehaqr2XS8kF89ageCWU",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -461,7 +461,12 @@
           }
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "cancel_order",
@@ -2500,6 +2505,19 @@
       ]
     },
     {
+      "name": "MarketSettledManual",
+      "discriminator": [
+        190,
+        239,
+        153,
+        183,
+        91,
+        104,
+        213,
+        11
+      ]
+    },
+    {
       "name": "PositionClosed",
       "discriminator": [
         157,
@@ -2740,6 +2758,91 @@
       "code": 6034,
       "name": "SelfTradingNotAllowed",
       "msg": "Cannot match trade against your own order"
+    },
+    {
+      "code": 6035,
+      "name": "EndTimeTooSoon",
+      "msg": "Market end time must be at least 1 hour in the future"
+    },
+    {
+      "code": 6036,
+      "name": "EndTimeTooFar",
+      "msg": "Market end time too far (max 1 year)"
+    },
+    {
+      "code": 6037,
+      "name": "ResolveTooSoon",
+      "msg": "Resolution time must be >= end time"
+    },
+    {
+      "code": 6038,
+      "name": "InvalidQuestion",
+      "msg": "Question must be 10-200 characters"
+    },
+    {
+      "code": 6039,
+      "name": "InvalidDescription",
+      "msg": "Description must be ≤ 400 characters"
+    },
+    {
+      "code": 6040,
+      "name": "EmptyPool",
+      "msg": "Pool is empty"
+    },
+    {
+      "code": 6041,
+      "name": "BettingClosed",
+      "msg": "Betting period has ended"
+    },
+    {
+      "code": 6042,
+      "name": "InsufficientFunds",
+      "msg": "Insufficient funds"
+    },
+    {
+      "code": 6043,
+      "name": "AlreadyInitialized",
+      "msg": "Market config already initialized"
+    },
+    {
+      "code": 6044,
+      "name": "NothingToRefund",
+      "msg": "Nothing to refund"
+    },
+    {
+      "code": 6045,
+      "name": "NoWinningTokens",
+      "msg": "No winning tokens to claim"
+    },
+    {
+      "code": 6046,
+      "name": "OutcomeNotSet",
+      "msg": "Outcome not set"
+    },
+    {
+      "code": 6047,
+      "name": "ZeroSupply",
+      "msg": "Zero winning supply"
+    },
+    {
+      "code": 6048,
+      "name": "ZeroPayout",
+      "msg": "Zero payout calculated"
+    },
+    {
+      "code": 6049,
+      "name": "OracleFeedMismatch",
+      "msg": "Pyth price feed ID mismatch"
+    },
+    {
+      "code": 6050,
+      "name": "StalePrice",
+      "msg": "Pyth price is stale (older than 60 seconds)"
+    },
+    {
+      "code": 6051,
+      "name": "UsePythForCrypto",
+      "msg": "Use Pyth oracle to settle Crypto markets"
     }
   ],
   "types": [
@@ -3101,6 +3204,14 @@
           {
             "name": "market_id",
             "type": "u64"
+          },
+          {
+            "name": "cancelled_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": "string"
           }
         ]
       }
@@ -3132,7 +3243,7 @@
     {
       "name": "MarketSettled",
       "docs": [
-        "Emitted when a market is settled via `settle_market`."
+        "Emitted when a market is settled via `settle_market` (Pyth oracle)."
       ],
       "type": {
         "kind": "struct",
@@ -3152,6 +3263,41 @@
           {
             "name": "total_payout_pool",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketSettledManual",
+      "docs": [
+        "Emitted when a market is settled manually (non-crypto markets)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "winning_outcome",
+            "type": "u8"
+          },
+          {
+            "name": "fee_collected",
+            "type": "u64"
+          },
+          {
+            "name": "total_payout_pool",
+            "type": "u64"
+          },
+          {
+            "name": "settled_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "settled_at",
+            "type": "i64"
           }
         ]
       }

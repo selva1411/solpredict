@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::SolPredictError;
-use crate::events::MarketSettled;
-use crate::state::{Config, Market, MarketStatus, WinningOutcome};
+use crate::events::MarketSettledManual;
+use crate::state::{Category, Config, Market, MarketStatus, WinningOutcome};
 use crate::utils::payout_math;
 
 #[derive(Accounts)]
@@ -28,14 +28,35 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // Block price-backed markets unless admin is calling or oracle is unresponsive past 24h
-    let is_oracle_market = market.oracle_feed_id != [0u8; 32];
-    let is_oracle_fallback = clock.unix_timestamp >= market.resolve_ts.saturating_add(86400); // 24-hour grace period
-    let is_admin = ctx.accounts.admin.key() == ctx.accounts.config.admin || ctx.accounts.admin.key() == market.authority;
-    
+    // ── CHECKS ──────────────────────────────────────────────
+    // Only admin can manually settle
     require!(
-        !is_oracle_market || is_oracle_fallback || is_admin,
-        SolPredictError::UseOracleSettlement
+        ctx.accounts.admin.key() == ctx.accounts.config.admin,
+        SolPredictError::Unauthorized
+    );
+
+    // Market must be Open
+    require!(
+        market.status == MarketStatus::Open,
+        SolPredictError::AlreadySettled
+    );
+
+    // Market must have ended
+    require!(
+        clock.unix_timestamp >= market.resolve_ts,
+        SolPredictError::MarketNotEnded
+    );
+
+    // Only non-crypto markets can be manually settled
+    require!(
+        market.category != Category::Crypto,
+        SolPredictError::UsePythForCrypto
+    );
+
+    // At least one side must have bets
+    require!(
+        market.yes_pool_lamports > 0 || market.no_pool_lamports > 0,
+        SolPredictError::EmptyPool
     );
 
     // Must be Open
@@ -44,59 +65,30 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
         SolPredictError::AlreadySettled
     );
 
-    // If non-admin caller, enforce time checks
-    if !is_admin {
-        require!(
-            clock.unix_timestamp >= market.end_ts,
-            SolPredictError::MarketNotEnded
-        );
-        require!(
-            clock.unix_timestamp >= market.resolve_ts,
-            SolPredictError::TooEarlyToSettle
-        );
-    }
+    // Market must have ended (resolve_ts passed)
+    require!(
+        clock.unix_timestamp >= market.resolve_ts,
+        SolPredictError::MarketNotEnded
+    );
 
-    // Decode outcome: 1 = Yes, 2 = No
+    // Outcome must be YES(1) or NO(2)
     let winning_outcome = match outcome {
         1 => WinningOutcome::Yes,
         2 => WinningOutcome::No,
         _ => return err!(SolPredictError::InvalidOutcome),
     };
 
-    // One-sided check: if winning side has zero supply, auto-cancel
-    let winning_supply = match winning_outcome {
-        WinningOutcome::Yes => market.yes_supply,
-        WinningOutcome::No => market.no_supply,
-        WinningOutcome::Unset => 0,
-    };
-
     let market = &mut ctx.accounts.market;
 
-    if winning_supply == 0 {
-        market.status = MarketStatus::Cancelled;
-        market.settled_at = clock.unix_timestamp;
-        market.settled_price = 0;
-        market.settled_expo = 0;
-
-        emit!(MarketSettled {
-            market_id: market.market_id,
-            winning_outcome: winning_outcome as u8,
-            settled_price: 0,
-            total_payout_pool: 0,
-        });
-
-        return Ok(());
-    }
-
-    // Compute fee and payout pool (same math as settle_market)
+    // Compute fee and payout pool
     let total_pool = market.yes_pool_lamports
         .checked_add(market.no_pool_lamports)
         .ok_or(SolPredictError::MathOverflow)?;
 
-    let losing_pool = match winning_outcome {
-        WinningOutcome::Yes => market.no_pool_lamports,
-        WinningOutcome::No => market.yes_pool_lamports,
-        WinningOutcome::Unset => 0,
+    let (winning_pool, losing_pool) = match winning_outcome {
+        WinningOutcome::Yes => (market.yes_pool_lamports, market.no_pool_lamports),
+        WinningOutcome::No => (market.no_pool_lamports, market.yes_pool_lamports),
+        WinningOutcome::Unset => (0, 0),
     };
 
     let fee = payout_math::calculate_fee(losing_pool, ctx.accounts.config.fee_bps)?;
@@ -107,17 +99,17 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
 
     market.status = MarketStatus::Settled;
     market.winning_outcome = winning_outcome;
-    market.settled_price = 0;
-    market.settled_expo = 0;
-    market.settled_at = clock.unix_timestamp;
     market.fee_collected = fee;
     market.total_payout_pool = total_payout_pool;
+    market.settled_at = clock.unix_timestamp;
 
-    emit!(MarketSettled {
+    emit!(MarketSettledManual {
         market_id: market.market_id,
-        winning_outcome: winning_outcome as u8,
-        settled_price: 0,
+        winning_outcome: outcome,
+        fee_collected: fee,
         total_payout_pool,
+        settled_by: ctx.accounts.admin.key(),
+        settled_at: clock.unix_timestamp,
     });
 
     msg!(
