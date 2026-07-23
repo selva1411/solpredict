@@ -28,11 +28,13 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // Block price-backed markets unless the oracle is unresponsive past the 24h fallback window
+    // Block price-backed markets unless admin is calling or oracle is unresponsive past 24h
     let is_oracle_market = market.oracle_feed_id != [0u8; 32];
     let is_oracle_fallback = clock.unix_timestamp >= market.resolve_ts.saturating_add(86400); // 24-hour grace period
+    let is_admin = ctx.accounts.admin.key() == ctx.accounts.config.admin || ctx.accounts.admin.key() == market.authority;
+    
     require!(
-        !is_oracle_market || is_oracle_fallback,
+        !is_oracle_market || is_oracle_fallback || is_admin,
         SolPredictError::UseOracleSettlement
     );
 
@@ -42,17 +44,17 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
         SolPredictError::AlreadySettled
     );
 
-    // Must be past end_ts
-    require!(
-        clock.unix_timestamp >= market.end_ts,
-        SolPredictError::MarketNotEnded
-    );
-
-    // Must be past resolve_ts
-    require!(
-        clock.unix_timestamp >= market.resolve_ts,
-        SolPredictError::TooEarlyToSettle
-    );
+    // If non-admin caller, enforce time checks
+    if !is_admin {
+        require!(
+            clock.unix_timestamp >= market.end_ts,
+            SolPredictError::MarketNotEnded
+        );
+        require!(
+            clock.unix_timestamp >= market.resolve_ts,
+            SolPredictError::TooEarlyToSettle
+        );
+    }
 
     // Decode outcome: 1 = Yes, 2 = No
     let winning_outcome = match outcome {

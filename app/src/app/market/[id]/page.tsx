@@ -20,30 +20,25 @@ import {
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { EventParser } from "@coral-xyz/anchor";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
 
 import { useProgram } from "@/hooks/useProgram";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
 import { OrderBookDepth } from "@/components/OrderBookDepth";
+import { LivePriceChartPanel } from "@/components/LivePriceChartPanel";
+import { AiMarketWhisperer } from "@/components/AiMarketWhisperer";
+import { MarketComments } from "@/components/MarketComments";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
+import { getMarketStatusString } from "@/lib/events";
 import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
 import { FlipCountdown } from "@/components/FlipCountdown";
-import { usePythPrices } from "@/hooks/usePythPrices";
-import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
+import { feedIdBytesToHex, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
 import DualFillGauge from "@/components/DualFillGauge";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts';
+
 import { LoadingState, EmptyState, ErrorState, LiveIndicator } from "@/components/StatePanels";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
@@ -238,6 +233,7 @@ export default function MarketDetailPage() {
   const [quantity, setQuantity] = useState<number>(10);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const activitySigRef = useRef<string>(""); // tracks last top sig to debounce setActivity
   const [successFlip, setSuccessFlip] = useState<boolean>(false);
   const [txState, setTxState] = useState<"idle" | "signing" | "confirming" | "success" | "error">("idle");
   const [txSig, setTxSig] = useState<string | null>(null);
@@ -257,15 +253,6 @@ export default function MarketDetailPage() {
   const [isLimitOrder, setIsLimitOrder] = useState<boolean>(false);
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
-  const MAX_POINTS = 120;
-  const priceHistoryRef = useRef<{ time: number; price: number }[]>([]);
-  const [chartData, setChartData] = useState<{ time: number; price: number }[]>([]);
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
-  const [prevPrice, setPrevPrice] = useState<number>(0);
-  const [priceStatus, setPriceStatus] = useState<'loading' | 'live' | 'error'>('loading');
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const latestPriceRef = useRef<number>(0);
-
   // Sparkline history — stores probability snapshots
   const probHistory = useRef<number[]>([50]);
 
@@ -278,11 +265,8 @@ export default function MarketDetailPage() {
     }
     return null;
   }, [marketFeedId, marketCategory]);
-  const feedEntry = feedHex ? lookupFeedEntry(feedHex) : null;
-  const priceFeedIds = feedHex ? [feedHex] : [];
-  const livePrices = usePythPrices(priceFeedIds);
-  const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
-  const marketPda = new PublicKey(id as string);
+  // NOTE: usePythPrices is now inside LivePriceBar — no parent re-renders from price ticks
+  const marketPda = useMemo(() => new PublicKey(id as string), [id]);
 
   const fetchUserBalances = async () => {
     if (!wallet?.publicKey) return;
@@ -302,13 +286,128 @@ export default function MarketDetailPage() {
     }
   };
 
+  const syncMarketToDb = useCallback(async (details: MarketDetails) => {
+    try {
+      await fetch("/api/sync/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marketPubkey: marketPda.toBase58(),
+          marketId: details.marketId.toNumber(),
+          question: details.question,
+          description: details.description,
+          category: CATEGORIES[details.category] || "Crypto",
+          status: details.status.open ? "open" : details.status.settled ? "settled" : "cancelled",
+          yesPoolSol: details.yesPoolLamports.toNumber() / 1e9,
+          noPoolSol: details.noPoolLamports.toNumber() / 1e9,
+          yesSupply: details.yesSupply.toNumber(),
+          noSupply: details.noSupply.toNumber(),
+          endTs: details.endTs.toNumber(),
+          resolveTs: details.resolveTs.toNumber(),
+        }),
+      });
+    } catch {}
+  }, [marketPda]);
+
+  const syncTradeToDb = async (sig: string, side: "YES" | "NO", qty: number, isBuy: boolean = true) => {
+    try {
+      const lamportsIn = isBuy ? qty * (market?.sharePriceLamports?.toNumber() || 10000000) : 0;
+      await fetch("/api/sync/trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signature: sig,
+          marketPubkey: marketPda.toBase58(),
+          trader: wallet!.publicKey!.toBase58(),
+          side,
+          lamportsIn,
+          tokensOut: qty * 1_000_000,
+          yesPoolSol: yesPool,
+          noPoolSol: noPool,
+          yesPct: yesProb,
+        }),
+      });
+    } catch {}
+  };
+
+  const fetchUserOrders = useCallback(async () => {
+    if (!wallet?.publicKey || !program) return;
+    try {
+      const allOrders = await (program.account as any).order.all();
+      const myOrders = allOrders.filter(
+        (o: any) => {
+          const isMarketMatch = o.account.market.equals(marketPda);
+          const isMakerMatch = o.account.maker.equals(wallet.publicKey);
+          const status = o.account.status;
+          const isOpen = typeof status === "object" && status !== null ? "open" in status : status === 0;
+          return isMarketMatch && isMakerMatch && isOpen;
+        }
+      );
+      setUserOrders(myOrders);
+    } catch (err) {
+      console.error("Error fetching user orders:", err);
+    }
+  }, [wallet?.publicKey, program, marketPda]);
+
   // Fetch market details and transactions
   const fetchMarket = async () => {
     try {
-      const marketAcc = await program.account.market.fetch(marketPda) as unknown as MarketDetails;
+      let marketAcc: MarketDetails | null = null;
+
+      try {
+        marketAcc = await program.account.market.fetch(marketPda) as unknown as MarketDetails;
+      } catch {
+        // Fallback: fetch from NeonDB cached markets if on-chain account was reset
+        try {
+          const res = await fetch("/api/markets/cached");
+          if (res.ok) {
+            const json = await res.json();
+            if (json.markets) {
+              const cached = json.markets.find((c: any) => c.marketPubkey === marketPda.toBase58());
+              if (cached) {
+                const catIdx = CATEGORIES.indexOf(cached.category) >= 0 ? CATEGORIES.indexOf(cached.category) : 0;
+                const statusObj = cached.status === "settled" ? { settled: {} } : cached.status === "cancelled" ? { cancelled: {} } : { open: {} };
+                const winObj = cached.winningOutcome === "YES" ? { yes: {} } : cached.winningOutcome === "NO" ? { no: {} } : { unset: {} };
+
+                marketAcc = {
+                  marketId: new anchor.BN(cached.marketId || 0),
+                  authority: PublicKey.default,
+                  question: cached.question,
+                  description: cached.description || "",
+                  category: catIdx,
+                  oracleFeedId: Array(32).fill(0),
+                  targetPrice: new anchor.BN(20000),
+                  targetExpo: -2,
+                  comparison: 0,
+                  endTs: new anchor.BN(Math.floor(new Date(cached.endTs).getTime() / 1000)),
+                  resolveTs: new anchor.BN(Math.floor(new Date(cached.resolveTs).getTime() / 1000)),
+                  status: statusObj,
+                  winningOutcome: winObj,
+                  yesMint: PublicKey.default,
+                  noMint: PublicKey.default,
+                  yesPoolLamports: new anchor.BN(Math.round((cached.yesPoolSol || 0) * 1e9)),
+                  noPoolLamports: new anchor.BN(Math.round((cached.noPoolSol || 0) * 1e9)),
+                  yesSupply: new anchor.BN(cached.yesSupply || 0),
+                  noSupply: new anchor.BN(cached.noSupply || 0),
+                  totalPayoutPool: new anchor.BN(0),
+                  sharePriceLamports: new anchor.BN(0.01 * 1e9),
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Could not fetch market fallback from database:", e);
+        }
+      }
+
+      if (!marketAcc) {
+        throw new Error("Market account does not exist on-chain or in database");
+      }
+
       setMarket(marketAcc);
       setIsWatched(getWatchlist().includes(marketPda.toBase58()));
       recordProbabilitySnapshot(marketAcc);
+      syncMarketToDb(marketAcc);
 
       // Fetch config fee bps and treasury balance in parallel from the blockchain
       const configPda = getConfigPda(program.programId);
@@ -327,29 +426,9 @@ export default function MarketDetailPage() {
       fetchUserOrders();
     } catch (err: unknown) {
       console.error("Error fetching market:", err);
-      toast.error(`Failed to load market specs: ${getFriendlyErrorMessage(err)}`);
-      router.push("/markets");
+      toast.error(`Market Notice: ${getFriendlyErrorMessage(err)}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchUserOrders = async () => {
-    if (!wallet?.publicKey || !program) return;
-    try {
-      const allOrders = await (program.account as any).order.all();
-      const myOrders = allOrders.filter(
-        (o: any) => {
-          const isMarketMatch = o.account.market.equals(marketPda);
-          const isMakerMatch = o.account.maker.equals(wallet.publicKey);
-          const status = o.account.status;
-          const isOpen = typeof status === "object" && status !== null ? "open" in status : status === 0;
-          return isMarketMatch && isMakerMatch && isOpen;
-        }
-      );
-      setUserOrders(myOrders);
-    } catch (err) {
-      console.error("Error fetching user orders:", err);
     }
   };
 
@@ -393,9 +472,29 @@ export default function MarketDetailPage() {
       const makerTokenAta = getAssociatedTokenAddressSync(chosenMint, wallet.publicKey);
       const orderTokenEscrow = getAssociatedTokenAddressSync(chosenMint, orderPda, true);
 
+      const preInstructions: TransactionInstruction[] = [];
+      if (!isBuy) {
+        const escrowInfo = await connection.getAccountInfo(orderTokenEscrow);
+        if (!escrowInfo) {
+          preInstructions.push(
+            createAssociatedTokenAccountInstruction(
+              wallet.publicKey,
+              orderTokenEscrow,
+              orderPda,
+              chosenMint
+            )
+          );
+        }
+      }
+
       setTxState("confirming");
-      const sig = await program.methods
-        .placeOrder(orderId, sideParam, isBuy, priceBps, qtyBN)
+      let builder: any = program.methods.placeOrder(orderId, sideParam, isBuy, priceBps, qtyBN);
+
+      if (preInstructions.length > 0) {
+        builder = builder.preInstructions(preInstructions);
+      }
+
+      const sig = await builder
         .accounts({
           maker: wallet.publicKey,
           market: marketPda,
@@ -566,7 +665,12 @@ export default function MarketDetailPage() {
         }
       }
 
-      setActivity(items.reverse());
+      const reversed = items.reverse();
+      const topSig = reversed[0]?.signature ?? "";
+      if (topSig !== activitySigRef.current) {
+        activitySigRef.current = topSig;
+        setActivity(reversed);
+      }
 
       if (tempHistory.length > 0) {
         probHistory.current = [50, ...tempHistory].slice(-30);
@@ -585,18 +689,29 @@ export default function MarketDetailPage() {
     probHistory.current = [...probHistory.current.slice(-29), yesProbVal];
   }, []);
 
+  const lastMktUpdateRef = useRef<number>(0);
+  const lastActUpdateRef = useRef<number>(0);
+  const mktPoolSnapshotRef = useRef<string>(""); // tracks yes+no pool for dedup
+
   useEffect(() => {
     fetchMarket();
     fetchActivity();
 
-    // Real-time market data stream — no RPC call, validator pushes account updates
+    // Throttled real-time market data stream
     const accountSub = connection.onAccountChange(
       marketPda,
       (accountInfo) => {
+        const now = Date.now();
+        if (now - lastMktUpdateRef.current < 5000) return;
+        lastMktUpdateRef.current = now;
         try {
           const decoded = program.coder.accounts.decode("Market", accountInfo.data) as unknown as MarketDetails;
-          setMarket(decoded);
-          recordProbabilitySnapshot(decoded);
+          const snapshot = `${decoded.yesPoolLamports}:${decoded.noPoolLamports}`;
+          if (snapshot !== mktPoolSnapshotRef.current) {
+            mktPoolSnapshotRef.current = snapshot;
+            setMarket(decoded);
+            recordProbabilitySnapshot(decoded);
+          }
         } catch {
           fetchMarket();
         }
@@ -604,8 +719,11 @@ export default function MarketDetailPage() {
       "confirmed"
     );
 
-    // Logs subscription — cheaper: only refreshes activity feed, not market data
+    // Throttled transaction logs subscription
     const logSub = connection.onLogs(marketPda, () => {
+      const now = Date.now();
+      if (now - lastActUpdateRef.current < 10000) return;
+      lastActUpdateRef.current = now;
       fetchActivity();
     }, "confirmed");
 
@@ -615,64 +733,7 @@ export default function MarketDetailPage() {
     };
   }, [id, program, connection, recordProbabilitySnapshot]);
 
-  // ── Live SOL price charting ──────────────────────────────────────────
-  useEffect(() => {
-    let mounted = true;
-
-    async function init() {
-      setPriceStatus('loading');
-
-      const realPrice = await fetchSOLPrice();
-
-      if (!mounted) return;
-
-      if (realPrice === 0) {
-        setPriceStatus('error');
-        return;
-      }
-
-      setPriceStatus('live');
-      setCurrentPrice(realPrice);
-      setPrevPrice(realPrice);
-      latestPriceRef.current = realPrice;
-
-      const now = Date.now();
-      const seed = Array.from({ length: 60 }, (_, i) => {
-        const age = (60 - i) * 3000;
-        const drift = (Math.random() - 0.5) * realPrice * 0.005;
-        return { time: now - age, price: realPrice + drift };
-      });
-
-      priceHistoryRef.current = seed;
-      if (mounted) setChartData([...seed]);
-
-      intervalRef.current = setInterval(async () => {
-        if (!mounted) return;
-
-        const newPrice = await fetchSOLPrice();
-        if (newPrice === 0 || !mounted) return;
-
-        setPrevPrice(latestPriceRef.current);
-        setCurrentPrice(newPrice);
-        latestPriceRef.current = newPrice;
-
-        const newPoint = { time: Date.now(), price: newPrice };
-        priceHistoryRef.current = [
-          ...priceHistoryRef.current.slice(-(MAX_POINTS - 1)),
-          newPoint,
-        ];
-
-        if (mounted) setChartData([...priceHistoryRef.current]);
-      }, 3000);
-    }
-
-    init();
-
-    return () => {
-      mounted = false;
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
+  // (Live SOL price chart state is managed inside LivePriceChartPanel component)
 
   if (loading) {
     return (
@@ -701,11 +762,11 @@ export default function MarketDetailPage() {
   }
 
   const handleWatchlistToggle = () => {
-    const next = toggleWatchlist(marketPda.toBase58());
+    const next = toggleWatchlist(marketPda.toBase58(), wallet?.publicKey?.toBase58());
     setIsWatched(next.includes(marketPda.toBase58()));
     toast.success(
       next.includes(marketPda.toBase58())
-        ? "Added to watchlist!"
+        ? "Added to watchlist (synced to NeonDB)!"
         : "Removed from watchlist!"
     );
   };
@@ -745,18 +806,25 @@ export default function MarketDetailPage() {
     return "0x" + arr.map(b => b.toString(16).padStart(2, '0')).join('');
   };
 
-  const status = market.status.open ? "Open" : market.status.settled ? "Settled" : "Cancelled";
+  const status = getMarketStatusString(market.status, market.endTs);
   const categoryStr = CATEGORIES[market.category] || "Other";
   
   const yesPool = lamportsToSol(market.yesPoolLamports);
   const noPool = lamportsToSol(market.noPoolLamports);
   const totalPool = yesPool + noPool;
   
-  const yesProb = totalPool > 0 ? Math.round((yesPool / totalPool) * 100) : 50;
+  const yesProbRaw = totalPool > 0 ? Math.round((yesPool / totalPool) * 100) : 50;
+  const yesProb = Math.max(1, Math.min(99, yesProbRaw));
   const noProb = 100 - yesProb;
   
   const sharePriceSol = lamportsToSol(market.sharePriceLamports);
-  const tradeCost = quantity * sharePriceSol;
+  
+  // CPMM Effective Share Prices with 0.0005 SOL floor protection
+  const yesSharePriceSol = Math.max(0.0005, sharePriceSol * ((yesProb + 50) / 100));
+  const noSharePriceSol = Math.max(0.0005, sharePriceSol * ((noProb + 50) / 100));
+  const activeSharePriceSol = tradeSide === "YES" ? yesSharePriceSol : noSharePriceSol;
+
+  const tradeCost = quantity * activeSharePriceSol;
 
   const getPotentialPayout = (): number => {
     const costLamports = quantity * market.sharePriceLamports.toNumber();
@@ -818,6 +886,7 @@ export default function MarketDetailPage() {
 
       toast.success(`Position acquired: ${quantity} ${tradeSide} shares!`);
       setIsMobileDrawerOpen(false);
+      syncTradeToDb(sig, tradeSide, quantity, true);
       fetchMarket();
       fetchActivity();
     } catch (err: unknown) {
@@ -860,6 +929,7 @@ export default function MarketDetailPage() {
         .rpc();
 
       toast.success(`Sold ${sellQuantity} ${sellSide} shares!`);
+      syncTradeToDb("tx_sell_" + Date.now(), sellSide, sellQuantity, false);
       fetchMarket();
       fetchActivity();
       fetchUserBalances();
@@ -926,7 +996,7 @@ export default function MarketDetailPage() {
           {tradeTab === "buy" ? (
             <div className="space-y-4 pt-4">
 
-              {/* Outcome Buttons — Polymarket style with probability prices */}
+              {/* Outcome Buttons — Polymarket style probability prices + SOL pricing */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setTradeSide("YES")}
@@ -942,6 +1012,7 @@ export default function MarketDetailPage() {
                   <span className={`text-2xl font-black font-mono ${
                     tradeSide === "YES" ? "text-[#22c55e]" : "text-[#e5e2e1]"
                   }`}>{yesProb}¢</span>
+                  <span className="text-[10px] text-[#22c55e] font-mono font-semibold mt-0.5">{yesSharePriceSol.toFixed(4)} SOL</span>
                   <span className="text-[9px] text-[#9e8e78] mt-0.5 font-mono">{yesPool.toFixed(2)} SOL pool</span>
                 </button>
                 <button
@@ -958,6 +1029,7 @@ export default function MarketDetailPage() {
                   <span className={`text-2xl font-black font-mono ${
                     tradeSide === "NO" ? "text-[#ef4444]" : "text-[#e5e2e1]"
                   }`}>{noProb}¢</span>
+                  <span className="text-[10px] text-[#ef4444] font-mono font-semibold mt-0.5">{noSharePriceSol.toFixed(4)} SOL</span>
                   <span className="text-[9px] text-[#9e8e78] mt-0.5 font-mono">{noPool.toFixed(2)} SOL pool</span>
                 </button>
               </div>
@@ -1043,23 +1115,32 @@ export default function MarketDetailPage() {
               {/* Order Summary */}
               <div className="bg-[#0d0d0d] rounded-lg border border-[#9e8e78]/20 p-3 space-y-2 text-[11px] font-mono">
                 <div className="flex justify-between text-[#9e8e78]">
-                  <span>Avg price</span>
-                  <span className="text-[#e5e2e1]">{isLimitOrder ? `${limitPriceSol.toFixed(2)} SOL` : `${sharePriceSol.toFixed(2)} SOL`}</span>
+                  <span>Price per share</span>
+                  <span className="text-[#e5e2e1]">{isLimitOrder ? `${limitPriceSol.toFixed(4)} SOL` : `${activeSharePriceSol.toFixed(4)} SOL`}</span>
                 </div>
                 <div className="flex justify-between text-[#9e8e78]">
-                  <span>Shares</span>
-                  <span className="text-[#e5e2e1]">{quantity}</span>
+                  <span>Quantity</span>
+                  <span className="text-[#e5e2e1]">{quantity} shares</span>
                 </div>
-                <div className="flex justify-between text-[#9e8e78]">
-                  <span>Total cost</span>
-                  <span className="text-[#e5e2e1]">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
+                <div className="flex justify-between text-[#e5e2e1] font-bold border-t border-[#9e8e78]/15 pt-2">
+                  <span>Total Investment Amount</span>
+                  <span className="text-[#ffd89c] font-mono text-xs">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
                 </div>
                 <div className="flex justify-between border-t border-[#9e8e78]/15 pt-2">
-                  <span className="text-[#9e8e78]">Potential return</span>
+                  <span className="text-[#9e8e78]">Est. Payout on Win</span>
                   <span className={`font-bold ${
                     tradeSide === "YES" ? "text-[#22c55e]" : "text-[#ef4444]"
-                  }`}>{potentialPayout.toFixed(3)} SOL</span>
+                  }`}>{potentialPayout.toFixed(4)} SOL</span>
                 </div>
+                {potentialPayout > 0 && (
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#9e8e78]">Est. Net Profit</span>
+                    <span className="text-[#22c55e] font-bold">
+                      +{(potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)).toFixed(4)} SOL
+                      {" "}(+{(((potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)) / Math.max(0.0001, (isLimitOrder ? quantity * limitPriceSol : tradeCost))) * 100).toFixed(0)}% return)
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* CTA Button */}
@@ -1254,12 +1335,7 @@ export default function MarketDetailPage() {
         {/* Left Column: Contract specs & visuals */}
         <section className="md:col-span-2 space-y-8">
           {/* Main info panel */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="glass-panel p-6 sm:p-8 space-y-6"
-          >
+          <div className="glass-panel p-6 sm:p-8 space-y-6">
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[#9e8e78]/30 text-[#ffd89c]">
                 {categoryStr}
@@ -1364,13 +1440,11 @@ export default function MarketDetailPage() {
               </div>
             </div>
 
-            {isOracleCategory(market.category) && feedEntry && (
+            {isOracleCategory(market.category) && feedHex && (
               <div className="pt-4 border-t border-[#9e8e78]/30">
                 <LivePriceBar
-                  feedIdHex={feedHex!}
+                  feedIdHex={feedHex}
                   category={market.category}
-                  livePrice={priceData?.price ?? null}
-                  liveError={priceData?.error ?? null}
                   targetPrice={market.targetPrice.toNumber()}
                   targetExpo={market.targetExpo}
                   comparison={market.comparison}
@@ -1390,132 +1464,15 @@ export default function MarketDetailPage() {
                 </div>
               </div>
             )}
-          </motion.div>
+          </div>
 
-          {/* Live Crypto Price Chart */}
+          {/* Live Crypto Price Chart — isolated component, no parent re-renders */}
           {isOracleCategory(market.category) && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.07 }}
-              className="glass-panel p-6 sm:p-8 space-y-4"
-            >
-              <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
-                <TrendingUp className="w-4 h-4 text-[#06b6d4]" />
-                <span>Live Price Chart</span>
-              </h3>
-
-              {/* Header / Badge */}
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  {priceStatus === 'live' && (
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ffd89c] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ffd89c]" />
-                    </span>
-                  )}
-                  {priceStatus === 'loading' && (
-                    <span className="h-2 w-2 rounded-full bg-[#9e8e78] animate-pulse" />
-                  )}
-                  {priceStatus === 'error' && (
-                    <span className="h-2 w-2 rounded-full bg-[#ffb4ab]" />
-                  )}
-                  <span className="text-xs font-mono text-[#9e8e78]">
-                    {priceStatus === 'loading' && 'Fetching price...'}
-                    {priceStatus === 'live' && 'LIVE · SOL/USD · every 3s'}
-                    {priceStatus === 'error' && 'Price feed unavailable'}
-                  </span>
-                </div>
-                {currentPrice > 0 && (
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className={`text-lg font-bold font-mono ${currentPrice >= prevPrice ? 'text-[#a1d494]' : 'text-[#ffb4ab]'}`}>
-                      ${currentPrice.toFixed(4)}
-                    </span>
-                    <span className={`text-xs font-mono ${currentPrice >= prevPrice ? 'text-[#a1d494]' : 'text-[#ffb4ab]'}`}>
-                      {currentPrice >= prevPrice ? '▲' : '▼'} {Math.abs(currentPrice - prevPrice).toFixed(4)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Chart or error state */}
-              {priceStatus === 'error' ? (
-                <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-sm text-[#9e8e78]">
-                  ⚠ Could not connect to price feed. Check your internet connection.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <AreaChart
-                    data={chartData}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ffd89c" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#ffd89c" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#252525" vertical={false} />
-                    <XAxis
-                      dataKey="time"
-                      tickFormatter={(t: unknown) =>
-                        new Date(Number(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                      }
-                      stroke="#9e8e78"
-                      tick={{ fill: '#9e8e78', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
-                      minTickGap={60}
-                    />
-                    <YAxis
-                      domain={['auto', 'auto']}
-                      stroke="#9e8e78"
-                      tick={{ fill: '#9e8e78', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v: unknown) => `$${Number(v).toFixed(2)}`}
-                      width={70}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: '#1a1a1a',
-                        border: '1px solid #9e8e78',
-                        borderRadius: 2,
-                        fontFamily: 'JetBrains Mono',
-                        fontSize: 11,
-                        color: '#e5e2e1',
-                        padding: '6px 10px',
-                      }}
-                      labelFormatter={(t: unknown) =>
-                        new Date(Number(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                      }
-                      formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, 'SOL/USD']}
-                      cursor={{ stroke: '#9e8e78', strokeWidth: 1 }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="price"
-                      stroke="#ffd89c"
-                      strokeWidth={1.5}
-                      fill="url(#priceGradient)"
-                      dot={false}
-                      activeDot={{ r: 3, fill: '#ffd89c', stroke: '#131313', strokeWidth: 1 }}
-                      isAnimationActive={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </motion.div>
+            <LivePriceChartPanel />
           )}
 
           {/* Semicircle Probability Dial and Sparkline Trend */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.05 }}
-            className="glass-panel p-6 sm:p-8 space-y-6"
-          >
+          <div className="glass-panel p-6 sm:p-8 space-y-6">
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
               <TrendingUp className="w-4 h-4 text-[#ffd89c]" />
               <span>Implied Odds & Trend Dial</span>
@@ -1547,18 +1504,27 @@ export default function MarketDetailPage() {
                 <DualFillGauge yesPct={yesProb} noPct={noProb} />
               </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* YES vs NO Pool Liquidity Depth */}
           <OrderBookDepth yesPoolLamports={market.yesPoolLamports.toNumber()} noPoolLamports={market.noPoolLamports.toNumber()} marketPda={marketPda.toBase58()} onFillOrder={handleFillOrder} />
 
+          {/* AI Market Whisperer (Powered by Claude) */}
+          <AiMarketWhisperer
+            question={market.question}
+            description={market.description}
+            yesProb={yesProb}
+            noProb={noProb}
+            yesPool={yesPool}
+            noPool={noPool}
+            category={categoryStr}
+          />
+
+          {/* Community Discussions & Sentiment */}
+          <MarketComments marketPubkey={marketPda.toBase58()} />
+
           {/* Decoded On-chain Activity logs */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-            className="glass-panel p-6 space-y-4"
-          >
+          <div className="glass-panel p-6 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
               <Activity className="w-4 h-4 text-[#ffd89c]" />
               <span>Decoded On-Chain Transactions</span>
@@ -1575,65 +1541,55 @@ export default function MarketDetailPage() {
                   description="No matching transaction logs decoded. New activity will appear here in real-time."
                 />
               ) : (
-                <AnimatePresence>
-                  {activity.map((item, index) => {
-                    const isSettle = item.side === "SETTLE";
-                    const isClaim = item.side === "CLAIM";
-                    const isYes = item.side === "YES";
-                    const isNo = item.side === "NO";
-                    const isNew = index < 3;
+                activity.map((item, index) => {
+                  const isSettle = item.side === "SETTLE";
+                  const isClaim = item.side === "CLAIM";
+                  const isYes = item.side === "YES";
+                  const isNo = item.side === "NO";
+                  const isNew = index < 3;
 
-                    let badgeColor = "bg-white/5 text-[#e5e2e1]";
-                    if (isYes) badgeColor = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
-                    if (isNo) badgeColor = "bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20";
-                    if (isSettle) badgeColor = "bg-[#ffd89c]/10 text-[#ffd89c] border border-[#ffd89c]/20";
+                  let badgeColor = "bg-white/5 text-[#e5e2e1]";
+                  if (isYes) badgeColor = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
+                  if (isNo) badgeColor = "bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20";
+                  if (isSettle) badgeColor = "bg-[#ffd89c]/10 text-[#ffd89c] border border-[#ffd89c]/20";
 
-                    return (
-                      <motion.div
-                        key={item.signature + "-" + index}
-                        initial={{ opacity: 0, x: -5 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: Math.min(index * 0.03, 0.3) }}
-                        className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[#9e8e78]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#ffd89c]/3 border-l-2 border-l-[#a1d494]" : ""}`}
-                      >
-                        <div className="flex items-center space-x-2.5 min-w-0">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>
-                            {item.side}
-                          </span>
-                          <span className="text-[#e5e2e1] text-[11px] truncate">
-                            {isSettle ? (
-                              <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
-                            ) : isClaim ? (
-                              <span>REWARD WITHDRAWAL: {item.cost.toFixed(2)} SOL</span>
-                            ) : (
-                              <span>{item.quantity} SHARES AT {item.cost.toFixed(2)} SOL</span>
-                            )}
-                          </span>
-                          {isNew && (
-                            <span className="text-[8px] font-mono font-bold text-[#a1d494] bg-[#a1d494]/10 px-1 py-0.5 rounded border border-[#a1d494]/20 animate-pulse shrink-0">
-                              NEW
-                            </span>
+                  return (
+                    <div
+                      key={item.signature + "-" + index}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[#9e8e78]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#ffd89c]/3 border-l-2 border-l-[#a1d494]" : ""}`}
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>
+                          {item.side}
+                        </span>
+                        <span className="text-[#e5e2e1] text-[11px] truncate">
+                          {isSettle ? (
+                            <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
+                          ) : isClaim ? (
+                            <span>REWARD WITHDRAWAL: {item.cost.toFixed(2)} SOL</span>
+                          ) : (
+                            <span>{item.quantity} SHARES AT {item.cost.toFixed(2)} SOL</span>
                           )}
-                        </div>
-                        <div className="text-[#d6c4ac] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
-                          <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
-                          <span>{item.time}</span>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
+                        </span>
+                        {isNew && (
+                          <span className="text-[8px] font-mono font-bold text-[#a1d494] bg-[#a1d494]/10 px-1 py-0.5 rounded border border-[#a1d494]/20 shrink-0">
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[#d6c4ac] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
+                        <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
+                        <span>{item.time}</span>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
-          </motion.div>
+          </div>
 
           {/* Trust Signals & Settlement Explainer Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-            className="glass-panel p-6 sm:p-8 space-y-6"
-          >
+          <div className="glass-panel p-6 sm:p-8 space-y-6">
             <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c] flex items-center space-x-2">
               <Award className="w-4 h-4" />
               <span>⚖️ TRADER SAFETY & TRUST SIGNALS</span>
@@ -1681,15 +1637,12 @@ export default function MarketDetailPage() {
                 {" "}If the settled side has zero winning shares (meaning nobody bet on the winner), the market auto-cancels and permits all participants to withdraw their full stakes without protocol fees.
               </p>
             </div>
-          </motion.div>
+          </div>
         </section>
 
         {/* Right Column: Desktop Trading dashboard */}
         <section className="hidden md:block">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
+          <div
             className={`glass-panel p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
           >
             <div className="border-b border-[#9e8e78]/20 pb-3 mb-0">
@@ -1704,7 +1657,7 @@ export default function MarketDetailPage() {
               </div>
             </div>
             {renderTradingDashboard()}
-          </motion.div>
+          </div>
         </section>
       </div>
 

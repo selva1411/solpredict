@@ -63,9 +63,9 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
         SolPredictError::AlreadySettled
     );
 
-    // 2. Must be past resolve_ts
+    // 2. Must be past end_ts or resolve_ts
     require!(
-        clock.unix_timestamp >= market.resolve_ts,
+        clock.unix_timestamp >= market.end_ts || clock.unix_timestamp >= market.resolve_ts,
         SolPredictError::TooEarlyToSettle
     );
 

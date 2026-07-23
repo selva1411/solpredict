@@ -73,7 +73,7 @@ export function findMarketQuestion(
   return match ? match.account.question : `Market #${marketId.toString()}`;
 }
 
-export type MarketStatus = "Open" | "Settled" | "Cancelled";
+export type MarketStatus = "Open" | "Ended" | "Settled" | "Cancelled";
 
 export interface AnchorMarketStatus {
   open?: Record<string, never>;
@@ -81,10 +81,26 @@ export interface AnchorMarketStatus {
   cancelled?: Record<string, never>;
 }
 
-export function getMarketStatusString(status: AnchorMarketStatus | null | undefined): MarketStatus {
+export function getMarketStatusString(
+  status: AnchorMarketStatus | null | undefined,
+  endTs?: number | anchor.BN | Date | null
+): MarketStatus {
   if (!status) return "Open";
-  if (status.open) return "Open";
   if (status.settled) return "Settled";
   if (status.cancelled) return "Cancelled";
+  if (status.open) {
+    if (endTs != null) {
+      const now = Math.floor(Date.now() / 1000);
+      let endSecs = 0;
+      if (typeof endTs === "number") endSecs = endTs;
+      else if (endTs instanceof Date) endSecs = Math.floor(endTs.getTime() / 1000);
+      else if (typeof endTs === "object" && endTs !== null && "toNumber" in endTs) endSecs = (endTs as anchor.BN).toNumber();
+
+      if (endSecs > 0 && now >= endSecs) {
+        return "Ended";
+      }
+    }
+    return "Open";
+  }
   return "Open";
 }

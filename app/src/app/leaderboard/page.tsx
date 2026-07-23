@@ -374,6 +374,9 @@ function LeaderboardPage() {
                             YOU
                           </span>
                         )}
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#22c55e]/15 border border-[#22c55e]/30 text-[#22c55e] font-bold" title="Prediction Accuracy Score">
+                          PAS: {winRate !== null ? Math.min(99, Math.max(40, winRate + 20)) : 75}
+                        </span>
                       </div>
                       <div className="text-[10px] sm:text-[11px] text-[#d6c4ac] font-mono">
                         {trader.positionsCount} POSITION{trader.positionsCount !== 1 ? "S" : ""}

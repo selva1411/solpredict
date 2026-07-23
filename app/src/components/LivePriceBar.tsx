@@ -2,13 +2,11 @@
 
 import React from "react";
 import { PYTH_FEED_REGISTRY } from "@/lib/pyth-feeds";
+import { usePythPrices } from "@/hooks/usePythPrices";
 
 export interface LivePriceBarProps {
   feedIdHex: string;
   category: number;
-  livePrice: number | null;
-  liveLoading?: boolean;
-  liveError: string | null;
   targetPrice: number;
   targetExpo: number;
   comparison: number;
@@ -32,17 +30,20 @@ function formatTarget(price: number, expo: number): string {
 export function LivePriceBar({
   feedIdHex,
   category,
-  livePrice,
-  liveLoading,
-  liveError,
   targetPrice,
   targetExpo,
   comparison,
   compact = false,
 }: LivePriceBarProps) {
-  const isOracleCategory = category === 0 || category === 3 || category === 4;
+  const isOracleCat = category === 0 || category === 3 || category === 4;
 
-  if (!isOracleCategory) {
+  // ── Own the Pyth price fetch internally so it doesn't cause parent re-renders ──
+  const feedIds = isOracleCat && feedIdHex ? [feedIdHex] : [];
+  const livePrices = usePythPrices(feedIds);
+  const cleanId = feedIdHex?.replace("0x", "") ?? "";
+  const priceData = cleanId ? livePrices[cleanId] : null;
+
+  if (!isOracleCat) {
     return (
       <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-[#ffd89c]/10 border border-[#ffd89c]/30 text-[#ffd89c] inline-flex items-center gap-1">
         ⚖️ Manually resolved
@@ -55,6 +56,10 @@ export function LivePriceBar({
     entry.feedIdHex.toLowerCase().includes(feedIdHex.toLowerCase())
   );
   const entry = lookupKey ? lookupKey[1] : null;
+
+  const livePrice = priceData?.price ?? null;
+  const liveError = priceData?.error ?? null;
+  const liveLoading = !priceData;
 
   if (liveLoading) {
     return (
@@ -112,7 +117,7 @@ export function LivePriceBar({
       </div>
       <div className="w-full h-2 bg-[#0d0d0d] rounded overflow-hidden border border-[#9e8e78]/20 relative">
         <div
-          className="h-full rounded transition-all duration-500 ease-out"
+          className="h-full rounded transition-[width] duration-500 ease-out"
           style={{
             width: `${barPct}%`,
             background: yesWinning

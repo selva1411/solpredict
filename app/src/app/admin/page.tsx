@@ -187,31 +187,63 @@ function AdminPage() {
       setConfigLoading(true);
       const configPda = getConfigPda(program.programId);
       
-      let configAcc;
       try {
-        configAcc = await program.account.config.fetch(configPda);
+        const configAcc = await program.account.config.fetch(configPda);
+        setConfig({
+          publicKey: configPda,
+          admin: configAcc.admin,
+          feeBps: configAcc.feeBps,
+          marketCount: configAcc.marketCount.toNumber(),
+        });
       } catch (configErr) {
         console.log("Config PDA not initialized yet:", configErr);
         setConfig(null);
-        return; // Config is not initialized, abort secondary queries
       }
 
-      setConfig({
-        publicKey: configPda,
-        admin: configAcc.admin,
-        feeBps: configAcc.feeBps,
-        marketCount: configAcc.marketCount.toNumber(),
-      });
+      const onChainMarkets = (await program.account.market.all().catch(() => [])) as Market[];
+      const existingKeys = new Set(onChainMarkets.map(m => m.publicKey.toBase58()));
 
-      let allMarkets: Market[] = [];
+      let dbMarkets: Market[] = [];
       try {
-        allMarkets = (await program.account.market.all()) as Market[];
-        setMarkets(allMarkets);
-        fetchAdminActivity(allMarkets);
-      } catch (marketErr) {
-        console.error("Failed to fetch markets list:", marketErr);
-        toast.error(`Failed to load markets: ${getFriendlyErrorMessage(marketErr)}`);
+        const res = await fetch("/api/markets/cached");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.markets) {
+            dbMarkets = json.markets
+              .filter((c: any) => !existingKeys.has(c.marketPubkey))
+              .map((c: any): Market => {
+                const catIdx = CATEGORIES.indexOf(c.category) >= 0 ? CATEGORIES.indexOf(c.category) : 4;
+                const statusObj = c.status === "settled" ? { settled: {} } : c.status === "cancelled" ? { cancelled: {} } : { open: {} };
+                return {
+                  publicKey: new PublicKey(c.marketPubkey),
+                  account: {
+                    marketId: new anchor.BN(c.marketId || 0),
+                    question: c.question,
+                    description: c.description || "",
+                    category: catIdx,
+                    oracleFeedId: Array(32).fill(0),
+                    targetPrice: new anchor.BN(0),
+                    targetExpo: 0,
+                    comparison: 0,
+                    endTs: new anchor.BN(Math.floor(new Date(c.endTs).getTime() / 1000)),
+                    resolveTs: new anchor.BN(Math.floor(new Date(c.resolveTs).getTime() / 1000)),
+                    status: statusObj,
+                    yesPoolLamports: new anchor.BN(Math.round((c.yesPoolSol || 0) * 1e9)),
+                    noPoolLamports: new anchor.BN(Math.round((c.noPoolSol || 0) * 1e9)),
+                    feeCollected: new anchor.BN(0),
+                    feeWithdrawn: false,
+                  }
+                };
+              });
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch cached markets from DB for admin:", e);
       }
+
+      const combinedMarkets = [...onChainMarkets, ...dbMarkets];
+      setMarkets(combinedMarkets);
+      fetchAdminActivity(combinedMarkets);
 
       try {
         const userPositions = await program.account.userPosition.all();
@@ -404,11 +436,47 @@ function AdminPage() {
     }
   };
 
+  const syncMarketStatusToDb = async (market: Market, status: "settled" | "cancelled" | "open", winningOutcome?: string) => {
+    try {
+      await fetch("/api/sync/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marketPubkey: market.publicKey.toBase58(),
+          marketId: market.account.marketId.toNumber(),
+          question: market.account.question,
+          description: market.account.description,
+          category: CATEGORIES[market.account.category] || "Crypto",
+          status,
+          winningOutcome,
+          yesPoolSol: lamportsToSol(market.account.yesPoolLamports),
+          noPoolSol: lamportsToSol(market.account.noPoolLamports),
+          endTs: market.account.endTs.toNumber(),
+          resolveTs: market.account.resolveTs.toNumber(),
+        }),
+      });
+    } catch (e) {
+      console.warn("DB status sync failed:", e);
+    }
+  };
+
   const handleMockSettle = async (market: Market, settlePrice: number) => {
     if (!wallet?.publicKey) return;
     const marketKey = market.publicKey.toBase58();
     try {
       setSettlingId(marketKey);
+
+      const targetPriceNorm = market.account.targetPrice.toNumber() / Math.pow(10, Math.abs(market.account.targetExpo));
+      const winSide = settlePrice >= targetPriceNorm ? "YES" : "NO";
+      const accInfo = await connection.getAccountInfo(market.publicKey).catch(() => null);
+
+      if (!accInfo) {
+        // Historical database market not present on current local validator
+        await syncMarketStatusToDb(market, "settled", winSide);
+        toast.success(`Historical market resolved as ${winSide} in Database!`);
+        fetchConfigAndMarkets();
+        return;
+      }
 
       const configPda = getConfigPda(program.programId);
       const mockPriceUpdatePda = getMockPriceUpdatePda(wallet.publicKey, program.programId);
@@ -442,7 +510,8 @@ function AdminPage() {
         } as any)
         .rpc();
 
-      toast.success(`Market resolved successfully!`);
+      toast.success(`Market resolved successfully on-chain!`);
+      await syncMarketStatusToDb(market, "settled", winSide);
       fetchConfigAndMarkets();
     } catch (err: any) {
       console.error(err);
@@ -455,6 +524,19 @@ function AdminPage() {
   const handleCancelMarket = async (marketPda: PublicKey) => {
     if (!wallet?.publicKey) return;
     try {
+      const accInfo = await connection.getAccountInfo(marketPda).catch(() => null);
+      const targetMarket = markets.find(m => m.publicKey.equals(marketPda));
+
+      if (!accInfo) {
+        if (targetMarket) {
+          await syncMarketStatusToDb(targetMarket, "cancelled");
+        }
+        toast.success("Historical market cancelled in Database!");
+        setCancelModal({ isOpen: false, marketPda: null });
+        fetchConfigAndMarkets();
+        return;
+      }
+
       const configPda = getConfigPda(program.programId);
       await program.methods
         .cancelMarket()
@@ -465,7 +547,10 @@ function AdminPage() {
         } as any)
         .rpc();
 
-      toast.success("Market cancelled. Traders may claim full refunds.");
+      toast.success("Market cancelled on-chain. Traders may claim full refunds.");
+      if (targetMarket) {
+        await syncMarketStatusToDb(targetMarket, "cancelled");
+      }
       setCancelModal({ isOpen: false, marketPda: null });
       fetchConfigAndMarkets();
     } catch (err: any) {
@@ -479,6 +564,17 @@ function AdminPage() {
     try {
       setSettlingId(marketKey);
 
+      const winSide = outcome === 1 ? "YES" : "NO";
+      const accInfo = await connection.getAccountInfo(market.publicKey).catch(() => null);
+
+      if (!accInfo) {
+        // Historical database market not present on current local validator
+        await syncMarketStatusToDb(market, "settled", winSide);
+        toast.success(`Historical market resolved as ${winSide} in Database!`);
+        fetchConfigAndMarkets();
+        return;
+      }
+
       const configPda = getConfigPda(program.programId);
       
       await program.methods
@@ -490,7 +586,8 @@ function AdminPage() {
         } as any)
         .rpc();
 
-      toast.success(`Market manually resolved successfully!`);
+      toast.success(`Market manually resolved successfully on-chain!`);
+      await syncMarketStatusToDb(market, "settled", winSide);
       fetchConfigAndMarkets();
     } catch (err: any) {
       console.error(err);
@@ -531,6 +628,12 @@ function AdminPage() {
   const handleWithdrawFees = async (market: Market) => {
     if (!wallet?.publicKey) return;
     try {
+      const accInfo = await connection.getAccountInfo(market.publicKey).catch(() => null);
+      if (!accInfo) {
+        toast.info("Historical record: No active on-chain treasury account exists to withdraw from.");
+        return;
+      }
+
       const configPda = getConfigPda(program.programId);
       const treasuryPda = getTreasuryPda(market.publicKey, program.programId);
 
@@ -545,7 +648,7 @@ function AdminPage() {
         } as any)
         .rpc();
 
-      toast.success("Platform protocol fees successfully withdrawn!");
+      toast.success("Platform protocol fees successfully withdrawn on-chain!");
       fetchConfigAndMarkets();
     } catch (err: any) {
       toast.error(`Withdrawal failed: ${getFriendlyErrorMessage(err)}`);
@@ -559,7 +662,7 @@ function AdminPage() {
     let settledCount = 0;
 
     markets.forEach((m) => {
-      const status = getMarketStatusString(m.account.status);
+      const status = getMarketStatusString(m.account.status, m.account.endTs);
       totalVolumeLamports += m.account.yesPoolLamports.toNumber() + m.account.noPoolLamports.toNumber();
       totalFeesCollectedLamports += m.account.feeCollected.toNumber();
       if (status === "Open") openCount++;
@@ -576,9 +679,9 @@ function AdminPage() {
 
   const needsActionMarkets = useMemo(() => {
     return markets.filter((m) => {
-      const status = getMarketStatusString(m.account.status);
+      const status = getMarketStatusString(m.account.status, m.account.endTs);
       const now = Math.floor(Date.now() / 1000);
-      return status === "Open" && m.account.endTs.toNumber() < now;
+      return (status === "Open" || status === "Ended") && m.account.endTs.toNumber() <= now;
     });
   }, [markets]);
 
@@ -1146,7 +1249,7 @@ function AdminPage() {
                       </thead>
                       <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
                         {markets.map((m) => {
-                          const status = getStatusString(m.account.status);
+                          const status = getStatusString(m.account.status, m.account.endTs);
                           const marketKey = m.publicKey.toBase58();
                           const yesPool = lamportsToSol(m.account.yesPoolLamports);
                           const noPool = lamportsToSol(m.account.noPoolLamports);
@@ -1159,9 +1262,9 @@ function AdminPage() {
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 {(() => {
                                   const now = Math.floor(Date.now() / 1000);
-                                  const isPast = m.account.resolveTs.toNumber() < now;
+                                  const isPast = m.account.resolveTs.toNumber() <= now || m.account.endTs.toNumber() <= now;
                                   const feedIdNonZero = m.account.oracleFeedId.some(b => b !== 0);
-                                  if (status === "Open" && isPast) {
+                                  if ((status === "Open" || status === "Ended") && isPast) {
                                     if (feedIdNonZero) {
                                       return (
                                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#06b6d4]/15 text-[#ffd89c] border border-[#06b6d4]/20 inline-flex items-center gap-1">
@@ -1180,6 +1283,8 @@ function AdminPage() {
                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                       status === "Open" 
                                         ? "bg-[#a1d494]/15 text-[#a1d494] border border-[#a1d494]/20" 
+                                        : status === "Ended"
+                                        ? "bg-[#f97316]/15 text-[#f97316] border border-[#f97316]/20"
                                         : status === "Settled" 
                                         ? "bg-white/5 text-[#d6c4ac] border border-white/10" 
                                         : "bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/20"
@@ -1191,7 +1296,7 @@ function AdminPage() {
                               </td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-[#e5e2e1]">{volume.toFixed(2)} SOL</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-center">
-                                {status === "Open" && (
+                                {(status === "Open" || status === "Ended") && (
                                   <div className="flex items-center justify-center gap-2">
                                     <button
                                       disabled={settlingId !== null}

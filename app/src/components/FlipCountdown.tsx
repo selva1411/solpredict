@@ -32,7 +32,7 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
         }`}
         style={{ perspective: "200px" }}
       >
-        <span key={value} className="flip-digit">
+        <span className="flip-digit">
           {pad(value)}
         </span>
       </div>
@@ -43,7 +43,7 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
   );
 }
 
-export function FlipCountdown({ endTs, compact = false }: FlipCountdownProps) {
+export const FlipCountdown = React.memo(function FlipCountdown({ endTs, compact = false }: FlipCountdownProps) {
   const [parts, setParts] = useState(() => getParts(endTs));
 
   useEffect(() => {
@@ -65,4 +65,4 @@ export function FlipCountdown({ endTs, compact = false }: FlipCountdownProps) {
       <FlipUnit value={parts.seconds} label="Sec" compact={compact} />
     </div>
   );
-}
+});

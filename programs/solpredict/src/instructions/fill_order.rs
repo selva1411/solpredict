@@ -81,8 +81,8 @@ pub fn handler(ctx: Context<FillOrder>, quantity: u64) -> Result<()> {
     if is_buy {
         // Maker is Buying tokens:
         // 1. Send SOL from Order PDA escrow -> Taker
-        **ctx.accounts.order.to_account_info().try_borrow_mut_lamports()? -= trade_val_u64;
-        **ctx.accounts.taker.to_account_info().try_borrow_mut_lamports()? += trade_val_u64;
+        ctx.accounts.order.sub_lamports(trade_val_u64)?;
+        ctx.accounts.taker.add_lamports(trade_val_u64)?;
 
         // 2. Transfer tokens Taker -> Maker
         token::transfer(

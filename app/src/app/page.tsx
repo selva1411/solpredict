@@ -141,7 +141,7 @@ export default function LandingPage() {
       let settledCount = 0;
 
       allMarkets.forEach((m) => {
-        const status = getMarketStatusString(m.account.status);
+        const status = getMarketStatusString(m.account.status, m.account.endTs);
         totalVolumeLamports += m.account.yesPoolLamports.toNumber() + m.account.noPoolLamports.toNumber();
         if (status === "Open") openCount++;
         if (status === "Settled") settledCount++;
@@ -156,7 +156,7 @@ export default function LandingPage() {
         traders: uniqueTraders,
       });
 
-      const openMarkets = allMarkets.filter((m) => getMarketStatusString(m.account.status) === "Open");
+      const openMarkets = allMarkets.filter((m) => getMarketStatusString(m.account.status, m.account.endTs) === "Open");
       setTickerMarkets(openMarkets);
     } catch (err: unknown) {
       console.error("Error loading landing data:", err);

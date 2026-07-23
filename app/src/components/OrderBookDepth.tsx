@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useProgram } from "@/hooks/useProgram";
 import { PublicKey } from "@solana/web3.js";
 
@@ -22,12 +22,12 @@ interface OrderEntry {
   maker: string;
 }
 
-export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onFillOrder }: OrderBookDepthProps) {
+export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onFillOrder }: OrderBookDepthProps) {
   const { program, wallet } = useProgram();
   const [bids, setBids] = useState<OrderEntry[]>([]);
   const [asks, setAsks] = useState<OrderEntry[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<OrderEntry | null>(null);
-  const [fillQtyInput, setFillQtyInput] = useState<number>(1);
+  const [selectedSideFilter, setSelectedSideFilter] = useState<"ALL" | "YES" | "NO">("ALL");
+  const lastOrdersSnapshotRef = useRef<string>("");
 
   const yesSol = yesPoolLamports / 1e9;
   const noSol = noPoolLamports / 1e9;
@@ -49,7 +49,9 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
 
         const openOrders = marketOrders.filter((o: any) => {
           const status = o.account.status;
-          if (typeof status === "object" && status !== null) return "open" in status;
+          if (typeof status === "object" && status !== null) {
+            return "open" in status || Object.keys(status)[0]?.toLowerCase() === "open";
+          }
           return status === 0;
         });
 
@@ -58,18 +60,23 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
 
         for (const o of openOrders) {
           const acc = o.account;
-          const side = (typeof acc.side === "object" && "yes" in acc.side) ? "YES" : "NO";
+          const isYes = typeof acc.side === "object" && acc.side !== null 
+            ? ("yes" in acc.side || Object.keys(acc.side)[0]?.toLowerCase() === "yes")
+            : acc.side === 0;
+          const side: "YES" | "NO" = isYes ? "YES" : "NO";
+
           const entry: OrderEntry = {
             account: acc,
             orderAccountObj: o,
-            priceBps: acc.priceBps?.toNumber?.() ?? acc.priceBps,
-            quantity: acc.quantity?.toNumber?.() ?? acc.quantity,
-            filled: acc.filledQuantity?.toNumber?.() ?? acc.filledQuantity,
+            priceBps: acc.priceBps?.toNumber?.() ?? Number(acc.priceBps),
+            quantity: acc.quantity?.toNumber?.() ?? Number(acc.quantity),
+            filled: acc.filledQuantity?.toNumber?.() ?? Number(acc.filledQuantity),
             side,
-            isBuy: acc.isBuy,
+            isBuy: Boolean(acc.isBuy),
             maker: acc.maker.toBase58().slice(0, 6),
           };
-          if (acc.isBuy) {
+
+          if (entry.isBuy) {
             bidEntries.push(entry);
           } else {
             askEntries.push(entry);
@@ -80,33 +87,45 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
         askEntries.sort((a, b) => a.priceBps - b.priceBps);
 
         if (!cancelled) {
-          setBids(bidEntries.slice(0, 8));
-          setAsks(askEntries.slice(0, 8));
+          const snapshot = JSON.stringify([
+            bidEntries.map(b => `${b.priceBps}:${b.quantity}:${b.filled}:${b.maker}`),
+            askEntries.map(a => `${a.priceBps}:${a.quantity}:${a.filled}:${a.maker}`)
+          ]);
+          if (snapshot !== lastOrdersSnapshotRef.current) {
+            lastOrdersSnapshotRef.current = snapshot;
+            setBids(bidEntries);
+            setAsks(askEntries);
+          }
         }
-      } catch {}
+      } catch (e) {
+        console.error("OrderBook fetch error:", e);
+      }
     };
 
     fetchOrders();
-    const interval = setInterval(fetchOrders, 4000);
+    const interval = setInterval(fetchOrders, 3000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [program, marketPda]);
 
+  const filteredBids = bids.filter(b => selectedSideFilter === "ALL" || b.side === selectedSideFilter).slice(0, 10);
+  const filteredAsks = asks.filter(a => selectedSideFilter === "ALL" || a.side === selectedSideFilter).slice(0, 10);
+
   const maxQty = Math.max(
-    ...bids.map(b => b.quantity - b.filled),
-    ...asks.map(a => a.quantity - a.filled),
+    ...filteredBids.map(b => b.quantity - b.filled),
+    ...filteredAsks.map(a => a.quantity - a.filled),
     1
   );
 
-  const bestBid = bids.length > 0 ? (bids[0].priceBps / 10000).toFixed(2) : "—";
-  const bestAsk = asks.length > 0 ? (asks[0].priceBps / 10000).toFixed(2) : "—";
-  const spreadSol = bids.length > 0 && asks.length > 0
-    ? (Math.abs(asks[0].priceBps - bids[0].priceBps) / 10000).toFixed(2)
+  const bestBid = filteredBids.length > 0 ? (filteredBids[0].priceBps / 10000).toFixed(2) : "—";
+  const bestAsk = filteredAsks.length > 0 ? (filteredAsks[0].priceBps / 10000).toFixed(2) : "—";
+  const spreadSol = filteredBids.length > 0 && filteredAsks.length > 0
+    ? (Math.abs(filteredAsks[0].priceBps - filteredBids[0].priceBps) / 10000).toFixed(2)
     : "—";
 
   return (
     <div className="board-panel p-5 space-y-4 border-[#9e8e78]/40 bg-[#131313]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#9e8e78]/30 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#9e8e78]/30 pb-3 gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold uppercase tracking-wider font-display text-[#ffd89c]">
             CLOB Order Book
@@ -115,12 +134,26 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
             P2P
           </span>
         </div>
-        <div className="flex items-center space-x-3 text-[10px] font-mono text-[#d6c4ac]">
-          <span className="flex items-center space-x-1">
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 bg-[#0d0d0d] p-0.5 rounded border border-[#9e8e78]/20 font-mono text-[10px]">
+            {(["ALL", "YES", "NO"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setSelectedSideFilter(tab)}
+                className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                  selectedSideFilter === tab
+                    ? "bg-[#ffd89c] text-[#131313] font-bold"
+                    : "text-[#9e8e78] hover:text-[#e5e2e1]"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] font-mono text-[#d6c4ac] flex items-center gap-1 pl-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
             <span>LIVE</span>
           </span>
-          <span>POOL: {totalSol.toFixed(3)} SOL</span>
         </div>
       </div>
 
@@ -136,9 +169,9 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
         </div>
 
         {/* Asks (sells) — highest first */}
-        {asks.length > 0 ? (
+        {filteredAsks.length > 0 ? (
           <div className="space-y-0.5">
-            {[...asks].reverse().map((ask, idx) => {
+            {[...filteredAsks].reverse().map((ask, idx) => {
               const remaining = ask.quantity - ask.filled;
               const depthPct = (remaining / maxQty) * 100;
               const isUserOrder = wallet?.publicKey && ask.account.maker.equals(wallet.publicKey);
@@ -164,7 +197,7 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
                   </div>
                   <div
                     style={{ width: `${Math.min(depthPct, 100)}%` }}
-                    className="absolute top-0 bottom-0 right-0 bg-[#ef4444]/8 pointer-events-none rounded-r transition-all duration-500"
+                    className="absolute top-0 bottom-0 right-0 bg-[#ef4444]/8 pointer-events-none rounded-r transition-[width] duration-300"
                   />
                 </div>
               );
@@ -184,9 +217,9 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
         </div>
 
         {/* Bids (buys) */}
-        {bids.length > 0 ? (
+        {filteredBids.length > 0 ? (
           <div className="space-y-0.5">
-            {bids.map((bid, idx) => {
+            {filteredBids.map((bid, idx) => {
               const remaining = bid.quantity - bid.filled;
               const depthPct = (remaining / maxQty) * 100;
               const isUserOrder = wallet?.publicKey && bid.account.maker.equals(wallet.publicKey);
@@ -243,4 +276,4 @@ export function OrderBookDepth({ yesPoolLamports, noPoolLamports, marketPda, onF
       </div>
     </div>
   );
-}
+});

@@ -13,8 +13,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getMarketStatusString } from "@/lib/events";
-import { usePythPrices } from "@/hooks/usePythPrices";
-import { feedIdBytesToHex, lookupFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
+import { feedIdBytesToHex, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
 import { MarketCardSkeleton, EmptyState } from "@/components/StatePanels";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
@@ -74,8 +73,46 @@ export default function MarketExplorer() {
   const fetchMarkets = async () => {
     try {
       setLoading(true);
-      const allMarkets = (await program.account.market.all()) as Market[];
-      setMarkets(allMarkets);
+      const onChainMarkets = (await program.account.market.all().catch(() => [])) as Market[];
+      const existingKeys = new Set(onChainMarkets.map(m => m.publicKey.toBase58()));
+
+      let dbMarkets: Market[] = [];
+      try {
+        const res = await fetch("/api/markets/cached");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.markets) {
+            dbMarkets = json.markets
+              .filter((c: any) => !existingKeys.has(c.marketPubkey))
+              .map((c: any): Market => {
+                const catIdx = CATEGORIES.indexOf(c.category) >= 0 ? CATEGORIES.indexOf(c.category) : 4;
+                const statusObj = c.status === "settled" ? { settled: {} } : c.status === "cancelled" ? { cancelled: {} } : { open: {} };
+                return {
+                  publicKey: new PublicKey(c.marketPubkey),
+                  account: {
+                    marketId: new anchor.BN(c.marketId || 0),
+                    question: c.question,
+                    description: c.description || "",
+                    category: catIdx,
+                    oracleFeedId: Array(32).fill(0),
+                    targetPrice: new anchor.BN(0),
+                    targetExpo: 0,
+                    comparison: 0,
+                    endTs: new anchor.BN(Math.floor(new Date(c.endTs).getTime() / 1000)),
+                    resolveTs: new anchor.BN(Math.floor(new Date(c.resolveTs).getTime() / 1000)),
+                    status: statusObj,
+                    yesPoolLamports: new anchor.BN(Math.round((c.yesPoolSol || 0) * 1e9)),
+                    noPoolLamports: new anchor.BN(Math.round((c.noPoolSol || 0) * 1e9)),
+                  }
+                };
+              });
+          }
+        }
+      } catch (e) {
+        console.warn("Could not fetch cached markets from DB:", e);
+      }
+
+      setMarkets([...onChainMarkets, ...dbMarkets]);
     } catch (err: unknown) {
       console.error(err);
       toast.error(`Failed to load markets: ${getFriendlyErrorMessage(err)}`);
@@ -118,18 +155,7 @@ export default function MarketExplorer() {
       });
   }, [markets, search, selectedCategory, selectedStatus, watchlistOnly, watchlist, sortBy]);
 
-  const allFeedHexes = useMemo(() => {
-    const hexes: string[] = [];
-    for (const m of sortedAndFiltered) {
-      if (isOracleCategory(m.account.category) && m.account.oracleFeedId) {
-        const hex = feedIdBytesToHex(m.account.oracleFeedId);
-        if (lookupFeedEntry(hex)) hexes.push(hex);
-      }
-    }
-    return hexes;
-  }, [sortedAndFiltered]);
-
-  const livePrices = usePythPrices(allFeedHexes);
+  // livePrices now fetched internally by each LivePriceBar instance
 
   // Stats banner
   const openCount = markets.filter(m => m.account.status && "open" in m.account.status).length;
@@ -265,7 +291,7 @@ export default function MarketExplorer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {sortedAndFiltered.map((market, i) => {
             const key = market.publicKey.toBase58();
-            const status = getMarketStatusString(market.account.status);
+            const status = getMarketStatusString(market.account.status, market.account.endTs);
             const isWatched = watchlist.includes(key);
             const yesPool = lamportsToSol(market.account.yesPoolLamports);
             const noPool = lamportsToSol(market.account.noPoolLamports);
@@ -275,11 +301,11 @@ export default function MarketExplorer() {
             const feedHex = isOracleCategory(market.account.category) && market.account.oracleFeedId
               ? feedIdBytesToHex(market.account.oracleFeedId)
               : null;
-            const priceData = feedHex ? livePrices[feedHex.replace("0x", "")] : null;
+
             const catName = CATEGORIES[market.account.category] || "Other";
             const endTs = market.account.endTs.toNumber();
             const now = Math.floor(Date.now() / 1000);
-            const isEndingSoon = endTs - now < 3600 && status === "Open";
+            const isEndingSoon = endTs - now < 3600 && endTs > now && status === "Open";
 
             return (
               <motion.div
@@ -312,10 +338,10 @@ export default function MarketExplorer() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`flex items-center gap-1 text-[9px] font-bold ${
-                        status === "Open" ? "text-[#22c55e]" : status === "Settled" ? "text-[#9e8e78]" : "text-[#ef4444]"
+                        status === "Open" ? "text-[#22c55e]" : status === "Ended" ? "text-[#f97316]" : status === "Settled" ? "text-[#9e8e78]" : "text-[#ef4444]"
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${
-                          status === "Open" ? "bg-[#22c55e] animate-pulse" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ef4444]"
+                          status === "Open" ? "bg-[#22c55e] animate-pulse" : status === "Ended" ? "bg-[#f97316]" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ef4444]"
                         }`} />
                         {status}
                       </span>
@@ -329,13 +355,11 @@ export default function MarketExplorer() {
                   </div>
 
                   {/* Live price if oracle */}
-                  {priceData && feedHex && (
+                  {feedHex && (
                     <div className="text-[10px]">
                       <LivePriceBar
                         feedIdHex={feedHex}
                         category={market.account.category}
-                        livePrice={priceData.price}
-                        liveError={priceData.error}
                         targetPrice={market.account.targetPrice.toNumber()}
                         targetExpo={market.account.targetExpo}
                         comparison={market.account.comparison}

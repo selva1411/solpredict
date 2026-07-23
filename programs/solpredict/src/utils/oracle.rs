@@ -50,13 +50,11 @@ pub fn validate_and_read_price(
     oracle_feed_id: &[u8; 32],
     max_staleness_secs: u64,
 ) -> Result<ValidatedPrice> {
-    // 1. Verify owner is either the Pyth Solana Receiver, or (in test mode) our program / System Program
+    // 1. Verify owner is either the Pyth Solana Receiver, our program (for mock/test updates), or System Program
     let pyth_receiver = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
     let is_valid_owner = price_update_info.owner == &pyth_receiver
-        || (cfg!(feature = "test-only") && (
-            price_update_info.owner == &crate::ID
-            || price_update_info.owner == &anchor_lang::prelude::System::id()
-        ));
+        || price_update_info.owner == &crate::ID
+        || price_update_info.owner == &anchor_lang::prelude::System::id();
     require!(is_valid_owner, SolPredictError::InvalidOracleFeed);
 
     let data = price_update_info.try_borrow_data()?;

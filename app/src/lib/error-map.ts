@@ -41,6 +41,10 @@ export function getFriendlyErrorMessage(err: unknown): string {
     }
   }
   
+  if (msg.includes("Attempt to debit an account") || msg.includes("insufficient lamports") || msg.includes("0x1")) {
+    return "Insufficient SOL in connected wallet for gas fees & position. Click '🪂 Airdrop SOL' in the header!";
+  }
+
   // Check common anchor/wallet adapter errors
   if (msg.includes("User rejected the request")) {
     return "Transaction signature rejected by user.";

@@ -79,6 +79,44 @@ async function getTokenBalance(
   }
 }
 
+async function syncTradeToNeon(marketPubkey: string, trader: string, side: "YES" | "NO", qty: number, isBuy: boolean) {
+  try {
+    await fetch("http://localhost:3000/api/sync/trade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        marketPubkey,
+        trader,
+        side,
+        lamportsIn: isBuy ? qty * 10_000_000 : 0,
+        tokensOut: qty * 1_000_000,
+        yesPoolSol: 1.0,
+        noPoolSol: 1.0,
+        yesPct: 50,
+      }),
+    });
+  } catch {}
+}
+
+async function syncMarketToNeon(marketPubkey: string, question: string) {
+  try {
+    await fetch("http://localhost:3000/api/sync/market", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        marketPubkey,
+        marketId: 0,
+        question,
+        description: "Auto-synced prediction market",
+        category: "Crypto",
+        status: "open",
+        yesPoolSol: 0,
+        noPoolSol: 0,
+      }),
+    });
+  } catch {}
+}
+
 // ── create a fresh market if needed ─────────────────────────────────────────
 
 async function ensureFreshMarket(
@@ -170,7 +208,8 @@ async function ensureFreshMarket(
     .rpc();
 
   const market = await (program.account as any).market.fetch(marketPda);
-  console.log(`  ✅ Created Market #${marketId} — expires in 60 min`);
+  await syncMarketToNeon(marketPda.toBase58(), "Will SOL exceed $200.00 in the next 1 hour?");
+  console.log(`  ✅ Created Market #${marketId.toNumber()} — expires in 60 min`);
   return { marketPda, market };
 }
 
@@ -320,6 +359,7 @@ async function main() {
             userPosition: positionPda,
           } as any)
           .rpc();
+        await syncTradeToNeon(marketPda.toBase58(), botPub.toBase58(), sideStr as "YES" | "NO", qty, true);
         wins++;
 
       } else if (roll < 75) {
@@ -421,26 +461,45 @@ async function main() {
           const fillQty = Math.min(3, remaining);
 
           if (takerBalance !== null && Number(takerBalance) >= fillQty * 1_000_000 && fillQty > 0) {
-            console.log(
-              `  [${step}] [${botName}] ⚡ P2P FILL ${fillQty} ${orderSide} from ${ord.maker.toBase58().slice(0, 6)}...`
-            );
-            const takerTokenAta = getAssociatedTokenAddressSync(mint, botPub);
-            const makerTokenAta = getAssociatedTokenAddressSync(mint, ord.maker);
-            const orderTokenEscrow = getAssociatedTokenAddressSync(mint, target.publicKey, true);
+            try {
+              console.log(
+                `  [${step}] [${botName}] ⚡ P2P FILL ${fillQty} ${orderSide} from ${ord.maker.toBase58().slice(0, 6)}...`
+              );
+              const takerTokenAta = getAssociatedTokenAddressSync(mint, botPub);
+              const makerTokenAta = getAssociatedTokenAddressSync(mint, ord.maker);
+              const orderTokenEscrow = getAssociatedTokenAddressSync(mint, target.publicKey, true);
 
-            await botProgram.methods
-              .fillOrder(new anchor.BN(fillQty))
-              .accounts({
-                taker: botPub,
-                maker: ord.maker,
-                market: marketPda,
-                order: target.publicKey,
-                takerTokenAta,
-                makerTokenAta,
-                orderTokenEscrow,
-              } as any)
-              .rpc();
-            wins++;
+              await botProgram.methods
+                .fillOrder(new anchor.BN(fillQty))
+                .accounts({
+                  taker: botPub,
+                  maker: ord.maker,
+                  market: marketPda,
+                  order: target.publicKey,
+                  takerTokenAta,
+                  makerTokenAta,
+                  orderTokenEscrow,
+                } as any)
+                .rpc();
+              wins++;
+            } catch {
+              // Fallback to AMM Buy if order fill failed
+              console.log(`  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr} (fallback)`);
+              await botProgram.methods
+                .buyShares(sideParam, new anchor.BN(qty))
+                .accounts({
+                  buyer: botPub,
+                  market: marketPda,
+                  treasury: treasuryPda,
+                  yesMint: yesMintPda,
+                  noMint: noMintPda,
+                  buyerYesAta: botYesAta,
+                  buyerNoAta: botNoAta,
+                  userPosition: positionPda,
+                } as any)
+                .rpc();
+              wins++;
+            }
           } else {
             // Fall back to buy
             console.log(`  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr} (no tokens for P2P fill)`);

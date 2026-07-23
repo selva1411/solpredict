@@ -1,0 +1,105 @@
+import { pgTable, serial, varchar, text, decimal, bigint, boolean, timestamp, integer, date, unique } from 'drizzle-orm/pg-core';
+
+export const marketsCache = pgTable('markets_cache', {
+  id: serial('id').primaryKey(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).unique().notNull(),
+  marketId: bigint('market_id', { mode: 'number' }).notNull(),
+  question: text('question').notNull(),
+  description: text('description'),
+  category: varchar('category', { length: 20 }),
+  status: varchar('status', { length: 20 }).default('open'),
+  winningOutcome: varchar('winning_outcome', { length: 10 }),
+  yesPoolSol: decimal('yes_pool_sol', { precision: 18, scale: 9 }).default('0'),
+  noPoolSol: decimal('no_pool_sol', { precision: 18, scale: 9 }).default('0'),
+  yesSupply: bigint('yes_supply', { mode: 'number' }).default(0),
+  noSupply: bigint('no_supply', { mode: 'number' }).default(0),
+  endTs: timestamp('end_ts'),
+  resolveTs: timestamp('resolve_ts'),
+  thumbnailUrl: text('thumbnail_url'),
+  tags: text('tags').array(),
+  viewCount: integer('view_count').default(0),
+  watchlistCount: integer('watchlist_count').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const trades = pgTable('trades', {
+  id: serial('id').primaryKey(),
+  signature: varchar('signature', { length: 88 }).unique().notNull(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).notNull(),
+  trader: varchar('trader', { length: 44 }).notNull(),
+  side: varchar('side', { length: 3 }).notNull(),
+  lamportsIn: bigint('lamports_in', { mode: 'number' }),
+  tokensOut: bigint('tokens_out', { mode: 'number' }),
+  pricePerToken: decimal('price_per_token', { precision: 18, scale: 9 }),
+  blockTime: timestamp('block_time'),
+  slot: bigint('slot', { mode: 'number' }),
+});
+
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  wallet: varchar('wallet', { length: 44 }).unique().notNull(),
+  username: varchar('username', { length: 50 }),
+  avatarUrl: text('avatar_url'),
+  bio: text('bio'),
+  twitterHandle: varchar('twitter_handle', { length: 50 }),
+  totalWagered: decimal('total_wagered', { precision: 18, scale: 9 }).default('0'),
+  totalWon: decimal('total_won', { precision: 18, scale: 9 }).default('0'),
+  totalProfit: decimal('total_profit', { precision: 18, scale: 9 }).default('0'),
+  marketsTraded: integer('markets_traded').default(0),
+  winRate: decimal('win_rate', { precision: 5, scale: 2 }).default('0'),
+  pasScore: integer('pas_score').default(50),
+  createdAt: timestamp('created_at').defaultNow(),
+  lastActive: timestamp('last_active').defaultNow(),
+});
+
+export const marketComments = pgTable('market_comments', {
+  id: serial('id').primaryKey(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).notNull(),
+  authorWallet: varchar('author_wallet', { length: 44 }).notNull(),
+  authorUsername: varchar('author_username', { length: 50 }),
+  authorAvatar: text('author_avatar'),
+  content: text('content').notNull(),
+  parentId: integer('parent_id'),
+  upvotes: integer('upvotes').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const priceHistory = pgTable('price_history', {
+  id: serial('id').primaryKey(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).notNull(),
+  timestamp: timestamp('timestamp').notNull(),
+  yesPct: decimal('yes_pct', { precision: 5, scale: 2 }),
+  yesPoolSol: decimal('yes_pool_sol', { precision: 18, scale: 9 }),
+  noPoolSol: decimal('no_pool_sol', { precision: 18, scale: 9 }),
+  totalVolume: decimal('total_volume', { precision: 18, scale: 9 }),
+});
+
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
+  wallet: varchar('wallet', { length: 44 }).notNull(),
+  type: varchar('type', { length: 30 }),
+  marketPubkey: varchar('market_pubkey', { length: 44 }),
+  message: text('message'),
+  read: boolean('read').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const watchlist = pgTable('watchlist', {
+  id: serial('id').primaryKey(),
+  wallet: varchar('wallet', { length: 44 }).notNull(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => ({ unq: unique().on(t.wallet, t.marketPubkey) }));
+
+export const leaderboardSnapshots = pgTable('leaderboard_snapshots', {
+  id: serial('id').primaryKey(),
+  wallet: varchar('wallet', { length: 44 }).notNull(),
+  period: varchar('period', { length: 10 }),
+  rank: integer('rank'),
+  profitSol: decimal('profit_sol', { precision: 18, scale: 9 }),
+  winRate: decimal('win_rate', { precision: 5, scale: 2 }),
+  pasScore: integer('pas_score'),
+  marketsCount: integer('markets_count'),
+  snapshotDate: date('snapshot_date'),
+});

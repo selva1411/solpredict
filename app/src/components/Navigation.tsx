@@ -100,6 +100,29 @@ export function Navigation() {
               </span>
             </div>
 
+            {/* Devnet/Localnet Airdrop Button */}
+            <button
+              onClick={async () => {
+                const walletAdapter = (window as any).solana || (window as any).phantom?.solana;
+                const pubkey = walletAdapter?.publicKey ? new (await import('@solana/web3.js')).PublicKey(walletAdapter.publicKey.toString()) : null;
+                if (!pubkey) {
+                  (await import('sonner')).toast.error("Please connect your wallet first!");
+                  return;
+                }
+                try {
+                  const toastId = (await import('sonner')).toast.loading("Airdropping 5 SOL to wallet...");
+                  const sig = await connection.requestAirdrop(pubkey, 5 * 1e9);
+                  await connection.confirmTransaction(sig, "confirmed");
+                  (await import('sonner')).toast.success("Airdropped 5 SOL to wallet!", { id: toastId });
+                } catch (e: any) {
+                  (await import('sonner')).toast.error(`Airdrop failed: ${e.message || String(e)}`);
+                }
+              }}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/40 rounded-md text-xs font-mono font-bold text-[#ffd89c] transition-all cursor-pointer"
+            >
+              <span>🪂 Airdrop 5 SOL</span>
+            </button>
+
             <MobileNav />
             <ClientWalletButton />
           </div>
