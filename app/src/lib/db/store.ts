@@ -48,28 +48,7 @@ export interface CommentEntry {
 // In-memory cache store for offline/localnet fallback
 const memoryMarkets = new Map<string, MarketCacheEntry>();
 const memoryTrades: TradeEntry[] = [];
-const memoryComments: CommentEntry[] = [
-  {
-    id: 1,
-    marketPubkey: "GtBWL87QoY2b9aZr5Qnxi5ft5BXujYmeihFb8pZZ2JCY",
-    authorWallet: "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS",
-    authorUsername: "SatoshiTrader",
-    authorAvatar: "https://api.dicebear.com/7.x/identicon/svg?seed=Satoshi",
-    content: "SOL momentum looks extremely strong after the recent breakout. YES is highly likely!",
-    upvotes: 12,
-    createdAt: new Date(Date.now() - 3600000),
-  },
-  {
-    id: 2,
-    marketPubkey: "GtBWL87QoY2b9aZr5Qnxi5ft5BXujYmeihFb8pZZ2JCY",
-    authorWallet: "6fPimtWc71g5f6h8894Jb6k6k6",
-    authorUsername: "SolanaBear",
-    authorAvatar: "https://api.dicebear.com/7.x/identicon/svg?seed=Bear",
-    content: "Resistance around $205 is massive. Expecting a short term pullback. Betting NO.",
-    upvotes: 5,
-    createdAt: new Date(Date.now() - 1800000),
-  }
-];
+const memoryComments: CommentEntry[] = [];
 
 export async function upsertMarketCache(entry: MarketCacheEntry) {
   memoryMarkets.set(entry.marketPubkey, entry);
@@ -278,12 +257,5 @@ export async function getLeaderboardData() {
     }
   }
 
-  // Fallback demo leaderboard
-  return [
-    { rank: 1, wallet: "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS", username: "AlphaTrader", avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Alpha", totalWagered: 145.5, totalProfit: 48.2, winRate: 78.5, pasScore: 92, marketsTraded: 42 },
-    { rank: 2, wallet: "6z3wWf...Bot1", username: "Bot_Trader_1", avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Bot1", totalWagered: 98.0, totalProfit: 24.5, winRate: 65.0, pasScore: 81, marketsTraded: 88 },
-    { rank: 3, wallet: "8Y6sf5...Bot2", username: "Bot_Trader_2", avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Bot2", totalWagered: 76.2, totalProfit: 18.1, winRate: 61.2, pasScore: 76, marketsTraded: 64 },
-    { rank: 4, wallet: "4kLm99...Whale", username: "SolanaWhale", avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Whale", totalWagered: 320.0, totalProfit: 15.4, winRate: 54.0, pasScore: 71, marketsTraded: 19 },
-    { rank: 5, wallet: "9xPq11...Oracle", username: "OracleSeeker", avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Oracle", totalWagered: 45.0, totalProfit: 9.8, winRate: 58.3, pasScore: 68, marketsTraded: 15 },
-  ];
+  return [];
 }

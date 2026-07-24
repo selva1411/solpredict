@@ -6,20 +6,8 @@ use crate::events::MarketSettled;
 use crate::state::{Config, Market, MarketStatus, WinningOutcome};
 use crate::utils::{oracle, payout_math};
 
-/// Accounts for the `settle_market` instruction.
-///
-/// Permissionless — anyone can trigger settlement for oracle-backed markets
-/// after `resolve_ts`. Only `market` and `price_update` are essential; `config`
-/// is read-only for fee calculation.
-///
-/// NOTE: We use UncheckedAccount for the Pyth price update to avoid an
-/// anchor-lang version conflict (pyth SDK 2.0.0 uses anchor 1.x internally).
-/// The oracle::validate_and_read_price function handles all validation
-/// including account data parsing, staleness, feed ID, and confidence checks.
 #[derive(Accounts)]
 pub struct SettleMarket<'info> {
-    /// Permissionless — anyone can trigger settlement for oracle markets.
-    /// No admin required.
     #[account(
         mut,
         seeds = [MARKET_SEED, market.market_id.to_le_bytes().as_ref()],
@@ -27,111 +15,61 @@ pub struct SettleMarket<'info> {
     )]
     pub market: Account<'info, Market>,
 
-    /// Config PDA — read-only for fee calculation.
     #[account(
         seeds = [CONFIG_SEED],
         bump = config.bump,
     )]
     pub config: Account<'info, Config>,
 
-    /// Pyth PriceUpdateV2 account — posted just before this instruction
-    /// in the same transaction bundle.
     /// CHECK: Validated inside oracle::validate_and_read_price which parses
     /// the account data, verifies feed ID, staleness, and confidence.
     pub price_update: UncheckedAccount<'info>,
 }
 
-/// Handler for `settle_market`.
-///
-/// Reads the oracle price, validates it, determines the winner, computes
-/// fees and payout pool, and transitions the market to Settled (or Cancelled
-/// if one-sided).
 pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // Only price-backed markets (non-zero oracle_feed_id) can be settled via oracle.
-    // Markets with a zero feed ID (no Pyth price feed configured) must use settle_market_manual.
-    require!(
-        market.oracle_feed_id != [0u8; 32],
-        SolPredictError::UseManualSettlement
-    );
+    require!(market.oracle_feed_id != [0u8; 32], SolPredictError::UseManualSettlement);
+    require!(market.status == MarketStatus::Open, SolPredictError::AlreadySettled);
+    require!(clock.unix_timestamp >= market.end_ts || clock.unix_timestamp >= market.resolve_ts, SolPredictError::TooEarlyToSettle);
 
-    // 1. Market must be Open (blocks double-settlement)
-    require!(
-        market.status == MarketStatus::Open,
-        SolPredictError::AlreadySettled
-    );
-
-    // 2. Must be past end_ts or resolve_ts
-    require!(
-        clock.unix_timestamp >= market.end_ts || clock.unix_timestamp >= market.resolve_ts,
-        SolPredictError::TooEarlyToSettle
-    );
-
-    // 3. Read and validate oracle price
-    //    This enforces: staleness ≤ 60s, feed id match, confidence ≤ 2%
     let validated_price = oracle::validate_and_read_price(
-        &ctx.accounts.price_update.to_account_info(),
-        &clock,
-        &market.oracle_feed_id,
-        MAX_STALENESS_SECS,
+        &ctx.accounts.price_update.to_account_info(), &clock, &market.oracle_feed_id, MAX_STALENESS_SECS,
     )?;
 
-    // 4. Compare oracle price against target to determine winner
     let yes_wins = oracle::compare_prices(
-        validated_price.price,
-        validated_price.expo,
-        market.target_price,
-        market.target_expo,
-        market.comparison,
+        validated_price.price, validated_price.expo, market.target_price, market.target_expo, market.comparison,
     )?;
 
-    let winning_outcome = if yes_wins {
-        WinningOutcome::Yes
-    } else {
-        WinningOutcome::No
-    };
+    let winning_outcome = if yes_wins { WinningOutcome::Yes } else { WinningOutcome::No };
 
-    // 5. One-sided market check: if winning side has zero supply,
-    //    auto-cancel instead of stranding the losing side's funds.
     let winning_supply = match winning_outcome {
         WinningOutcome::Yes => market.yes_supply,
         WinningOutcome::No => market.no_supply,
-        WinningOutcome::Unset => 0, // unreachable
+        WinningOutcome::Unset => 0,
     };
 
-    let market = &mut ctx.accounts.market;
+    let market_id = market.market_id;
+    let settled_price = validated_price.price;
+    let settled_expo = validated_price.expo;
 
     if winning_supply == 0 {
-        // Nobody bet on the winning side → cancel, let everyone refund
+        ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
+        let market = &mut ctx.accounts.market;
         market.status = MarketStatus::Cancelled;
-        market.settled_price = validated_price.price;
-        market.settled_expo = validated_price.expo;
+        market.settled_price = settled_price;
+        market.settled_expo = settled_expo;
         market.settled_at = clock.unix_timestamp;
+        ctx.accounts.market.reentrancy_lock.release();
 
-        msg!(
-            "Market {} auto-cancelled: winning side has zero supply",
-            market.market_id
-        );
-
-        emit!(MarketSettled {
-            market_id: market.market_id,
-            winning_outcome: winning_outcome as u8,
-            settled_price: validated_price.price,
-            total_payout_pool: 0,
-        });
-
+        emit!(MarketSettled { market_id, winning_outcome: winning_outcome as u8, settled_price, total_payout_pool: 0 });
         return Ok(());
     }
 
-    // 6. Compute fee and payout pool
     let yes_pool = market.yes_pool_lamports;
     let no_pool = market.no_pool_lamports;
-
-    let total_pool = yes_pool
-        .checked_add(no_pool)
-        .ok_or(SolPredictError::MathOverflow)?;
+    let total_pool = yes_pool.checked_add(no_pool).ok_or(SolPredictError::MathOverflow)?;
 
     let losing_pool = match winning_outcome {
         WinningOutcome::Yes => no_pool,
@@ -140,36 +78,22 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
     };
 
     let fee = payout_math::calculate_fee(losing_pool, ctx.accounts.config.fee_bps)?;
+    let total_payout_pool = total_pool.checked_sub(fee).ok_or(SolPredictError::MathOverflow)?;
 
-    let total_payout_pool = total_pool
-        .checked_sub(fee)
-        .ok_or(SolPredictError::MathOverflow)?;
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
-    // 7. Store settlement results
+    let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Settled;
     market.winning_outcome = winning_outcome;
-    market.settled_price = validated_price.price;
-    market.settled_expo = validated_price.expo;
+    market.settled_price = settled_price;
+    market.settled_expo = settled_expo;
     market.settled_at = clock.unix_timestamp;
     market.fee_collected = fee;
     market.total_payout_pool = total_payout_pool;
 
-    // 8. Emit event
-    emit!(MarketSettled {
-        market_id: market.market_id,
-        winning_outcome: winning_outcome as u8,
-        settled_price: validated_price.price,
-        total_payout_pool,
-    });
+    ctx.accounts.market.reentrancy_lock.release();
 
-    msg!(
-        "Market {} settled: winner={:?}, price={}, payout_pool={}, fee={}",
-        market.market_id,
-        winning_outcome,
-        validated_price.price,
-        total_payout_pool,
-        fee
-    );
+    emit!(MarketSettled { market_id, winning_outcome: winning_outcome as u8, settled_price, total_payout_pool });
 
     Ok(())
 }

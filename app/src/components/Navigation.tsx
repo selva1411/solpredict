@@ -17,6 +17,11 @@ const NAV_ITEMS = [
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
 ];
 
+interface WindowSolana {
+  solana?: { publicKey?: { toString(): string }; isPhantom?: boolean };
+  phantom?: { solana?: { publicKey?: { toString(): string }; isPhantom?: boolean } };
+}
+
 export function Navigation() {
   const { role } = useUserRole();
   const { publicKey } = useWallet();
@@ -28,8 +33,9 @@ export function Navigation() {
 
   useEffect(() => {
     setWatchlistCount(getWatchlist().length);
-    const interval = setInterval(() => setWatchlistCount(getWatchlist().length), 5000);
-    return () => clearInterval(interval);
+    const onStorage = () => setWatchlistCount(getWatchlist().length);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useEffect(() => {
@@ -161,7 +167,8 @@ export function Navigation() {
             {/* Devnet/Localnet Airdrop Button */}
             <button
               onClick={async () => {
-                const walletAdapter = (window as any).solana || (window as any).phantom?.solana;
+                const w = typeof window !== "undefined" ? (window as unknown as WindowSolana) : undefined;
+                const walletAdapter = w?.solana || w?.phantom?.solana;
                 const pubkey = walletAdapter?.publicKey ? new (await import('@solana/web3.js')).PublicKey(walletAdapter.publicKey.toString()) : null;
                 if (!pubkey) {
                   (await import('sonner')).toast.error("Please connect your wallet first!");

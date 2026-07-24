@@ -7,7 +7,7 @@ use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::SharesPurchased;
 use crate::state::{Market, MarketStatus, Side, UserPosition};
-use crate::utils::payout_math;
+use crate::utils::{amm_math, payout_math};
 
 /// Accounts for the `buy_shares` instruction.
 ///
@@ -96,39 +96,39 @@ pub struct BuyShares<'info> {
 pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()> {
     let market = &ctx.accounts.market;
 
-    // 1. Market must be Open
     require!(
         market.status == MarketStatus::Open,
         SolPredictError::MarketNotOpen
     );
 
-    // 2. Trading period must not have expired — NEVER trust client-supplied time
     let clock = Clock::get()?;
     require!(
         clock.unix_timestamp < market.end_ts,
         SolPredictError::MarketExpired
     );
 
-    // 3. Quantity validation
     require!(
         quantity > 0 && quantity <= MAX_SHARES_PER_TX,
         SolPredictError::InvalidQuantity
     );
 
-    // 4. Calculate cost dynamically based on CPMM pool ratio
-    let side_pool = match side {
-        Side::Yes => market.yes_pool_lamports,
-        Side::No => market.no_pool_lamports,
-    };
-    let total_pool = market.yes_pool_lamports.saturating_add(market.no_pool_lamports);
-    let cost = payout_math::calculate_dynamic_cost(
-        quantity,
-        market.share_price_lamports,
-        side_pool,
-        total_pool,
-    )?;
+    let pool_yes = market.yes_pool_lamports as u128;
+    let pool_no = market.no_pool_lamports as u128;
+    let dy_out = (quantity as u128) * (market.share_price_lamports as u128);
+    let fee_bps = market.fee_bps;
 
-    // 5. CPI: Transfer SOL from buyer → treasury
+    let cost_u128 = if dy_out == 0 {
+        0
+    } else if pool_yes == 0 && pool_no == 0 {
+        payout_math::calculate_cost(quantity, market.share_price_lamports)? as u128
+    } else {
+        match side {
+            Side::Yes => amm_math::get_buy_cost_in(pool_yes, pool_no, dy_out, fee_bps),
+            Side::No => amm_math::get_buy_cost_in(pool_no, pool_yes, dy_out, fee_bps),
+        }?
+    };
+    let cost = u64::try_from(cost_u128).map_err(|_| error!(SolPredictError::MathOverflow))?;
+
     system_program::transfer(
         CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
@@ -140,14 +140,12 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         cost,
     )?;
 
-    // 6. Calculate token amount to mint (quantity shares * 10^6 base units per share)
     let mint_amount = (quantity as u128)
         .checked_mul(BASE_UNITS_PER_SHARE as u128)
         .ok_or(SolPredictError::MathOverflow)?;
     let mint_amount_u64 =
         u64::try_from(mint_amount).map_err(|_| SolPredictError::MathOverflow)?;
 
-    // 7. Determine which mint and ATA to use based on side
     let (mint_account, ata_account) = match side {
         Side::Yes => (
             ctx.accounts.yes_mint.to_account_info(),
@@ -159,8 +157,6 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         ),
     };
 
-    // 8. CPI: Mint tokens to buyer's ATA
-    //    Signer seeds = Market PDA's seeds (mint authority is the Market PDA)
     let market_id_bytes = ctx.accounts.market.market_id.to_le_bytes();
     let market_bump = ctx.accounts.market.bump;
     let signer_seeds: &[&[&[u8]]] = &[&[
@@ -182,7 +178,15 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         mint_amount_u64,
     )?;
 
-    // 9. Update market pools and supplies with checked_add
+    // Pre-read values for emit and rent check
+    let buyer_key = ctx.accounts.buyer.key();
+    let market_key = ctx.accounts.market.key();
+
+    let rent = Rent::get()?;
+    let treasury_min = rent.minimum_balance(0);
+
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
+
     let market = &mut ctx.accounts.market;
     match side {
         Side::Yes => {
@@ -207,12 +211,10 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         }
     }
 
-    // 10. Update (or initialize) UserPosition
     let position = &mut ctx.accounts.user_position;
-    // On first purchase, set owner and market (init_if_needed zeroes these)
     if position.owner == Pubkey::default() {
-        position.owner = ctx.accounts.buyer.key();
-        position.market = market.key();
+        position.owner = buyer_key;
+        position.market = market_key;
         position.bump = ctx.bumps.user_position;
     }
 
@@ -235,15 +237,24 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         .checked_add(cost)
         .ok_or(SolPredictError::MathOverflow)?;
 
-    // 11. Emit event for live activity feed and probability updates
+    let new_yes_pool = market.yes_pool_lamports;
+    let new_no_pool = market.no_pool_lamports;
+    let market_id = market.market_id;
+
+    // Rent exemption: treasury must stay above minimum or be empty after all claims
+    let treasury_after = ctx.accounts.treasury.lamports();
+    require!(treasury_after >= treasury_min || treasury_after == 0, SolPredictError::TreasuryInsufficient);
+
+    ctx.accounts.market.reentrancy_lock.release();
+
     emit!(SharesPurchased {
-        market_id: market.market_id,
-        buyer: ctx.accounts.buyer.key(),
+        market_id,
+        buyer: buyer_key,
         side,
         quantity,
         cost,
-        new_yes_pool: market.yes_pool_lamports,
-        new_no_pool: market.no_pool_lamports,
+        new_yes_pool,
+        new_no_pool,
     });
 
     Ok(())

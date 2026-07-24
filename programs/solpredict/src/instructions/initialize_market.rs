@@ -192,6 +192,7 @@ pub fn handler(
     market.settled_expo = 0;
     market.settled_at = 0;
     market.share_price_lamports = share_price_lamports;
+    market.fee_bps = ctx.accounts.config.fee_bps;
     market.bump = ctx.bumps.market;
     market.treasury_bump = ctx.bumps.treasury;
 

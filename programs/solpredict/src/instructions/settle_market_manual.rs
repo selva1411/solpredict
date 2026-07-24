@@ -28,97 +28,52 @@ pub fn handler(ctx: Context<SettleMarketManual>, outcome: u8) -> Result<()> {
     let market = &ctx.accounts.market;
     let clock = Clock::get()?;
 
-    // ── CHECKS ──────────────────────────────────────────────
-    // Only admin can manually settle
-    require!(
-        ctx.accounts.admin.key() == ctx.accounts.config.admin,
-        SolPredictError::Unauthorized
-    );
+    require!(ctx.accounts.admin.key() == ctx.accounts.config.admin, SolPredictError::Unauthorized);
+    require!(market.status == MarketStatus::Open, SolPredictError::AlreadySettled);
+    require!(clock.unix_timestamp >= market.resolve_ts, SolPredictError::MarketNotEnded);
+    require!(market.category != Category::Crypto, SolPredictError::UsePythForCrypto);
+    require!(market.yes_pool_lamports > 0 || market.no_pool_lamports > 0, SolPredictError::EmptyPool);
 
-    // Market must be Open
-    require!(
-        market.status == MarketStatus::Open,
-        SolPredictError::AlreadySettled
-    );
-
-    // Market must have ended
-    require!(
-        clock.unix_timestamp >= market.resolve_ts,
-        SolPredictError::MarketNotEnded
-    );
-
-    // Only non-crypto markets can be manually settled
-    require!(
-        market.category != Category::Crypto,
-        SolPredictError::UsePythForCrypto
-    );
-
-    // At least one side must have bets
-    require!(
-        market.yes_pool_lamports > 0 || market.no_pool_lamports > 0,
-        SolPredictError::EmptyPool
-    );
-
-    // Must be Open
-    require!(
-        market.status == MarketStatus::Open,
-        SolPredictError::AlreadySettled
-    );
-
-    // Market must have ended (resolve_ts passed)
-    require!(
-        clock.unix_timestamp >= market.resolve_ts,
-        SolPredictError::MarketNotEnded
-    );
-
-    // Outcome must be YES(1) or NO(2)
     let winning_outcome = match outcome {
         1 => WinningOutcome::Yes,
         2 => WinningOutcome::No,
         _ => return err!(SolPredictError::InvalidOutcome),
     };
 
-    let market = &mut ctx.accounts.market;
+    let market_id = market.market_id;
 
-    // Compute fee and payout pool
     let total_pool = market.yes_pool_lamports
         .checked_add(market.no_pool_lamports)
         .ok_or(SolPredictError::MathOverflow)?;
 
-    let (winning_pool, losing_pool) = match winning_outcome {
-        WinningOutcome::Yes => (market.yes_pool_lamports, market.no_pool_lamports),
-        WinningOutcome::No => (market.no_pool_lamports, market.yes_pool_lamports),
-        WinningOutcome::Unset => (0, 0),
+    let losing_pool = match winning_outcome {
+        WinningOutcome::Yes => market.no_pool_lamports,
+        WinningOutcome::No => market.yes_pool_lamports,
+        WinningOutcome::Unset => 0,
     };
 
     let fee = payout_math::calculate_fee(losing_pool, ctx.accounts.config.fee_bps)?;
+    let total_payout_pool = total_pool.checked_sub(fee).ok_or(SolPredictError::MathOverflow)?;
 
-    let total_payout_pool = total_pool
-        .checked_sub(fee)
-        .ok_or(SolPredictError::MathOverflow)?;
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
+    let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Settled;
     market.winning_outcome = winning_outcome;
     market.fee_collected = fee;
     market.total_payout_pool = total_payout_pool;
     market.settled_at = clock.unix_timestamp;
 
+    ctx.accounts.market.reentrancy_lock.release();
+
     emit!(MarketSettledManual {
-        market_id: market.market_id,
+        market_id,
         winning_outcome: outcome,
         fee_collected: fee,
         total_payout_pool,
         settled_by: ctx.accounts.admin.key(),
         settled_at: clock.unix_timestamp,
     });
-
-    msg!(
-        "Market {} manually settled: winner={:?}, payout_pool={}, fee={}",
-        market.market_id,
-        winning_outcome,
-        total_payout_pool,
-        fee
-    );
 
     Ok(())
 }

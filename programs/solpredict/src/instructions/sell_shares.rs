@@ -7,7 +7,7 @@ use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::SharesSold;
 use crate::state::{Market, MarketStatus, Side, UserPosition};
-use crate::utils::payout_math;
+use crate::utils::{amm_math, payout_math};
 
 #[derive(Accounts)]
 pub struct SellShares<'info> {
@@ -75,28 +75,18 @@ pub struct SellShares<'info> {
 pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()> {
     let market = &ctx.accounts.market;
 
-    require!(
-        market.status == MarketStatus::Open,
-        SolPredictError::MarketNotOpen
-    );
+    require!(market.status == MarketStatus::Open, SolPredictError::MarketNotOpen);
 
     let clock = Clock::get()?;
-    require!(
-        clock.unix_timestamp < market.end_ts,
-        SolPredictError::MarketExpired
-    );
+    require!(clock.unix_timestamp < market.end_ts, SolPredictError::MarketExpired);
 
-    require!(
-        quantity > 0 && quantity <= MAX_SHARES_PER_TX,
-        SolPredictError::InvalidQuantity
-    );
+    require!(quantity > 0 && quantity <= MAX_SHARES_PER_TX, SolPredictError::InvalidQuantity);
 
     let mint_amount = (quantity as u128)
         .checked_mul(BASE_UNITS_PER_SHARE as u128)
         .ok_or(SolPredictError::MathOverflow)?;
     let mint_amount_u64 = u64::try_from(mint_amount).map_err(|_| error!(SolPredictError::MathOverflow))?;
 
-    // Choose mint and ATA based on side
     let (ata_amount, is_yes) = match side {
         Side::Yes => (ctx.accounts.seller_yes_ata.amount, true),
         Side::No  => (ctx.accounts.seller_no_ata.amount, false),
@@ -104,26 +94,28 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
 
     require!(ata_amount >= mint_amount_u64, SolPredictError::InsufficientShares);
 
-    // Snapshot pool values before mutation
-    let side_pool = if is_yes { market.yes_pool_lamports } else { market.no_pool_lamports };
-    let total_pool = market.yes_pool_lamports.saturating_add(market.no_pool_lamports);
+    let pool_yes = market.yes_pool_lamports as u128;
+    let pool_no = market.no_pool_lamports as u128;
+    let dy_in = (quantity as u128) * (market.share_price_lamports as u128);
+    let fee_bps = market.fee_bps;
     let treasury_balance = ctx.accounts.treasury.lamports();
-    let share_price = market.share_price_lamports;
     let market_id = market.market_id;
+    let seller_key = ctx.accounts.seller.key();
 
-    // Calculate safe refund using inverse CPMM (never drains treasury)
-    let refund = payout_math::calculate_sell_refund(
-        quantity,
-        share_price,
-        side_pool,
-        total_pool,
-        treasury_balance,
-    )?;
+    let refund_u128 = if dy_in == 0 || pool_yes == 0 || pool_no == 0 {
+        payout_math::calculate_cost(quantity, market.share_price_lamports)? as u128
+    } else {
+        match is_yes {
+            true => amm_math::get_sell_amount_out(pool_yes, pool_no, dy_in, fee_bps),
+            false => amm_math::get_sell_amount_out(pool_no, pool_yes, dy_in, fee_bps),
+        }.unwrap_or_else(|_| payout_math::calculate_cost(quantity, market.share_price_lamports).unwrap_or(0) as u128)
+    };
+    let refund = u64::try_from(refund_u128)
+        .unwrap_or(u64::MAX)
+        .min(treasury_balance.saturating_sub(1));
 
     require!(refund > 0, SolPredictError::MathOverflow);
-    require!(refund < treasury_balance, SolPredictError::MathOverflow);
 
-    // Burn tokens first
     let (mint_info, ata_info) = if is_yes {
         (ctx.accounts.yes_mint.to_account_info(), ctx.accounts.seller_yes_ata.to_account_info())
     } else {
@@ -142,7 +134,6 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
         mint_amount_u64,
     )?;
 
-    // Transfer SOL refund from treasury to seller
     let market_key = ctx.accounts.market.key();
     let treasury_bump = ctx.accounts.market.treasury_bump;
     let seeds = &[TREASURY_SEED, market_key.as_ref(), &[treasury_bump]];
@@ -160,7 +151,8 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
         refund,
     )?;
 
-    // Update market pool accounting
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
+
     let market = &mut ctx.accounts.market;
     if is_yes {
         market.yes_pool_lamports = market.yes_pool_lamports.saturating_sub(refund);
@@ -170,19 +162,19 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
         market.no_supply = market.no_supply.saturating_sub(mint_amount_u64);
     }
 
-    // Update user position — use saturating_sub to prevent underflow on position accounting
     let position = &mut ctx.accounts.user_position;
     if is_yes {
         position.yes_amount = position.yes_amount.saturating_sub(mint_amount_u64);
     } else {
         position.no_amount = position.no_amount.saturating_sub(mint_amount_u64);
     }
-    // total_spent_lamports tracks net cost — use saturating sub to avoid underflow
     position.total_spent_lamports = position.total_spent_lamports.saturating_sub(refund);
+
+    market.reentrancy_lock.release();
 
     emit!(SharesSold {
         market_id,
-        seller: ctx.accounts.seller.key(),
+        seller: seller_key,
         side,
         quantity,
         refund,

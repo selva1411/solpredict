@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useRealtime } from "@/hooks/useRealtime";
 import { TrendingUp } from "lucide-react";
 import {
   AreaChart,
@@ -68,9 +69,29 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
   const priceHistoryRef = useRef<{ time: number; price: number }[]>([]);
   const latestPriceRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mountedRef = useRef(true);
+
+  useRealtime("global:ticker", (payload: unknown) => {
+    if (!mountedRef.current) return;
+    const tick = payload as { solPrice: number };
+    if (tick?.solPrice) appendPrice(tick.solPrice);
+  });
+
+  function appendPrice(newPrice: number) {
+    setPrevPrice(latestPriceRef.current);
+    setCurrentPrice(newPrice);
+    latestPriceRef.current = newPrice;
+    const newPoint = { time: Date.now(), price: newPrice };
+    priceHistoryRef.current = [
+      ...priceHistoryRef.current.slice(-(MAX_POINTS - 1)),
+      newPoint,
+    ];
+    setChartData([...priceHistoryRef.current]);
+  }
 
   useEffect(() => {
     let mounted = true;
+    mountedRef.current = true;
 
     async function init() {
       setPriceStatus("loading");
@@ -100,23 +121,14 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
         if (!mounted) return;
         const newPrice = await fetchSOLPrice();
         if (newPrice === 0 || !mounted) return;
-
-        setPrevPrice(latestPriceRef.current);
-        setCurrentPrice(newPrice);
-        latestPriceRef.current = newPrice;
-
-        const newPoint = { time: Date.now(), price: newPrice };
-        priceHistoryRef.current = [
-          ...priceHistoryRef.current.slice(-(MAX_POINTS - 1)),
-          newPoint,
-        ];
-        if (mounted) setChartData([...priceHistoryRef.current]);
-      }, POLL_MS);
+        appendPrice(newPrice);
+      }, 30_000);
     }
 
     init();
     return () => {
       mounted = false;
+      mountedRef.current = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);

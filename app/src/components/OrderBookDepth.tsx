@@ -2,18 +2,33 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useProgram } from "@/hooks/useProgram";
+import { useRealtime } from "@/hooks/useRealtime";
 import { PublicKey } from "@solana/web3.js";
+import * as anchor from "@coral-xyz/anchor";
 
 interface OrderBookDepthProps {
   yesPoolLamports: number;
   noPoolLamports: number;
   marketPda?: string;
-  onFillOrder?: (orderAccount: any, qty: number) => void;
+  onFillOrder?: (orderAccount: { publicKey: PublicKey; account: OrderAccountRaw }, qty: number) => void;
+}
+
+interface OrderAccountRaw {
+  maker: PublicKey;
+  market: PublicKey;
+  side: object;
+  isBuy: boolean;
+  priceBps: anchor.BN;
+  quantity: anchor.BN;
+  filledQuantity: anchor.BN;
+  status: object;
+  orderId: anchor.BN;
+  [key: string]: unknown;
 }
 
 interface OrderEntry {
-  account: any;
-  orderAccountObj: any;
+  account: OrderAccountRaw;
+  orderAccountObj: { publicKey: PublicKey; account: OrderAccountRaw };
   priceBps: number;
   quantity: number;
   filled: number;
@@ -41,13 +56,13 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
 
     const fetchOrders = async () => {
       try {
-        const allOrders = await (program.account as any).order.all();
+        const allOrders = await program.account.order.all();
         const mktKey = new PublicKey(marketPda);
-        const marketOrders = allOrders.filter((o: any) => {
+        const marketOrders = allOrders.filter((o) => {
           try { return o.account.market.equals(mktKey); } catch { return false; }
         });
 
-        const openOrders = marketOrders.filter((o: any) => {
+        const openOrders = marketOrders.filter((o) => {
           const status = o.account.status;
           if (typeof status === "object" && status !== null) {
             return "open" in status || Object.keys(status)[0]?.toLowerCase() === "open";
@@ -103,9 +118,16 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
     };
 
     fetchOrders();
-    const interval = setInterval(fetchOrders, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => { cancelled = true; };
   }, [program, marketPda]);
+
+  useRealtime(marketPda ? `market:${marketPda}:orderbook` : undefined, (payload: unknown) => {
+    try {
+      const data = payload as { bids: OrderEntry[]; asks: OrderEntry[] };
+      if (data.bids) setBids(data.bids);
+      if (data.asks) setAsks(data.asks);
+    } catch {}
+  });
 
   const filteredBids = bids.filter(b => selectedSideFilter === "ALL" || b.side === selectedSideFilter).slice(0, 10);
   const filteredAsks = asks.filter(a => selectedSideFilter === "ALL" || a.side === selectedSideFilter).slice(0, 10);

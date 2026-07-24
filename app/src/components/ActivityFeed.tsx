@@ -1,8 +1,8 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useProgram } from "@/hooks/useProgram";
+import { useRealtime } from "@/hooks/useRealtime";
 import { shortAddr, timeUntil } from "@/lib/format";
-import Link from "next/link";
 
 interface ActivityEntry {
   id: string;
@@ -19,7 +19,13 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
   const { program, connection } = useProgram();
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dbFallback, setDbFallback] = useState(false);
+  const activitiesRef = useRef(activities);
+  activitiesRef.current = activities;
+
+  useRealtime("global:activity", (payload: unknown) => {
+    const entry = payload as ActivityEntry;
+    setActivities((prev) => [entry, ...prev].slice(0, limit));
+  });
 
   const fetchActivities = useCallback(async () => {
     if (!connection) return;
@@ -38,7 +44,7 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
           });
           if (!tx?.meta?.logMessages) continue;
           const logs = tx.meta.logMessages.join(" ");
-          const msg = tx.transaction.message as any;
+          const msg = tx.transaction.message as unknown as { staticAccountKeys?: import("@solana/web3.js").PublicKey[]; accountKeys?: Array<{ toBase58(): string }> };
           const signer = (msg.staticAccountKeys?.[0] ?? msg.accountKeys?.[0])?.toBase58() ?? "";
           const ts = sig.blockTime ?? Math.floor(Date.now() / 1000);
 
@@ -72,11 +78,9 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
             });
           }
         } catch {
-          // skip failed parse
         }
       }
       setActivities(entries);
-      setDbFallback(false);
     } catch {
       try {
         const res = await fetch('/api/activity/recent');
@@ -92,7 +96,6 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
             timestamp: a.blockTime ? Math.floor(new Date(a.blockTime).getTime() / 1000) : Math.floor(Date.now() / 1000),
           }));
           setActivities(entries);
-          setDbFallback(true);
         } else {
           setActivities([]);
         }
@@ -106,8 +109,6 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
 
   useEffect(() => {
     fetchActivities();
-    const interval = setInterval(fetchActivities, 15_000);
-    return () => clearInterval(interval);
   }, [fetchActivities]);
 
   if (loading) {
@@ -121,18 +122,13 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
   if (activities.length === 0) {
     return (
       <div style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--color-text-secondary)", padding: "16px", textAlign: "center" }}>
-        {dbFallback ? "No recent activity in cache" : "No recent activity"}
+        No recent activity
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-      {dbFallback && (
-        <div style={{ padding: "6px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-crypto)", borderBottom: "1px solid var(--color-surface-variant)" }}>
-          Showing cached trades from database
-        </div>
-      )}
       {activities.map((a) => (
         <div
           key={a.id}

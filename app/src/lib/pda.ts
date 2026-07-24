@@ -84,3 +84,19 @@ export function getOrderPda(
   );
   return pda;
 }
+
+export function getProposalPda(proposalId: anchor.BN, programId: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("proposal"), proposalId.toArrayLike(Buffer, "le", 8)],
+    programId
+  );
+  return pda;
+}
+
+export function getProposalVaultPda(proposalId: anchor.BN, programId: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("proposal_vault"), proposalId.toArrayLike(Buffer, "le", 8)],
+    programId
+  );
+  return pda;
+}

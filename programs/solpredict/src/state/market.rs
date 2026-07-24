@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::{MAX_DESCRIPTION_LEN, MAX_QUESTION_LEN};
+use crate::utils::ReentrancyLock;
 
 // ============================================================================
 // Enums — stored as u8 on-chain, matching the spec's numbering exactly.
@@ -145,6 +146,12 @@ pub struct Market {
 
     /// Treasury PDA canonical bump (stored here for efficient claim/refund CPIs).
     pub treasury_bump: u8,
+
+    /// Fee in basis points (e.g. 30 = 0.3%). Charged from the losing pool at settlement.
+    pub fee_bps: u16,
+
+    /// Reentrancy protection lock.
+    pub reentrancy_lock: ReentrancyLock,
 }
 
 impl Market {
@@ -177,8 +184,11 @@ impl Market {
     /// 4  settled_expo (i32)
     /// 8  settled_at (i64)
     /// 8  share_price_lamports (u64)
+    /// 2  fee_bps (u16)
     /// 1  bump (u8)
     /// 1  treasury_bump (u8)
+    /// 1  reentrancy_lock.locked (u8)
+    /// 32 reentrancy_lock.locker (Pubkey)
     pub const LEN: usize = 8   // discriminator
         + 8                     // market_id
         + 32                    // authority
@@ -207,6 +217,9 @@ impl Market {
         + 4                     // settled_expo
         + 8                     // settled_at
         + 8                     // share_price_lamports
+        + 2                     // fee_bps
         + 1                     // bump
-        + 1;                    // treasury_bump
+        + 1                     // treasury_bump
+        + 1                     // reentrancy_lock.locked
+        + 32;                   // reentrancy_lock.locker
 }

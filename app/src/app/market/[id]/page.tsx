@@ -34,6 +34,7 @@ import { MarketComments } from "@/components/MarketComments";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getMarketStatusString } from "@/lib/events";
 import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
+import { txAccounts } from "@/lib/anchor-utils";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { feedIdBytesToHex, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
@@ -333,7 +334,7 @@ export default function MarketDetailPage() {
   const fetchUserOrders = useCallback(async () => {
     if (!wallet?.publicKey || !program) return;
     try {
-      const allOrders = await (program.account as any).order.all();
+      const allOrders = await program.account.order.all();
       const myOrders = allOrders.filter(
         (o: any) => {
           const isMarketMatch = o.account.market.equals(marketPda);
@@ -495,13 +496,13 @@ export default function MarketDetailPage() {
       }
 
       const sig = await builder
-        .accounts({
+        .accounts(txAccounts({
           maker: wallet.publicKey,
           market: marketPda,
           order: orderPda,
           makerTokenAta,
           orderTokenEscrow,
-        } as any)
+        }))
         .rpc();
 
       setTxState("success");
@@ -535,7 +536,7 @@ export default function MarketDetailPage() {
 
       const sig = await program.methods
         .fillOrder(new anchor.BN(fillQty))
-        .accounts({
+        .accounts(txAccounts({
           taker: wallet.publicKey,
           maker: ord.maker,
           market: marketPda,
@@ -543,7 +544,7 @@ export default function MarketDetailPage() {
           takerTokenAta,
           makerTokenAta,
           orderTokenEscrow,
-        } as any)
+        }))
         .rpc();
 
       toast.success(`Filled ${fillQty} shares order! (Sig: ${sig.slice(0, 8)}...)`);
@@ -568,13 +569,13 @@ export default function MarketDetailPage() {
 
       const sig = await program.methods
         .cancelOrder()
-        .accounts({
+        .accounts(txAccounts({
           maker: wallet.publicKey,
           market: marketPda,
           order: orderAccount.publicKey,
           makerTokenAta,
           orderTokenEscrow,
-        } as any)
+        }))
         .rpc();
 
       toast.success(`Limit Order cancelled! (Sig: ${sig.slice(0, 8)}...)`);
@@ -867,7 +868,7 @@ export default function MarketDetailPage() {
       setTxState("confirming");
       const sig = await program.methods
         .buyShares(sideParam, new anchor.BN(quantity))
-        .accounts({
+        .accounts(txAccounts({
           buyer: wallet.publicKey,
           market: marketPda,
           treasury: treasuryPda,
@@ -876,7 +877,7 @@ export default function MarketDetailPage() {
           buyerYesAta: buyerYesAta,
           buyerNoAta: buyerNoAta,
           userPosition: userPositionPda,
-        } as Record<string, unknown>)
+        }))
         .rpc();
 
       setTxSig(sig);
@@ -916,7 +917,7 @@ export default function MarketDetailPage() {
 
       await program.methods
         .sellShares(sideParam, new anchor.BN(sellQuantity))
-        .accounts({
+        .accounts(txAccounts({
           seller: wallet.publicKey,
           market: marketPda,
           treasury: treasuryPda,
@@ -925,7 +926,7 @@ export default function MarketDetailPage() {
           sellerYesAta,
           sellerNoAta,
           userPosition: userPositionPda,
-        } as Record<string, unknown>)
+        }))
         .rpc();
 
       toast.success(`Sold ${sellQuantity} ${sellSide} shares!`);

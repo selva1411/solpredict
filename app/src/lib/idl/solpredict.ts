@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "B7iciCdfA2Jw3yrQVrYtZMMdbehaqr2XS8kF89ageCWU",
+  "address": "EFqjmCwa7r6UHxEGMKUEjkfodWs84a4fHju31predFKP",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -13,6 +13,613 @@ export type Solpredict = {
     "description": "SOLPredict — Decentralized Prediction Market on Solana"
   },
   "instructions": [
+    {
+      "name": "addLiquidity",
+      "docs": [
+        "Add liquidity to a market and receive YES/NO tokens + LP position."
+      ],
+      "discriminator": [
+        181,
+        157,
+        89,
+        67,
+        143,
+        182,
+        52,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yesMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "noMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "providerYesAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "yesMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "providerNoAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "noMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "liquidityPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "yesLamports",
+          "type": "u64"
+        },
+        {
+          "name": "noLamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "approveMarket",
+      "docs": [
+        "Approve a pending market proposal and create the market (admin-only)."
+      ],
+      "discriminator": [
+        195,
+        83,
+        73,
+        224,
+        150,
+        237,
+        150,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "marketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposalVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "marketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer",
+          "writable": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "marketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yesMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "noMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "batchSettle",
+      "docs": [
+        "Batch-settle multiple markets in one transaction (admin-only)."
+      ],
+      "discriminator": [
+        176,
+        160,
+        44,
+        84,
+        68,
+        211,
+        201,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "outcomes",
+          "type": "bytes"
+        }
+      ]
+    },
     {
       "name": "buyShares",
       "docs": [
@@ -413,16 +1020,10 @@ export type Solpredict = {
       "accounts": [
         {
           "name": "admin",
-          "docs": [
-            "Admin signer — must match `config.admin`."
-          ],
           "signer": true
         },
         {
           "name": "config",
-          "docs": [
-            "Config PDA — to verify admin identity."
-          ],
           "pda": {
             "seeds": [
               {
@@ -441,9 +1042,6 @@ export type Solpredict = {
         },
         {
           "name": "market",
-          "docs": [
-            "Market PDA — must be Open (can't cancel something already settled)."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -907,17 +1505,11 @@ export type Solpredict = {
       "accounts": [
         {
           "name": "claimer",
-          "docs": [
-            "Claimer — must own the position and tokens."
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "market",
-          "docs": [
-            "Market — must be Settled."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -942,9 +1534,6 @@ export type Solpredict = {
         },
         {
           "name": "treasury",
-          "docs": [
-            "Treasury PDA — pays out SOL to winners."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -970,16 +1559,10 @@ export type Solpredict = {
         },
         {
           "name": "winningMint",
-          "docs": [
-            "Winning mint — YES or NO depending on market.winning_outcome."
-          ],
           "writable": true
         },
         {
           "name": "claimerAta",
-          "docs": [
-            "Claimer's ATA for the winning mint."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1070,9 +1653,6 @@ export type Solpredict = {
         },
         {
           "name": "userPosition",
-          "docs": [
-            "UserPosition PDA — double-claim guard and rent recovery."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1189,6 +1769,284 @@ export type Solpredict = {
               {
                 "kind": "account",
                 "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "emergencyPause",
+      "docs": [
+        "Emergency-pause the entire program to halt trading (admin-only)."
+      ],
+      "discriminator": [
+        21,
+        143,
+        27,
+        142,
+        200,
+        181,
+        210,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergencyPause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "emergencyUnpause",
+      "docs": [
+        "Unpause the program (requires guardian confirmations)."
+      ],
+      "discriminator": [
+        83,
+        249,
+        195,
+        57,
+        206,
+        189,
+        31,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergencyPause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "confirmations",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "emergencyWithdraw",
+      "docs": [
+        "Emergency withdrawal of funds from a settled or paused market (admin-only)."
+      ],
+      "discriminator": [
+        239,
+        45,
+        203,
+        64,
+        150,
+        73,
+        218,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergencyPause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
               }
             ]
           }
@@ -1589,92 +2447,6 @@ export type Solpredict = {
       ]
     },
     {
-      "name": "mockCreatePriceUpdate",
-      "docs": [
-        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
-      ],
-      "discriminator": [
-        103,
-        162,
-        52,
-        4,
-        77,
-        138,
-        211,
-        58
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "priceUpdate",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  111,
-                  99,
-                  107,
-                  95,
-                  112,
-                  114,
-                  105,
-                  99,
-                  101,
-                  95,
-                  102,
-                  101,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feedId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "price",
-          "type": "i64"
-        },
-        {
-          "name": "conf",
-          "type": "u64"
-        },
-        {
-          "name": "exponent",
-          "type": "i32"
-        },
-        {
-          "name": "publishTime",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "placeOrder",
       "docs": [
         "Place an on-chain limit order (Bid or Ask) for a prediction outcome."
@@ -1789,6 +2561,499 @@ export type Solpredict = {
         },
         {
           "name": "quantity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "proposeMarket",
+      "docs": [
+        "Propose a new prediction market (anyone can propose)."
+      ],
+      "discriminator": [
+        39,
+        201,
+        255,
+        2,
+        194,
+        181,
+        58,
+        105
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.market_count",
+                "account": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposalVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.market_count",
+                "account": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "category",
+          "type": "u8"
+        },
+        {
+          "name": "oracleFeedId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "targetPrice",
+          "type": "i64"
+        },
+        {
+          "name": "targetExpo",
+          "type": "i32"
+        },
+        {
+          "name": "comparison",
+          "type": "u8"
+        },
+        {
+          "name": "endTs",
+          "type": "i64"
+        },
+        {
+          "name": "resolveTs",
+          "type": "i64"
+        },
+        {
+          "name": "sharePriceLamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "removeLiquidity",
+      "docs": [
+        "Remove liquidity and burn LP tokens, receiving SOL back."
+      ],
+      "discriminator": [
+        80,
+        85,
+        209,
+        72,
+        24,
+        206,
+        177,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yesMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "noMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "providerYesAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "yesMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "providerNoAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "noMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "liquidityPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lpTokensToBurn",
           "type": "u64"
         }
       ]
@@ -2167,10 +3432,6 @@ export type Solpredict = {
       "accounts": [
         {
           "name": "market",
-          "docs": [
-            "Permissionless — anyone can trigger settlement for oracle markets.",
-            "No admin required."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -2195,9 +3456,6 @@ export type Solpredict = {
         },
         {
           "name": "config",
-          "docs": [
-            "Config PDA — read-only for fee calculation."
-          ],
           "pda": {
             "seeds": [
               {
@@ -2217,8 +3475,6 @@ export type Solpredict = {
         {
           "name": "priceUpdate",
           "docs": [
-            "Pyth PriceUpdateV2 account — posted just before this instruction",
-            "in the same transaction bundle.",
             "the account data, verifies feed ID, staleness, and confidence."
           ]
         }
@@ -2296,6 +3552,109 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "updateMarket",
+      "docs": [
+        "Update market parameters (admin-only)."
+      ],
+      "discriminator": [
+        153,
+        39,
+        2,
+        197,
+        179,
+        50,
+        199,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "question",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "description",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "category",
+          "type": {
+            "option": "u8"
+          }
+        },
+        {
+          "name": "endTs",
+          "type": {
+            "option": "i64"
+          }
+        },
+        {
+          "name": "resolveTs",
+          "type": {
+            "option": "i64"
+          }
+        },
+        {
+          "name": "sharePriceLamports",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "withdrawFees",
       "docs": [
         "Withdraw collected protocol fees from a settled market (admin-only)."
@@ -2313,17 +3672,11 @@ export type Solpredict = {
       "accounts": [
         {
           "name": "admin",
-          "docs": [
-            "Admin signer — must match `config.admin`."
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "config",
-          "docs": [
-            "Config PDA — to verify admin identity."
-          ],
           "pda": {
             "seeds": [
               {
@@ -2342,9 +3695,6 @@ export type Solpredict = {
         },
         {
           "name": "market",
-          "docs": [
-            "Market — must be Settled, fee not yet withdrawn."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -2369,9 +3719,6 @@ export type Solpredict = {
         },
         {
           "name": "treasury",
-          "docs": [
-            "Treasury PDA — fee source."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -2418,6 +3765,32 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "emergencyPause",
+      "discriminator": [
+        189,
+        168,
+        191,
+        242,
+        126,
+        143,
+        137,
+        18
+      ]
+    },
+    {
+      "name": "liquidityPosition",
+      "discriminator": [
+        153,
+        56,
+        106,
+        34,
+        55,
+        42,
+        113,
+        176
+      ]
+    },
+    {
       "name": "market",
       "discriminator": [
         219,
@@ -2428,6 +3801,19 @@ export type Solpredict = {
         227,
         198,
         154
+      ]
+    },
+    {
+      "name": "marketProposal",
+      "discriminator": [
+        22,
+        198,
+        69,
+        191,
+        38,
+        163,
+        168,
+        161
       ]
     },
     {
@@ -2459,6 +3845,32 @@ export type Solpredict = {
   ],
   "events": [
     {
+      "name": "emergencyPauseChanged",
+      "discriminator": [
+        40,
+        185,
+        90,
+        71,
+        82,
+        142,
+        105,
+        91
+      ]
+    },
+    {
+      "name": "emergencyWithdraw",
+      "discriminator": [
+        128,
+        80,
+        236,
+        119,
+        137,
+        129,
+        241,
+        144
+      ]
+    },
+    {
       "name": "feesWithdrawn",
       "discriminator": [
         234,
@@ -2469,6 +3881,32 @@ export type Solpredict = {
         241,
         40,
         21
+      ]
+    },
+    {
+      "name": "liquidityAdded",
+      "discriminator": [
+        154,
+        26,
+        221,
+        108,
+        238,
+        64,
+        217,
+        161
+      ]
+    },
+    {
+      "name": "liquidityRemoved",
+      "discriminator": [
+        225,
+        105,
+        216,
+        39,
+        124,
+        116,
+        169,
+        189
       ]
     },
     {
@@ -2498,6 +3936,32 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "marketProposalProcessed",
+      "discriminator": [
+        80,
+        17,
+        251,
+        0,
+        216,
+        18,
+        207,
+        60
+      ]
+    },
+    {
+      "name": "marketProposed",
+      "discriminator": [
+        241,
+        200,
+        151,
+        120,
+        229,
+        7,
+        131,
+        124
+      ]
+    },
+    {
       "name": "marketSettled",
       "discriminator": [
         237,
@@ -2521,6 +3985,19 @@ export type Solpredict = {
         104,
         213,
         11
+      ]
+    },
+    {
+      "name": "marketUpdated",
+      "discriminator": [
+        170,
+        51,
+        74,
+        147,
+        116,
+        168,
+        217,
+        251
       ]
     },
     {
@@ -2849,6 +4326,91 @@ export type Solpredict = {
       "code": 6051,
       "name": "usePythForCrypto",
       "msg": "Use Pyth oracle to settle Crypto markets"
+    },
+    {
+      "code": 6052,
+      "name": "marketPaused",
+      "msg": "Market is paused for maintenance"
+    },
+    {
+      "code": 6053,
+      "name": "reentrancyDetected",
+      "msg": "Reentrancy detected — call rejected"
+    },
+    {
+      "code": 6054,
+      "name": "insufficientLiquidity",
+      "msg": "Not enough liquidity in pool"
+    },
+    {
+      "code": 6055,
+      "name": "liquidityPositionNotFound",
+      "msg": "Liquidity position not found"
+    },
+    {
+      "code": 6056,
+      "name": "noLpTokens",
+      "msg": "No LP tokens to withdraw"
+    },
+    {
+      "code": 6057,
+      "name": "slippageExceeded",
+      "msg": "Slippage tolerance exceeded"
+    },
+    {
+      "code": 6058,
+      "name": "minSpendNotMet",
+      "msg": "Minimum spend not met"
+    },
+    {
+      "code": 6059,
+      "name": "signatureVerificationFailed",
+      "msg": "Signature verification failed"
+    },
+    {
+      "code": 6060,
+      "name": "alreadyCancelled",
+      "msg": "Market already cancelled"
+    },
+    {
+      "code": 6061,
+      "name": "invalidCategory",
+      "msg": "Invalid category"
+    },
+    {
+      "code": 6062,
+      "name": "alreadyPaused",
+      "msg": "Emergency pause is already active"
+    },
+    {
+      "code": 6063,
+      "name": "notPaused",
+      "msg": "Emergency pause is not active"
+    },
+    {
+      "code": 6064,
+      "name": "multisigRequired",
+      "msg": "Admin operation requires multisig approval"
+    },
+    {
+      "code": 6065,
+      "name": "resolutionSourceMismatch",
+      "msg": "Market resolution source mismatch"
+    },
+    {
+      "code": 6066,
+      "name": "batchSizeExceeded",
+      "msg": "Batch size exceeds maximum"
+    },
+    {
+      "code": 6067,
+      "name": "proposalNotPending",
+      "msg": "Proposal is not in Pending state"
+    },
+    {
+      "code": 6068,
+      "name": "proposalBondTooLow",
+      "msg": "Proposal bond is below the minimum required"
     }
   ],
   "types": [
@@ -2947,6 +4509,122 @@ export type Solpredict = {
       }
     },
     {
+      "name": "emergencyPause",
+      "docs": [
+        "Emergency pause state — singleton account.",
+        "When paused, all non-admin trading is halted."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "docs": [
+              "Whether the program is paused"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pausedBy",
+            "docs": [
+              "Admin who paused (for audit trail)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pausedAt",
+            "docs": [
+              "Timestamp of pause"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "guardians",
+            "docs": [
+              "Multisig addresses that can unpause"
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "requiredConfirmations",
+            "docs": [
+              "Number of guardian confirmations required to unpause"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "confirmations",
+            "docs": [
+              "Current guardian confirmations count"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "emergencyPauseChanged",
+      "docs": [
+        "Emitted when program is paused or unpaused."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "pausedBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "emergencyWithdraw",
+      "docs": [
+        "Emitted when admin performs emergency withdrawal."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
       "name": "feesWithdrawn",
       "docs": [
         "Emitted when the admin withdraws collected fees."
@@ -2960,6 +4638,143 @@ export type Solpredict = {
           },
           {
             "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityAdded",
+      "docs": [
+        "Emitted when liquidity is added via `add_liquidity`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "yesLamports",
+            "type": "u64"
+          },
+          {
+            "name": "noLamports",
+            "type": "u64"
+          },
+          {
+            "name": "lpTokensMinted",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityPosition",
+      "docs": [
+        "Liquidity Provider position for a single market.",
+        "Tracks how much liquidity an LP has deposited."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "LP wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "Market this LP position belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lpTokens",
+            "docs": [
+              "Amount of LP tokens minted (representing share of the pool)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "yesDeposited",
+            "docs": [
+              "Total YES tokens deposited"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "noDeposited",
+            "docs": [
+              "Total NO tokens deposited"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "totalLamportsDeposited",
+            "docs": [
+              "Total lamports deposited as liquidity"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "Unix timestamp when position was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updatedAt",
+            "docs": [
+              "Unix timestamp of last liquidity modification"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityRemoved",
+      "docs": [
+        "Emitted when liquidity is removed via `remove_liquidity`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "yesPayout",
+            "type": "u64"
+          },
+          {
+            "name": "noPayout",
+            "type": "u64"
+          },
+          {
+            "name": "lpTokensBurned",
             "type": "u64"
           }
         ]
@@ -3195,6 +5010,24 @@ export type Solpredict = {
               "Treasury PDA canonical bump (stored here for efficient claim/refund CPIs)."
             ],
             "type": "u8"
+          },
+          {
+            "name": "feeBps",
+            "docs": [
+              "Fee in basis points (e.g. 30 = 0.3%). Charged from the losing pool at settlement."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "reentrancyLock",
+            "docs": [
+              "Reentrancy protection lock."
+            ],
+            "type": {
+              "defined": {
+                "name": "reentrancyLock"
+              }
+            }
           }
         ]
       }
@@ -3241,6 +5074,147 @@ export type Solpredict = {
           },
           {
             "name": "endTs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketProposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposalId",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "category",
+            "type": "u8"
+          },
+          {
+            "name": "oracleFeedId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "targetPrice",
+            "type": "i64"
+          },
+          {
+            "name": "targetExpo",
+            "type": "i32"
+          },
+          {
+            "name": "comparison",
+            "type": "u8"
+          },
+          {
+            "name": "endTs",
+            "type": "i64"
+          },
+          {
+            "name": "resolveTs",
+            "type": "i64"
+          },
+          {
+            "name": "sharePriceLamports",
+            "type": "u64"
+          },
+          {
+            "name": "bondLamports",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "proposalStatus"
+              }
+            }
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketProposalProcessed",
+      "docs": [
+        "Emitted when a market proposal is approved (or rejected) by the admin."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposalId",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "marketId",
+            "type": {
+              "option": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketProposed",
+      "docs": [
+        "Emitted when a user proposes a new market."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposalId",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "bondLamports",
+            "type": "u64"
+          },
+          {
+            "name": "createdAt",
             "type": "i64"
           }
         ]
@@ -3327,6 +5301,29 @@ export type Solpredict = {
           },
           {
             "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketUpdated",
+      "docs": [
+        "Emitted when market details are updated via `update_market`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketId",
+            "type": "u64"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "endTs",
+            "type": "i64"
           }
         ]
       }
@@ -3460,6 +5457,47 @@ export type Solpredict = {
           {
             "name": "rentReclaimed",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "proposalStatus",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "pending"
+          },
+          {
+            "name": "approved"
+          },
+          {
+            "name": "rejected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reentrancyLock",
+      "docs": [
+        "Reentrancy guard stored in accounts.",
+        "Use explicit acquire/release within a scope block to avoid",
+        "Rust borrow checker conflicts with mutable account access."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "locked",
+            "type": "u8"
+          },
+          {
+            "name": "locker",
+            "type": "pubkey"
           }
         ]
       }
@@ -3702,6 +5740,11 @@ export type Solpredict = {
       "value": "[99, 111, 110, 102, 105, 103]"
     },
     {
+      "name": "lpSeed",
+      "type": "bytes",
+      "value": "[108, 112]"
+    },
+    {
       "name": "marketSeed",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116]"
@@ -3717,9 +5760,24 @@ export type Solpredict = {
       "value": "[111, 114, 100, 101, 114]"
     },
     {
+      "name": "pauseSeed",
+      "type": "bytes",
+      "value": "[101, 109, 101, 114, 103, 101, 110, 99, 121, 95, 112, 97, 117, 115, 101]"
+    },
+    {
       "name": "positionSeed",
       "type": "bytes",
       "value": "[112, 111, 115, 105, 116, 105, 111, 110]"
+    },
+    {
+      "name": "proposalSeed",
+      "type": "bytes",
+      "value": "[112, 114, 111, 112, 111, 115, 97, 108]"
+    },
+    {
+      "name": "proposalVaultSeed",
+      "type": "bytes",
+      "value": "[112, 114, 111, 112, 111, 115, 97, 108, 95, 118, 97, 117, 108, 116]"
     },
     {
       "name": "treasurySeed",

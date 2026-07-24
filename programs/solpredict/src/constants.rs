@@ -26,6 +26,18 @@ pub const NO_MINT_SEED: &[u8] = b"no_mint";
 #[constant]
 pub const ORDER_SEED: &[u8] = b"order";
 
+#[constant]
+pub const LP_SEED: &[u8] = b"lp";
+
+#[constant]
+pub const PAUSE_SEED: &[u8] = b"emergency_pause";
+
+#[constant]
+pub const PROPOSAL_SEED: &[u8] = b"proposal";
+
+#[constant]
+pub const PROPOSAL_VAULT_SEED: &[u8] = b"proposal_vault";
+
 // ============================================================================
 // Market Constraints
 // ============================================================================
@@ -49,6 +61,9 @@ pub const MIN_SHARE_PRICE: u64 = 1_000_000;
 /// Maximum shares purchasable in a single transaction.
 /// Prevents overflow-crafting attacks where quantity * share_price > u64::MAX.
 pub const MAX_SHARES_PER_TX: u64 = 1_000_000;
+
+/// Precision scaling factor for fixed-point math (1e9).
+pub const PRECISION: u64 = 1_000_000_000;
 
 /// Token decimals for YES/NO SPL token mints.
 /// 1 share = 10^6 base units (matching SOL's lamport scale for mental math).

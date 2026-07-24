@@ -1,5 +1,5 @@
 {
-  "address": "B7iciCdfA2Jw3yrQVrYtZMMdbehaqr2XS8kF89ageCWU",
+  "address": "EFqjmCwa7r6UHxEGMKUEjkfodWs84a4fHju31predFKP",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -7,6 +7,613 @@
     "description": "SOLPredict — Decentralized Prediction Market on Solana"
   },
   "instructions": [
+    {
+      "name": "add_liquidity",
+      "docs": [
+        "Add liquidity to a market and receive YES/NO tokens + LP position."
+      ],
+      "discriminator": [
+        181,
+        157,
+        89,
+        67,
+        143,
+        182,
+        52,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yes_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "no_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider_yes_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "yes_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "provider_no_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "no_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "liquidity_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "yes_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "no_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "approve_market",
+      "docs": [
+        "Approve a pending market proposal and create the market (admin-only)."
+      ],
+      "discriminator": [
+        195,
+        83,
+        73,
+        224,
+        150,
+        237,
+        150,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "MarketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "MarketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer",
+          "writable": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "MarketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yes_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "no_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "batch_settle",
+      "docs": [
+        "Batch-settle multiple markets in one transaction (admin-only)."
+      ],
+      "discriminator": [
+        176,
+        160,
+        44,
+        84,
+        68,
+        211,
+        201,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "outcomes",
+          "type": "bytes"
+        }
+      ]
+    },
     {
       "name": "buy_shares",
       "docs": [
@@ -407,16 +1014,10 @@
       "accounts": [
         {
           "name": "admin",
-          "docs": [
-            "Admin signer — must match `config.admin`."
-          ],
           "signer": true
         },
         {
           "name": "config",
-          "docs": [
-            "Config PDA — to verify admin identity."
-          ],
           "pda": {
             "seeds": [
               {
@@ -435,9 +1036,6 @@
         },
         {
           "name": "market",
-          "docs": [
-            "Market PDA — must be Open (can't cancel something already settled)."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -901,17 +1499,11 @@
       "accounts": [
         {
           "name": "claimer",
-          "docs": [
-            "Claimer — must own the position and tokens."
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "market",
-          "docs": [
-            "Market — must be Settled."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -936,9 +1528,6 @@
         },
         {
           "name": "treasury",
-          "docs": [
-            "Treasury PDA — pays out SOL to winners."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -964,16 +1553,10 @@
         },
         {
           "name": "winning_mint",
-          "docs": [
-            "Winning mint — YES or NO depending on market.winning_outcome."
-          ],
           "writable": true
         },
         {
           "name": "claimer_ata",
-          "docs": [
-            "Claimer's ATA for the winning mint."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1064,9 +1647,6 @@
         },
         {
           "name": "user_position",
-          "docs": [
-            "UserPosition PDA — double-claim guard and rent recovery."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1183,6 +1763,284 @@
               {
                 "kind": "account",
                 "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "emergency_pause",
+      "docs": [
+        "Emergency-pause the entire program to halt trading (admin-only)."
+      ],
+      "discriminator": [
+        21,
+        143,
+        27,
+        142,
+        200,
+        181,
+        210,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_pause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "emergency_unpause",
+      "docs": [
+        "Unpause the program (requires guardian confirmations)."
+      ],
+      "discriminator": [
+        83,
+        249,
+        195,
+        57,
+        206,
+        189,
+        31,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_pause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "confirmations",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "emergency_withdraw",
+      "docs": [
+        "Emergency withdrawal of funds from a settled or paused market (admin-only)."
+      ],
+      "discriminator": [
+        239,
+        45,
+        203,
+        64,
+        150,
+        73,
+        218,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_pause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
               }
             ]
           }
@@ -1583,92 +2441,6 @@
       ]
     },
     {
-      "name": "mock_create_price_update",
-      "docs": [
-        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
-      ],
-      "discriminator": [
-        103,
-        162,
-        52,
-        4,
-        77,
-        138,
-        211,
-        58
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "price_update",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  111,
-                  99,
-                  107,
-                  95,
-                  112,
-                  114,
-                  105,
-                  99,
-                  101,
-                  95,
-                  102,
-                  101,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feed_id",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "price",
-          "type": "i64"
-        },
-        {
-          "name": "conf",
-          "type": "u64"
-        },
-        {
-          "name": "exponent",
-          "type": "i32"
-        },
-        {
-          "name": "publish_time",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "place_order",
       "docs": [
         "Place an on-chain limit order (Bid or Ask) for a prediction outcome."
@@ -1783,6 +2555,499 @@
         },
         {
           "name": "quantity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "propose_market",
+      "docs": [
+        "Propose a new prediction market (anyone can propose)."
+      ],
+      "discriminator": [
+        39,
+        201,
+        255,
+        2,
+        194,
+        181,
+        58,
+        105
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.market_count",
+                "account": "Config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.market_count",
+                "account": "Config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "category",
+          "type": "u8"
+        },
+        {
+          "name": "oracle_feed_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "target_price",
+          "type": "i64"
+        },
+        {
+          "name": "target_expo",
+          "type": "i32"
+        },
+        {
+          "name": "comparison",
+          "type": "u8"
+        },
+        {
+          "name": "end_ts",
+          "type": "i64"
+        },
+        {
+          "name": "resolve_ts",
+          "type": "i64"
+        },
+        {
+          "name": "share_price_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "remove_liquidity",
+      "docs": [
+        "Remove liquidity and burn LP tokens, receiving SOL back."
+      ],
+      "discriminator": [
+        80,
+        85,
+        209,
+        72,
+        24,
+        206,
+        177,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yes_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "no_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider_yes_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "yes_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "provider_no_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "no_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "liquidity_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "lp_tokens_to_burn",
           "type": "u64"
         }
       ]
@@ -2161,10 +3426,6 @@
       "accounts": [
         {
           "name": "market",
-          "docs": [
-            "Permissionless — anyone can trigger settlement for oracle markets.",
-            "No admin required."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -2189,9 +3450,6 @@
         },
         {
           "name": "config",
-          "docs": [
-            "Config PDA — read-only for fee calculation."
-          ],
           "pda": {
             "seeds": [
               {
@@ -2211,8 +3469,6 @@
         {
           "name": "price_update",
           "docs": [
-            "Pyth PriceUpdateV2 account — posted just before this instruction",
-            "in the same transaction bundle.",
             "the account data, verifies feed ID, staleness, and confidence."
           ]
         }
@@ -2290,6 +3546,109 @@
       ]
     },
     {
+      "name": "update_market",
+      "docs": [
+        "Update market parameters (admin-only)."
+      ],
+      "discriminator": [
+        153,
+        39,
+        2,
+        197,
+        179,
+        50,
+        199,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "question",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "description",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "category",
+          "type": {
+            "option": "u8"
+          }
+        },
+        {
+          "name": "end_ts",
+          "type": {
+            "option": "i64"
+          }
+        },
+        {
+          "name": "resolve_ts",
+          "type": {
+            "option": "i64"
+          }
+        },
+        {
+          "name": "share_price_lamports",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw_fees",
       "docs": [
         "Withdraw collected protocol fees from a settled market (admin-only)."
@@ -2307,17 +3666,11 @@
       "accounts": [
         {
           "name": "admin",
-          "docs": [
-            "Admin signer — must match `config.admin`."
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "config",
-          "docs": [
-            "Config PDA — to verify admin identity."
-          ],
           "pda": {
             "seeds": [
               {
@@ -2336,9 +3689,6 @@
         },
         {
           "name": "market",
-          "docs": [
-            "Market — must be Settled, fee not yet withdrawn."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -2363,9 +3713,6 @@
         },
         {
           "name": "treasury",
-          "docs": [
-            "Treasury PDA — fee source."
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -2412,6 +3759,32 @@
       ]
     },
     {
+      "name": "EmergencyPause",
+      "discriminator": [
+        189,
+        168,
+        191,
+        242,
+        126,
+        143,
+        137,
+        18
+      ]
+    },
+    {
+      "name": "LiquidityPosition",
+      "discriminator": [
+        153,
+        56,
+        106,
+        34,
+        55,
+        42,
+        113,
+        176
+      ]
+    },
+    {
       "name": "Market",
       "discriminator": [
         219,
@@ -2422,6 +3795,19 @@
         227,
         198,
         154
+      ]
+    },
+    {
+      "name": "MarketProposal",
+      "discriminator": [
+        22,
+        198,
+        69,
+        191,
+        38,
+        163,
+        168,
+        161
       ]
     },
     {
@@ -2453,6 +3839,32 @@
   ],
   "events": [
     {
+      "name": "EmergencyPauseChanged",
+      "discriminator": [
+        40,
+        185,
+        90,
+        71,
+        82,
+        142,
+        105,
+        91
+      ]
+    },
+    {
+      "name": "EmergencyWithdraw",
+      "discriminator": [
+        128,
+        80,
+        236,
+        119,
+        137,
+        129,
+        241,
+        144
+      ]
+    },
+    {
       "name": "FeesWithdrawn",
       "discriminator": [
         234,
@@ -2463,6 +3875,32 @@
         241,
         40,
         21
+      ]
+    },
+    {
+      "name": "LiquidityAdded",
+      "discriminator": [
+        154,
+        26,
+        221,
+        108,
+        238,
+        64,
+        217,
+        161
+      ]
+    },
+    {
+      "name": "LiquidityRemoved",
+      "discriminator": [
+        225,
+        105,
+        216,
+        39,
+        124,
+        116,
+        169,
+        189
       ]
     },
     {
@@ -2492,6 +3930,32 @@
       ]
     },
     {
+      "name": "MarketProposalProcessed",
+      "discriminator": [
+        80,
+        17,
+        251,
+        0,
+        216,
+        18,
+        207,
+        60
+      ]
+    },
+    {
+      "name": "MarketProposed",
+      "discriminator": [
+        241,
+        200,
+        151,
+        120,
+        229,
+        7,
+        131,
+        124
+      ]
+    },
+    {
       "name": "MarketSettled",
       "discriminator": [
         237,
@@ -2515,6 +3979,19 @@
         104,
         213,
         11
+      ]
+    },
+    {
+      "name": "MarketUpdated",
+      "discriminator": [
+        170,
+        51,
+        74,
+        147,
+        116,
+        168,
+        217,
+        251
       ]
     },
     {
@@ -2843,6 +4320,91 @@
       "code": 6051,
       "name": "UsePythForCrypto",
       "msg": "Use Pyth oracle to settle Crypto markets"
+    },
+    {
+      "code": 6052,
+      "name": "MarketPaused",
+      "msg": "Market is paused for maintenance"
+    },
+    {
+      "code": 6053,
+      "name": "ReentrancyDetected",
+      "msg": "Reentrancy detected — call rejected"
+    },
+    {
+      "code": 6054,
+      "name": "InsufficientLiquidity",
+      "msg": "Not enough liquidity in pool"
+    },
+    {
+      "code": 6055,
+      "name": "LiquidityPositionNotFound",
+      "msg": "Liquidity position not found"
+    },
+    {
+      "code": 6056,
+      "name": "NoLpTokens",
+      "msg": "No LP tokens to withdraw"
+    },
+    {
+      "code": 6057,
+      "name": "SlippageExceeded",
+      "msg": "Slippage tolerance exceeded"
+    },
+    {
+      "code": 6058,
+      "name": "MinSpendNotMet",
+      "msg": "Minimum spend not met"
+    },
+    {
+      "code": 6059,
+      "name": "SignatureVerificationFailed",
+      "msg": "Signature verification failed"
+    },
+    {
+      "code": 6060,
+      "name": "AlreadyCancelled",
+      "msg": "Market already cancelled"
+    },
+    {
+      "code": 6061,
+      "name": "InvalidCategory",
+      "msg": "Invalid category"
+    },
+    {
+      "code": 6062,
+      "name": "AlreadyPaused",
+      "msg": "Emergency pause is already active"
+    },
+    {
+      "code": 6063,
+      "name": "NotPaused",
+      "msg": "Emergency pause is not active"
+    },
+    {
+      "code": 6064,
+      "name": "MultisigRequired",
+      "msg": "Admin operation requires multisig approval"
+    },
+    {
+      "code": 6065,
+      "name": "ResolutionSourceMismatch",
+      "msg": "Market resolution source mismatch"
+    },
+    {
+      "code": 6066,
+      "name": "BatchSizeExceeded",
+      "msg": "Batch size exceeds maximum"
+    },
+    {
+      "code": 6067,
+      "name": "ProposalNotPending",
+      "msg": "Proposal is not in Pending state"
+    },
+    {
+      "code": 6068,
+      "name": "ProposalBondTooLow",
+      "msg": "Proposal bond is below the minimum required"
     }
   ],
   "types": [
@@ -2941,6 +4503,122 @@
       }
     },
     {
+      "name": "EmergencyPause",
+      "docs": [
+        "Emergency pause state — singleton account.",
+        "When paused, all non-admin trading is halted."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "docs": [
+              "Whether the program is paused"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "paused_by",
+            "docs": [
+              "Admin who paused (for audit trail)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "paused_at",
+            "docs": [
+              "Timestamp of pause"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "guardians",
+            "docs": [
+              "Multisig addresses that can unpause"
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "required_confirmations",
+            "docs": [
+              "Number of guardian confirmations required to unpause"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "confirmations",
+            "docs": [
+              "Current guardian confirmations count"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmergencyPauseChanged",
+      "docs": [
+        "Emitted when program is paused or unpaused."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "paused_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmergencyWithdraw",
+      "docs": [
+        "Emitted when admin performs emergency withdrawal."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
       "name": "FeesWithdrawn",
       "docs": [
         "Emitted when the admin withdraws collected fees."
@@ -2954,6 +4632,143 @@
           },
           {
             "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityAdded",
+      "docs": [
+        "Emitted when liquidity is added via `add_liquidity`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "yes_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "no_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "lp_tokens_minted",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityPosition",
+      "docs": [
+        "Liquidity Provider position for a single market.",
+        "Tracks how much liquidity an LP has deposited."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "LP wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "Market this LP position belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_tokens",
+            "docs": [
+              "Amount of LP tokens minted (representing share of the pool)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "yes_deposited",
+            "docs": [
+              "Total YES tokens deposited"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "no_deposited",
+            "docs": [
+              "Total NO tokens deposited"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_lamports_deposited",
+            "docs": [
+              "Total lamports deposited as liquidity"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp when position was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Unix timestamp of last liquidity modification"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityRemoved",
+      "docs": [
+        "Emitted when liquidity is removed via `remove_liquidity`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "yes_payout",
+            "type": "u64"
+          },
+          {
+            "name": "no_payout",
+            "type": "u64"
+          },
+          {
+            "name": "lp_tokens_burned",
             "type": "u64"
           }
         ]
@@ -3189,6 +5004,24 @@
               "Treasury PDA canonical bump (stored here for efficient claim/refund CPIs)."
             ],
             "type": "u8"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee in basis points (e.g. 30 = 0.3%). Charged from the losing pool at settlement."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "reentrancy_lock",
+            "docs": [
+              "Reentrancy protection lock."
+            ],
+            "type": {
+              "defined": {
+                "name": "ReentrancyLock"
+              }
+            }
           }
         ]
       }
@@ -3235,6 +5068,147 @@
           },
           {
             "name": "end_ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketProposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "category",
+            "type": "u8"
+          },
+          {
+            "name": "oracle_feed_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "target_price",
+            "type": "i64"
+          },
+          {
+            "name": "target_expo",
+            "type": "i32"
+          },
+          {
+            "name": "comparison",
+            "type": "u8"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "resolve_ts",
+            "type": "i64"
+          },
+          {
+            "name": "share_price_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "bond_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "ProposalStatus"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketProposalProcessed",
+      "docs": [
+        "Emitted when a market proposal is approved (or rejected) by the admin."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "market_id",
+            "type": {
+              "option": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketProposed",
+      "docs": [
+        "Emitted when a user proposes a new market."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "bond_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
             "type": "i64"
           }
         ]
@@ -3321,6 +5295,29 @@
           },
           {
             "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketUpdated",
+      "docs": [
+        "Emitted when market details are updated via `update_market`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
           }
         ]
       }
@@ -3454,6 +5451,47 @@
           {
             "name": "rent_reclaimed",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalStatus",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Approved"
+          },
+          {
+            "name": "Rejected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReentrancyLock",
+      "docs": [
+        "Reentrancy guard stored in accounts.",
+        "Use explicit acquire/release within a scope block to avoid",
+        "Rust borrow checker conflicts with mutable account access."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "locked",
+            "type": "u8"
+          },
+          {
+            "name": "locker",
+            "type": "pubkey"
           }
         ]
       }
@@ -3696,6 +5734,11 @@
       "value": "[99, 111, 110, 102, 105, 103]"
     },
     {
+      "name": "LP_SEED",
+      "type": "bytes",
+      "value": "[108, 112]"
+    },
+    {
       "name": "MARKET_SEED",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116]"
@@ -3711,9 +5754,24 @@
       "value": "[111, 114, 100, 101, 114]"
     },
     {
+      "name": "PAUSE_SEED",
+      "type": "bytes",
+      "value": "[101, 109, 101, 114, 103, 101, 110, 99, 121, 95, 112, 97, 117, 115, 101]"
+    },
+    {
       "name": "POSITION_SEED",
       "type": "bytes",
       "value": "[112, 111, 115, 105, 116, 105, 111, 110]"
+    },
+    {
+      "name": "PROPOSAL_SEED",
+      "type": "bytes",
+      "value": "[112, 114, 111, 112, 111, 115, 97, 108]"
+    },
+    {
+      "name": "PROPOSAL_VAULT_SEED",
+      "type": "bytes",
+      "value": "[112, 114, 111, 112, 111, 115, 97, 108, 95, 118, 97, 117, 108, 116]"
     },
     {
       "name": "TREASURY_SEED",

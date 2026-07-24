@@ -7,18 +7,11 @@ use crate::events::RewardsClaimed;
 use crate::state::{Market, MarketStatus, UserPosition, WinningOutcome};
 use crate::utils::payout_math;
 
-/// Accounts for the `claim_rewards` instruction.
-///
-/// Winners burn their tokens and receive a pro-rata SOL payout from the
-/// treasury. Double-claim is prevented by both the `claimed` flag and
-/// the token burn (defense in depth).
 #[derive(Accounts)]
 pub struct ClaimRewards<'info> {
-    /// Claimer — must own the position and tokens.
     #[account(mut)]
     pub claimer: Signer<'info>,
 
-    /// Market — must be Settled.
     #[account(
         mut,
         seeds = [MARKET_SEED, market.market_id.to_le_bytes().as_ref()],
@@ -27,8 +20,6 @@ pub struct ClaimRewards<'info> {
     )]
     pub market: Account<'info, Market>,
 
-    /// Treasury PDA — pays out SOL to winners.
-    /// CHECK: Validated by seeds. Lamports transferred via direct manipulation.
     #[account(
         mut,
         seeds = [TREASURY_SEED, market.key().as_ref()],
@@ -36,7 +27,6 @@ pub struct ClaimRewards<'info> {
     )]
     pub treasury: SystemAccount<'info>,
 
-    /// Winning mint — YES or NO depending on market.winning_outcome.
     #[account(
         mut,
         constraint = (
@@ -46,7 +36,6 @@ pub struct ClaimRewards<'info> {
     )]
     pub winning_mint: Account<'info, Mint>,
 
-    /// Claimer's ATA for the winning mint.
     #[account(
         mut,
         associated_token::mint = winning_mint,
@@ -54,7 +43,6 @@ pub struct ClaimRewards<'info> {
     )]
     pub claimer_ata: Account<'info, TokenAccount>,
 
-    /// UserPosition PDA — double-claim guard and rent recovery.
     #[account(
         mut,
         close = claimer,
@@ -69,21 +57,8 @@ pub struct ClaimRewards<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Handler for `claim_rewards`.
-///
-/// Burns the winner's tokens, computes pro-rata payout via u128 math,
-/// and transfers SOL from treasury to claimer.
-///
-/// FOLLOWS CEI (Checks-Effects-Interactions):
-///   1. CHECK: claimed flag, token balance, payout validity
-///   2. EFFECT: mark claimed = true FIRST (prevents re-entrancy)
-///   3. INTERACT: burn tokens, transfer SOL
 pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
-    // ═══════════════ CHECKS ═══════════════
-    require!(
-        !ctx.accounts.user_position.claimed,
-        SolPredictError::AlreadyClaimed
-    );
+    require!(!ctx.accounts.user_position.claimed, SolPredictError::AlreadyClaimed);
 
     let user_tokens = ctx.accounts.claimer_ata.amount;
     require!(user_tokens > 0, SolPredictError::NothingToClaim);
@@ -95,18 +70,13 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
     };
 
     let payout = payout_math::calculate_payout(
-        ctx.accounts.market.total_payout_pool,
-        user_tokens,
-        winning_supply,
+        ctx.accounts.market.total_payout_pool, user_tokens, winning_supply,
     )?;
 
-    // ═══════════════ EFFECTS (state first) ═══════════════
     ctx.accounts.user_position.yes_amount = 0;
     ctx.accounts.user_position.no_amount = 0;
     ctx.accounts.user_position.claimed = true;
 
-    // ═══════════════ INTERACTIONS ═══════════════
-    // Burn ALL winning tokens from claimer's ATA
     token::burn(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -119,55 +89,38 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         user_tokens,
     )?;
 
-    // Transfer SOL from treasury → claimer via CPI
     let market_key = ctx.accounts.market.key();
     let treasury_bump = ctx.accounts.market.treasury_bump;
-    let seeds = &[
-        TREASURY_SEED,
-        market_key.as_ref(),
-        &[treasury_bump],
-    ];
+    let seeds = &[TREASURY_SEED, market_key.as_ref(), &[treasury_bump]];
     let signer_seeds = &[&seeds[..]];
 
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.system_program.to_account_info(),
-        anchor_lang::system_program::Transfer {
-            from: ctx.accounts.treasury.to_account_info(),
-            to: ctx.accounts.claimer.to_account_info(),
-        },
-        signer_seeds,
-    );
-    anchor_lang::system_program::transfer(cpi_ctx, payout)?;
+    anchor_lang::system_program::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.treasury.to_account_info(),
+                to: ctx.accounts.claimer.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        payout,
+    )?;
 
-    // Track total claimed — prevents over-draining the treasury
+    let claimer_key = ctx.accounts.claimer.key();
+    let market_id = ctx.accounts.market.market_id;
+
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
+
     let market = &mut ctx.accounts.market;
-    market.total_claimed = market
-        .total_claimed
-        .checked_add(payout)
-        .ok_or(SolPredictError::MathOverflow)?;
+    market.total_claimed = market.total_claimed.checked_add(payout).ok_or(SolPredictError::MathOverflow)?;
 
-    // Verify treasury still has enough to cover remaining unclaimed payouts
-    let remaining = market
-        .total_payout_pool
-        .checked_sub(market.total_claimed)
-        .ok_or(SolPredictError::MathOverflow)?;
+    let remaining = market.total_payout_pool.checked_sub(market.total_claimed).ok_or(SolPredictError::MathOverflow)?;
     let treasury_balance = ctx.accounts.treasury.to_account_info().lamports();
-    require!(
-        treasury_balance >= remaining,
-        SolPredictError::TreasuryInsufficient
-    );
+    require!(treasury_balance >= remaining, SolPredictError::TreasuryInsufficient);
 
-    emit!(RewardsClaimed {
-        market_id: ctx.accounts.market.market_id,
-        claimer: ctx.accounts.claimer.key(),
-        payout,
-    });
+    ctx.accounts.market.reentrancy_lock.release();
 
-    msg!(
-        "Claimed {} lamports for market {}",
-        payout,
-        ctx.accounts.market.market_id
-    );
+    emit!(RewardsClaimed { market_id, claimer: claimer_key, payout });
 
     Ok(())
 }

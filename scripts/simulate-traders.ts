@@ -51,16 +51,38 @@ function isOrderOpen(order: any): boolean {
 async function ensureAirdrop(pubkey: PublicKey, label: string) {
   try {
     const bal = await connection.getBalance(pubkey);
-    if (bal < 2 * LAMPORTS_PER_SOL) {
-      process.stdout.write(`  💰 Airdropping to ${label}... `);
-      const sig = await connection.requestAirdrop(pubkey, 10 * LAMPORTS_PER_SOL);
-      await connection.confirmTransaction(sig, "confirmed");
-      console.log("✓");
+    if (bal < 1 * LAMPORTS_PER_SOL) {
+      process.stdout.write(`  💰 Funding ${label}... `);
+      try {
+        const sig = await connection.requestAirdrop(pubkey, 2 * LAMPORTS_PER_SOL);
+        await connection.confirmTransaction(sig, "confirmed");
+        console.log("✓ (airdrop)");
+      } catch (airdropErr) {
+        // Fallback: Transfer from local wallet if airdrop rate limited/internal error
+        try {
+          const defaultWalletPath = path.join(process.env.HOME || "", ".config/solana/id.json");
+          if (fs.existsSync(defaultWalletPath)) {
+            const secret = JSON.parse(fs.readFileSync(defaultWalletPath, "utf8"));
+            const adminPayer = Keypair.fromSecretKey(Uint8Array.from(secret));
+            const tx = new anchor.web3.Transaction().add(
+              anchor.web3.SystemProgram.transfer({
+                fromPubkey: adminPayer.publicKey,
+                toPubkey: pubkey,
+                lamports: 2 * LAMPORTS_PER_SOL,
+              })
+            );
+            await anchor.web3.sendAndConfirmTransaction(connection, tx, [adminPayer]);
+            console.log("✓ (faucet transfer)");
+          }
+        } catch (transferErr: any) {
+          console.warn(`⚠ Funding failed: ${transferErr.message?.slice(0, 60)}`);
+        }
+      }
     } else {
       console.log(`  ✓  ${label}: ${(bal / LAMPORTS_PER_SOL).toFixed(2)} SOL`);
     }
   } catch (e: any) {
-    console.warn(`  ⚠ Airdrop failed for ${label}: ${e.message?.slice(0, 60)}`);
+    console.warn(`  ⚠ Funding check failed for ${label}: ${e.message?.slice(0, 60)}`);
   }
 }
 
@@ -224,7 +246,16 @@ async function main() {
   console.log("──────────────────────────────────────────────────────────");
 
   // Admin wallet (needed to create markets)
-  const adminWallet = anchor.Wallet.local();
+  let adminWallet: anchor.Wallet;
+  const defaultWalletPath = path.join(process.env.HOME || "", ".config/solana/id.json");
+  if (process.env.ANCHOR_WALLET && fs.existsSync(process.env.ANCHOR_WALLET)) {
+    adminWallet = anchor.Wallet.local();
+  } else if (fs.existsSync(defaultWalletPath)) {
+    const secret = JSON.parse(fs.readFileSync(defaultWalletPath, "utf8"));
+    adminWallet = new anchor.Wallet(Keypair.fromSecretKey(Uint8Array.from(secret)));
+  } else {
+    adminWallet = new anchor.Wallet(Keypair.generate());
+  }
   const adminKeypair = adminWallet.payer;
   const provider = new anchor.AnchorProvider(connection, adminWallet, {
     commitment: "confirmed",

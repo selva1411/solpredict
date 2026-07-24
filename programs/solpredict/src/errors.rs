@@ -160,4 +160,59 @@ pub enum SolPredictError {
 
     #[msg("Use Pyth oracle to settle Crypto markets")]
     UsePythForCrypto,
+
+    // =========================================================================
+    // New errors for enhanced instructions
+    // =========================================================================
+
+    #[msg("Market is paused for maintenance")]
+    MarketPaused,
+
+    #[msg("Reentrancy detected — call rejected")]
+    ReentrancyDetected,
+
+    #[msg("Not enough liquidity in pool")]
+    InsufficientLiquidity,
+
+    #[msg("Liquidity position not found")]
+    LiquidityPositionNotFound,
+
+    #[msg("No LP tokens to withdraw")]
+    NoLpTokens,
+
+    #[msg("Slippage tolerance exceeded")]
+    SlippageExceeded,
+
+    #[msg("Minimum spend not met")]
+    MinSpendNotMet,
+
+    #[msg("Signature verification failed")]
+    SignatureVerificationFailed,
+
+    #[msg("Market already cancelled")]
+    AlreadyCancelled,
+
+    #[msg("Invalid category")]
+    InvalidCategory,
+
+    #[msg("Emergency pause is already active")]
+    AlreadyPaused,
+
+    #[msg("Emergency pause is not active")]
+    NotPaused,
+
+    #[msg("Admin operation requires multisig approval")]
+    MultisigRequired,
+
+    #[msg("Market resolution source mismatch")]
+    ResolutionSourceMismatch,
+
+    #[msg("Batch size exceeds maximum")]
+    BatchSizeExceeded,
+
+    #[msg("Proposal is not in Pending state")]
+    ProposalNotPending,
+
+    #[msg("Proposal bond is below the minimum required")]
+    ProposalBondTooLow,
 }

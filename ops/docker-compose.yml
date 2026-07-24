@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: predictx
+      POSTGRES_USER: predictx
+      POSTGRES_PASSWORD: predictx_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U predictx
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  solana-localnet:
+    image: solanalabs/solana:v2.2.6
+    command:
+      - solana-test-validator
+      - --reset
+      - --quiet
+      - --bind-address
+      - 0.0.0.0
+      - --rpc-port
+      - 8899
+      - --ledger
+      - /ledger
+    ports:
+      - "8899:8899"
+      - "8900:8900"
+    volumes:
+      - ledger:/ledger
+    healthcheck:
+      test: curl -sf http://localhost:8899/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  ledger:

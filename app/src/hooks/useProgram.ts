@@ -53,6 +53,7 @@ export interface SolPredictProgram {
           sharePriceLamports: anchor.BN;
           feeCollected: anchor.BN;
           feeWithdrawn: boolean;
+          feeBps: number;
         };
       }>>;
       fetch(pda: PublicKey): Promise<{
@@ -79,6 +80,7 @@ export interface SolPredictProgram {
         sharePriceLamports: anchor.BN;
         feeCollected: anchor.BN;
         feeWithdrawn: boolean;
+        feeBps: number;
       }>;
     };
     userPosition: {
@@ -91,8 +93,66 @@ export interface SolPredictProgram {
           noAmount: anchor.BN;
           totalSpentLamports: anchor.BN;
           claimed: boolean;
+          bump: number;
         };
       }>>;
+    };
+    order: {
+      all(filters?: Array<{ memcmp: { offset: number; bytes: string } }>): Promise<Array<{
+        publicKey: PublicKey;
+        account: {
+          maker: PublicKey;
+          market: PublicKey;
+          side: object;
+          isBuy: boolean;
+          priceBps: anchor.BN;
+          quantity: anchor.BN;
+          filledQuantity: anchor.BN;
+          status: object;
+          orderId: anchor.BN;
+        };
+      }>>;
+    };
+    marketProposal: {
+      all(filters?: Array<{ memcmp: { offset: number; bytes: string } }>): Promise<Array<{
+        publicKey: PublicKey;
+        account: {
+          proposalId: anchor.BN;
+          proposer: PublicKey;
+          question: string;
+          description: string;
+          category: number;
+          oracleFeedId: number[];
+          targetPrice: anchor.BN;
+          targetExpo: number;
+          comparison: number;
+          endTs: anchor.BN;
+          resolveTs: anchor.BN;
+          sharePriceLamports: anchor.BN;
+          bondLamports: anchor.BN;
+          status: object;
+          createdAt: anchor.BN;
+          bump: number;
+        };
+      }>>;
+      fetch(pda: PublicKey): Promise<{
+        proposalId: anchor.BN;
+        proposer: PublicKey;
+        question: string;
+        description: string;
+        category: number;
+        oracleFeedId: number[];
+        targetPrice: anchor.BN;
+        targetExpo: number;
+        comparison: number;
+        endTs: anchor.BN;
+        resolveTs: anchor.BN;
+        sharePriceLamports: anchor.BN;
+        bondLamports: anchor.BN;
+        status: object;
+        createdAt: anchor.BN;
+        bump: number;
+      }>;
     };
   };
 }
@@ -102,7 +162,6 @@ export function useProgram() {
   const wallet = useWallet();
 
   const program = useMemo(() => {
-    // If no wallet is connected, construct a read-only provider
     const provider = new AnchorProvider(
       connection,
       wallet as unknown as Wallet,
@@ -112,37 +171,29 @@ export function useProgram() {
     const idlCopy = { ...idl, address: ENV.programId.toBase58() };
     const rawProgram = new Program(idlCopy as Idl, provider);
 
-    // Map category enum to number
     const parseCategory = (categoryObj: any): number => {
       if (typeof categoryObj === "number") return categoryObj;
-      if (!categoryObj) return 4; // default to Other (index 4)
+      if (!categoryObj) return 4;
       if (categoryObj.crypto !== undefined) return 0;
       if (categoryObj.sports !== undefined) return 1;
       if (categoryObj.politics !== undefined) return 2;
       if (categoryObj.tech !== undefined) return 3;
       if (categoryObj.other !== undefined) return 4;
-      
-      // Check uppercase variants
       if (categoryObj.Crypto !== undefined) return 0;
       if (categoryObj.Sports !== undefined) return 1;
       if (categoryObj.Politics !== undefined) return 2;
       if (categoryObj.Tech !== undefined) return 3;
       if (categoryObj.Other !== undefined) return 4;
-
       return 4;
     };
 
-    // Map comparison enum to number
     const parseComparison = (comparisonObj: any): number => {
       if (typeof comparisonObj === "number") return comparisonObj;
-      if (!comparisonObj) return 0; // default to GreaterThan (index 0)
+      if (!comparisonObj) return 0;
       if (comparisonObj.greaterThan !== undefined) return 0;
       if (comparisonObj.lessThan !== undefined) return 1;
-      
-      // Check uppercase variants
       if (comparisonObj.GreaterThan !== undefined) return 0;
       if (comparisonObj.LessThan !== undefined) return 1;
-
       return 0;
     };
 
@@ -155,7 +206,6 @@ export function useProgram() {
       };
     };
 
-    // Proxy the market account methods to parse the category enum on fetch/all
     const originalMarket = (rawProgram.account as any).market;
     const wrappedMarket = new Proxy(originalMarket, {
       get(target: any, prop: string | symbol) {
@@ -179,7 +229,6 @@ export function useProgram() {
       }
     });
 
-    // Create a proxy/wrapper for program to keep all other fields and overwrite account.market
     const wrappedProgram = new Proxy(rawProgram, {
       get(target: any, prop: string | symbol) {
         if (prop === "account") {

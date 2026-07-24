@@ -8,6 +8,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
+import { txAccounts } from "@/lib/anchor-utils";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { 
@@ -60,6 +61,8 @@ interface Market {
     noPoolLamports: anchor.BN;
     feeCollected: anchor.BN;
     feeWithdrawn: boolean;
+    feeBps: number;
+    [key: string]: unknown;
   };
 }
 
@@ -232,6 +235,7 @@ function AdminPage() {
                     noPoolLamports: new anchor.BN(Math.round((c.noPoolSol || 0) * 1e9)),
                     feeCollected: new anchor.BN(0),
                     feeWithdrawn: false,
+                    feeBps: 200,
                   }
                 };
               });
@@ -350,10 +354,10 @@ function AdminPage() {
       const configPda = getConfigPda(program.programId);
       await program.methods
         .initializeConfig(feeBps)
-        .accounts({
+        .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
-        } as any)
+        }))
         .rpc();
 
       toast.success("Platform Config PDA successfully initialized!");
@@ -413,14 +417,14 @@ function AdminPage() {
           resolveTs,
           new anchor.BN(10_000_000) // 0.01 SOL share price
         )
-        .accounts({
+        .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
           market: marketPda,
           yesMint: yesMintPda,
           noMint: noMintPda,
           treasury: treasuryPda,
-        } as any)
+        }))
         .rpc();
 
       toast.success(`Market ID #${nextMarketId} deployed successfully!`);
@@ -495,19 +499,19 @@ function AdminPage() {
           exponent,
           publishTime
         )
-        .accounts({
+        .accounts(txAccounts({
           payer: wallet.publicKey,
           priceUpdate: mockPriceUpdatePda,
-        } as any)
+        }))
         .rpc();
 
       await program.methods
         .settleMarket()
-        .accounts({
+        .accounts(txAccounts({
           market: market.publicKey,
           config: configPda,
           priceUpdate: mockPriceUpdatePda,
-        } as any)
+        }))
         .rpc();
 
       toast.success(`Market resolved successfully on-chain!`);
@@ -540,11 +544,11 @@ function AdminPage() {
       const configPda = getConfigPda(program.programId);
       await program.methods
         .cancelMarket()
-        .accounts({
+        .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
           market: marketPda,
-        } as any)
+        }))
         .rpc();
 
       toast.success("Market cancelled on-chain. Traders may claim full refunds.");
@@ -579,11 +583,11 @@ function AdminPage() {
       
       await program.methods
         .settleMarketManual(outcome)
-        .accounts({
+        .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
           market: market.publicKey,
-        } as any)
+        }))
         .rpc();
 
       toast.success(`Market manually resolved successfully on-chain!`);
@@ -619,7 +623,7 @@ function AdminPage() {
     const noPool = market.account.noPoolLamports.toNumber();
     const totalPool = yesPool + noPool;
     const losingPool = outcome === 1 ? noPool : yesPool;
-    const feeBpsVal = config?.feeBps ?? 200;
+    const feeBpsVal = market.account.feeBps ?? config?.feeBps ?? 200;
     const fee = Math.floor(losingPool * feeBpsVal / 10000);
     const payoutPoolLamports = totalPool - fee;
     return payoutPoolLamports / 1e9;
@@ -639,13 +643,13 @@ function AdminPage() {
 
       await program.methods
         .withdrawFees()
-        .accounts({
+        .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
           market: market.publicKey,
           treasury: treasuryPda,
           systemProgram: SystemProgram.programId,
-        } as any)
+        }))
         .rpc();
 
       toast.success("Platform protocol fees successfully withdrawn on-chain!");

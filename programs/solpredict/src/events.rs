@@ -92,3 +92,67 @@ pub struct PositionClosed {
     pub user: Pubkey,
     pub rent_reclaimed: u64,
 }
+
+/// Emitted when market details are updated via `update_market`.
+#[event]
+pub struct MarketUpdated {
+    pub market_id: u64,
+    pub question: String,
+    pub end_ts: i64,
+}
+
+/// Emitted when liquidity is added via `add_liquidity`.
+#[event]
+pub struct LiquidityAdded {
+    pub market_id: u64,
+    pub provider: Pubkey,
+    pub yes_lamports: u64,
+    pub no_lamports: u64,
+    pub lp_tokens_minted: u64,
+}
+
+/// Emitted when liquidity is removed via `remove_liquidity`.
+#[event]
+pub struct LiquidityRemoved {
+    pub market_id: u64,
+    pub provider: Pubkey,
+    pub yes_payout: u64,
+    pub no_payout: u64,
+    pub lp_tokens_burned: u64,
+}
+
+/// Emitted when admin performs emergency withdrawal.
+#[event]
+pub struct EmergencyWithdraw {
+    pub market_id: u64,
+    pub admin: Pubkey,
+    pub amount: u64,
+    pub reason: String,
+}
+
+/// Emitted when program is paused or unpaused.
+#[event]
+pub struct EmergencyPauseChanged {
+    pub paused: bool,
+    pub paused_by: Pubkey,
+    pub timestamp: i64,
+}
+
+/// Emitted when a user proposes a new market.
+#[event]
+pub struct MarketProposed {
+    pub proposal_id: u64,
+    pub proposer: Pubkey,
+    pub question: String,
+    pub bond_lamports: u64,
+    pub created_at: i64,
+}
+
+/// Emitted when a market proposal is approved (or rejected) by the admin.
+#[event]
+pub struct MarketProposalProcessed {
+    pub proposal_id: u64,
+    pub proposer: Pubkey,
+    pub status: u8,
+    pub market_id: Option<u64>,
+}

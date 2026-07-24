@@ -9,6 +9,7 @@ import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
+import { txAccounts } from "@/lib/anchor-utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -43,33 +44,43 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer, listItem } from "@/lib/motion-variants";
 
+interface PositionAccountData {
+  market: PublicKey;
+  owner: PublicKey;
+  yesAmount: anchor.BN;
+  noAmount: anchor.BN;
+  totalSpentLamports: anchor.BN;
+  claimed: boolean;
+  [key: string]: unknown;
+}
+
+interface MarketAccountData {
+  marketId: anchor.BN;
+  authority: PublicKey;
+  question: string;
+  description: string;
+  category: number;
+  endTs: anchor.BN;
+  status: object;
+  winningOutcome: { yes?: Record<string, never>; no?: Record<string, never>; unset?: Record<string, never> };
+  yesMint: PublicKey;
+  noMint: PublicKey;
+  yesPoolLamports: anchor.BN;
+  noPoolLamports: anchor.BN;
+  yesSupply: anchor.BN;
+  noSupply: anchor.BN;
+  totalPayoutPool: anchor.BN;
+  yesAmount: anchor.BN;
+  noAmount: anchor.BN;
+  feeCollected: anchor.BN;
+  sharePriceLamports: anchor.BN;
+  [key: string]: unknown;
+}
+
 interface PositionWithMarket {
   publicKey: PublicKey;
-  account: {
-    market: PublicKey;
-    owner: PublicKey;
-    yesAmount: anchor.BN;
-    noAmount: anchor.BN;
-    totalSpentLamports: anchor.BN;
-    claimed: boolean;
-  };
-  marketAccount: {
-    marketId: anchor.BN;
-    authority: PublicKey;
-    question: string;
-    description: string;
-    category: number;
-    endTs: anchor.BN;
-    status: any;
-    winningOutcome: any;
-    yesMint: PublicKey;
-    noMint: PublicKey;
-    yesPoolLamports: anchor.BN;
-    noPoolLamports: anchor.BN;
-    yesSupply: anchor.BN;
-    noSupply: anchor.BN;
-    totalPayoutPool: anchor.BN;
-  };
+  account: PositionAccountData;
+  marketAccount: MarketAccountData;
 }
 
 interface PersonalActivity {
@@ -159,8 +170,8 @@ export default function UserDashboard() {
             const marketAccount = await program.account.market.fetch(pos.account.market);
             positionData.push({
               publicKey: pos.publicKey,
-              account: pos.account as any,
-              marketAccount: marketAccount as any,
+              account: pos.account as unknown as PositionAccountData,
+              marketAccount: marketAccount as unknown as MarketAccountData,
             });
           } catch (err) {
             console.error("Error fetching market for position:", pos.publicKey.toBase58(), err);
@@ -232,7 +243,7 @@ export default function UserDashboard() {
             event.name === "SharesPurchased" &&
             (event.data.buyer as PublicKey).toBase58() === walletKey
           ) {
-            const side = event.data.side as any;
+            const side = event.data.side as { yes?: Record<string, never>; no?: Record<string, never> };
             items.push({
               signature: sig.signature,
               type: side.yes !== undefined ? "BUY_YES" : "BUY_NO",
@@ -309,7 +320,7 @@ export default function UserDashboard() {
       const claimerAta = getAssociatedTokenAddressSync(winningMint, wallet.publicKey);
       await program.methods
         .claimRewards()
-        .accounts({
+        .accounts(txAccounts({
           claimer: wallet.publicKey,
           market: pos.account.market,
           treasury: PublicKey.findProgramAddressSync(
@@ -319,7 +330,7 @@ export default function UserDashboard() {
           winningMint,
           claimerAta,
           userPosition: pos.publicKey,
-        } as any)
+        }))
         .rpc();
 
       toast.success("Rewards claimed successfully!");
@@ -350,7 +361,7 @@ export default function UserDashboard() {
 
       await program.methods
         .claimRefund()
-        .accounts({
+        .accounts(txAccounts({
           claimer: wallet.publicKey,
           market: pos.account.market,
           treasury: PublicKey.findProgramAddressSync(
@@ -362,7 +373,7 @@ export default function UserDashboard() {
           claimerYesAta,
           claimerNoAta,
           userPosition: pos.publicKey,
-        } as any)
+        }))
         .rpc();
 
       toast.success("Refund processed successfully!");
@@ -381,11 +392,11 @@ export default function UserDashboard() {
       setClaimingId(pos.publicKey.toBase58());
       await program.methods
         .closePosition()
-        .accounts({
+        .accounts(txAccounts({
           user: wallet.publicKey,
           market: pos.account.market,
           userPosition: pos.publicKey,
-        } as any)
+        }))
         .rpc();
 
       toast.success("Position closed & rent (~0.0015 SOL) reclaimed!");

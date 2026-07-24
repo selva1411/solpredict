@@ -58,3 +58,64 @@ export function getUserPositionPda(
   );
   return pda;
 }
+
+export function getLpPda(
+  marketPda: PublicKey,
+  providerPubkey: PublicKey,
+  programId: PublicKey
+): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("lp"),
+      marketPda.toBuffer(),
+      providerPubkey.toBuffer(),
+    ],
+    programId
+  );
+  return pda;
+}
+
+export function getEmergencyPausePda(programId: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("emergency_pause")],
+    programId
+  );
+  return pda;
+}
+
+export function getOrderPda(
+  marketPda: PublicKey,
+  makerPubkey: PublicKey,
+  orderId: anchor.BN,
+  programId: PublicKey
+): PublicKey {
+  const orderIdBuffer = orderId.toArrayLike(Buffer, "le", 8);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("order"),
+      marketPda.toBuffer(),
+      makerPubkey.toBuffer(),
+      orderIdBuffer,
+    ],
+    programId
+  );
+  return pda;
+}
+
+export function getProposalPda(proposalId: anchor.BN, programId: PublicKey): PublicKey {
+  const idBuf = proposalId.toArrayLike(Buffer, "le", 8);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("proposal"), idBuf],
+    programId
+  );
+  return pda;
+}
+
+export function getProposalVaultPda(proposalId: anchor.BN, programId: PublicKey): PublicKey {
+  const idBuf = proposalId.toArrayLike(Buffer, "le", 8);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("proposal_vault"), idBuf],
+    programId
+  );
+  return pda;
+}
