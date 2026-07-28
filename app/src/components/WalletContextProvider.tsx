@@ -7,8 +7,9 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adap
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ENV } from "@/lib/env";
+import { AppProvider } from "@/contexts/AppContext";
+import { MarketDataProvider } from "@/contexts/MarketDataContext";
 
-// Import Wallet Adapter styles
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 const queryClient = new QueryClient({
@@ -23,7 +24,6 @@ const queryClient = new QueryClient({
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const endpoint = useMemo(() => ENV.rpcUrl, []);
 
-  // Configure supported wallets (Phantom and Solflare)
   const wallets = useMemo(
     () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
     []
@@ -34,7 +34,11 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <QueryClientProvider client={queryClient}>
-            {children}
+            <AppProvider>
+              <MarketDataProvider>
+                {children}
+              </MarketDataProvider>
+            </AppProvider>
           </QueryClientProvider>
         </WalletModalProvider>
       </WalletProvider>

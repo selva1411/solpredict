@@ -1,29 +1,24 @@
-import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/client';
 import { trades } from '@/lib/db/schema';
-import { desc, sql } from 'drizzle-orm';
+import { desc } from 'drizzle-orm';
+import { ok } from '@/lib/api-response';
+import { apiHandler } from '@/lib/api-handler';
 
-export async function GET() {
-  if (!db) {
-    return NextResponse.json({ ok: false, error: 'DB not available' });
-  }
-  try {
-    const rows = await db.select({
-      signature: trades.signature,
-      marketPubkey: trades.marketPubkey,
-      trader: trades.trader,
-      side: trades.side,
-      lamportsIn: trades.lamportsIn,
-      tokensOut: trades.tokensOut,
-      blockTime: trades.blockTime,
-    })
-      .from(trades)
-      .orderBy(desc(trades.blockTime))
-      .limit(50);
+export const GET = apiHandler(async () => {
+  if (!db) return ok({ ok: false, error: 'DB not available' });
 
-    return NextResponse.json({ ok: true, activities: rows });
-  } catch (err: any) {
-    console.error('Error fetching recent activity:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
+  const rows = await db.select({
+    signature: trades.signature,
+    marketPubkey: trades.marketPubkey,
+    trader: trades.trader,
+    side: trades.side,
+    lamportsIn: trades.lamportsIn,
+    tokensOut: trades.tokensOut,
+    blockTime: trades.blockTime,
+  })
+    .from(trades)
+    .orderBy(desc(trades.blockTime))
+    .limit(50);
+
+  return ok({ ok: true, activities: rows });
+}, { cacheMaxAge: 15, cacheTags: ["activity"] });

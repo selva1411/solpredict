@@ -1,12 +1,8 @@
-import { NextResponse } from 'next/server';
 import { getCachedMarketsFromDb } from '@/lib/db/store';
+import { ok } from '@/lib/api-response';
+import { apiHandler } from '@/lib/api-handler';
 
-export async function GET() {
-  try {
-    const markets = await getCachedMarketsFromDb();
-    return NextResponse.json({ ok: true, markets });
-  } catch (err: any) {
-    console.error("Error fetching cached markets API:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
+export const GET = apiHandler(async () => {
+  const markets = await getCachedMarketsFromDb();
+  return ok({ ok: true, markets: markets ?? [] });
+}, { cacheMaxAge: 10, cacheTags: ["markets"] });

@@ -10,3 +10,4 @@ scratch_lint.txt
 test_output.log
 price_feeds.json
 yarn.lock
+opencode.json

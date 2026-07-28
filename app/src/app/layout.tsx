@@ -1,40 +1,44 @@
 import type { Metadata } from "next";
-import { Archivo_Narrow, Inter, JetBrains_Mono } from "next/font/google";
-import { Toaster } from "sonner";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 import { WalletContextProvider } from "@/components/WalletContextProvider";
-import { ScrollProgress } from "@/components/ScrollProgress";
 import { Navigation } from "@/components/Navigation";
+import { MobileBottomNav } from "@/components/MobileNav";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { WebVitals } from "@/components/WebVitals";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ToastProvider } from "@/components/NotificationToast";
+import { validateEnv } from "@/lib/env-validate";
+
+if (typeof globalThis !== "undefined") {
+  try { validateEnv(); } catch {}
+}
 
 const inter = Inter({
-  variable: "--font-inter",
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  display: "swap",
 });
 
-const archivoNarrow = Archivo_Narrow({
-  variable: "--font-archivo-narrow",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+  variable: "--font-geist-mono",
   subsets: ["latin"],
-  weight: ["400", "700"],
-  display: "swap",
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : "http://localhost:3000"),
-  title: "SOLPredict — Decentralized Prediction Board",
-  description: "Predict the future and own the outcome. Trade YES/NO contracts on Solana, settled by trustless Pyth oracles.",
-  icons: {
-    icon: "/icon.png",
-    apple: "/icon.png",
+  title: "PREDICT-X — Predict the Future. Win the Future.",
+  description: "Solana's premier prediction market. Trade YES/NO on any outcome with sub-second settlement, CPMM pricing, and Pyth oracle resolution.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "PREDICT-X",
   },
 };
 
@@ -44,46 +48,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${archivoNarrow.variable} ${jetbrainsMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col font-sans bg-[#131313] text-[#e5e2e1]">
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased pb-16 md:pb-0`}
+        style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+      >
         <WalletContextProvider>
           <ErrorBoundary>
-            <ScrollProgress />
-
-            {/* Background layers */}
-            <div className="dot-pattern" />
-            <div className="grid-overlay" />
-            <div className="ambient-glow ambient-glow-1" />
-            <div className="ambient-glow ambient-glow-2" />
-            <div className="ambient-glow ambient-glow-3" />
-            <div className="noise-overlay" />
-            <div className="scanline-overlay" />
-
             <Navigation />
-
-            <ToastProvider>
-              <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 sm:pb-8 flex flex-col">
-                {children}
-              </main>
-            </ToastProvider>
-
-            <footer className="w-full border-t border-[#9e8e78]/20 bg-[#131313]/80 backdrop-blur-sm py-6 mt-auto text-xs text-[#d6c4ac] hidden sm:block">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono">
-                <p className="text-[#d6c4ac]/60">
-                  &copy; 2026 SOLPREDICT // DEVNET // PYTH ORACLES
-                </p>
-                <div className="flex items-center space-x-4 text-[#d6c4ac]/40">
-                  <span>FEED rec5EK...5LtFJ</span>
-                </div>
-              </div>
-            </footer>
-
-            <Toaster theme="dark" position="bottom-right" richColors />
+            <main className="animate-fade-in">
+              {children}
+            </main>
           </ErrorBoundary>
+          <MobileBottomNav />
         </WalletContextProvider>
+        <Toaster />
+        <WebVitals />
+        <ServiceWorkerRegister />
+        <ScrollToTop />
       </body>
     </html>
   );

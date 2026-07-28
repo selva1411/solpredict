@@ -1,41 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getMarketComments, addMarketComment } from '@/lib/db/store';
+import { NextRequest } from "next/server";
+import { getMarketComments, addMarketComment } from "@/lib/db/store";
+import { badRequest, ok } from "@/lib/api-response";
+import { apiHandler } from "@/lib/api-handler";
+import { commentPostSchema } from "@/lib/schemas";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: marketPubkey } = await params;
-    const comments = await getMarketComments(marketPubkey);
-    return NextResponse.json({ ok: true, comments });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
+export const GET = apiHandler(async (req: NextRequest, context) => {
+  const params = await context?.params;
+  const marketPubkey = params?.id ?? "";
+  const comments = await getMarketComments(marketPubkey);
+  return ok({ ok: true, comments });
+});
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: marketPubkey } = await params;
-    const { authorWallet, authorUsername, content, parentId } = await req.json();
+export const POST = apiHandler(async (req: NextRequest, context) => {
+  const params = await context?.params;
+  const marketPubkey = params?.id ?? "";
+  const body = await req.json();
 
-    if (!authorWallet || !content) {
-      return NextResponse.json({ error: 'authorWallet and content required' }, { status: 400 });
-    }
+  const parsed = commentPostSchema.safeParse(body);
+  if (!parsed.success) return badRequest(parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; "));
 
-    const created = await addMarketComment({
-      marketPubkey,
-      authorWallet,
-      authorUsername,
-      content,
-      parentId,
-    });
+  const { authorWallet, authorUsername, content, parentId } = parsed.data;
 
-    return NextResponse.json({ ok: true, comment: created });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
+  const created = await addMarketComment({
+    marketPubkey, authorWallet, authorUsername, content, parentId,
+  });
+  return ok({ ok: true, comment: created });
+});

@@ -1,423 +1,127 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { Search, ArrowUpDown, Clock, TrendingUp, Sparkles } from "lucide-react";
+import { useMarkets } from "@/hooks/useMarkets";
+import { onChainMarketsToUi } from "@/lib/market-adapter";
+import { MarketCard } from "@/components/MarketCard";
+import type { UiMarket } from "@/lib/market-adapter";
+import { LoadingState, EmptyState } from "@/components/StatePanels";
 import Link from "next/link";
-import { useProgram } from "@/hooks/useProgram";
-import { PublicKey } from "@solana/web3.js";
-import { motion, type Variants } from "framer-motion";
-import { Search, Clock, TrendingUp, Star, Flame, Zap, BarChart2 } from "lucide-react";
-import { getFriendlyErrorMessage } from "@/lib/error-map";
-import { lamportsToSol, bnToNum } from "@/lib/format";
-import { toast } from "sonner";
-import * as anchor from "@coral-xyz/anchor";
-import { FlipCountdown } from "@/components/FlipCountdown";
-import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
-import { getMarketStatusString } from "@/lib/events";
-import { feedIdBytesToHex, isOracleCategory } from "@/lib/pyth-feeds";
-import { LivePriceBar } from "@/components/LivePriceBar";
-import { MarketCardSkeleton, EmptyState } from "@/components/StatePanels";
-import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 
-interface Market {
-  publicKey: PublicKey;
-  account: {
-    marketId: anchor.BN;
-    question: string;
-    description: string;
-    category: number;
-    oracleFeedId: number[];
-    targetPrice: anchor.BN;
-    targetExpo: number;
-    comparison: number;
-    endTs: anchor.BN;
-    resolveTs: anchor.BN;
-    status: { open?: Record<string, never>; settled?: Record<string, never>; cancelled?: Record<string, never> };
-    yesPoolLamports: anchor.BN;
-    noPoolLamports: anchor.BN;
-  };
-}
+const CATEGORIES = ["All", "Crypto", "Sports", "Politics", "Tech", "Other"] as const;
+const SORT_OPTIONS = [
+  { key: "liquidity", label: "Volume", icon: TrendingUp },
+  { key: "newest", label: "Newest", icon: Sparkles },
+  { key: "ending", label: "Ending Soon", icon: Clock },
+] as const;
+type SortKey = (typeof SORT_OPTIONS)[number]["key"];
 
-const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
-const CATEGORY_ICONS: Record<string, string> = {
-  Crypto: "₿",
-  Sports: "⚽",
-  Politics: "🗳",
-  Tech: "💻",
-  Other: "🌐",
-};
-
-const fadeIn: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.3, delay: i * 0.04, ease: "easeOut" as const },
-  }),
-};
-
-export default function MarketExplorer() {
-  const { program, connection } = useProgram();
-  const [markets, setMarkets] = useState<Market[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function MarketsPage() {
+  const [activeCategory, setActiveCategory] = useState<typeof CATEGORIES[number]>("All");
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedStatus, setSelectedStatus] = useState("Open");
-  const [watchlistOnly, setWatchlistOnly] = useState(false);
-  const [watchlist, setWatchlist] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"trending" | "volume" | "ends" | "newest">("trending");
+  const [sortBy, setSortBy] = useState<SortKey>("liquidity");
+  const { markets: onChainMarkets, loading, error } = useMarkets();
 
-  useEffect(() => {
-    setWatchlist(getWatchlist());
-  }, []);
+  const markets: UiMarket[] = useMemo(
+    () => onChainMarketsToUi(onChainMarkets ?? []),
+    [onChainMarkets]
+  );
 
-  const fetchMarkets = async () => {
-    try {
-      setLoading(true);
-      const onChainMarkets = (await program.account.market.all().catch(() => [])) as Market[];
-      const existingKeys = new Set(onChainMarkets.map(m => m.publicKey.toBase58()));
-
-      let dbMarkets: Market[] = [];
-      try {
-        const res = await fetch("/api/markets/cached");
-        if (res.ok) {
-          const json = await res.json();
-          if (json.markets) {
-            dbMarkets = json.markets
-              .filter((c: any) => !existingKeys.has(c.marketPubkey))
-              .map((c: any): Market => {
-                const catIdx = CATEGORIES.indexOf(c.category) >= 0 ? CATEGORIES.indexOf(c.category) : 4;
-                const statusObj = c.status === "settled" ? { settled: {} } : c.status === "cancelled" ? { cancelled: {} } : { open: {} };
-                return {
-                  publicKey: new PublicKey(c.marketPubkey),
-                  account: {
-                    marketId: new anchor.BN(c.marketId || 0),
-                    question: c.question,
-                    description: c.description || "",
-                    category: catIdx,
-                    oracleFeedId: Array(32).fill(0),
-                    targetPrice: new anchor.BN(0),
-                    targetExpo: 0,
-                    comparison: 0,
-                    endTs: new anchor.BN(Math.floor(new Date(c.endTs).getTime() / 1000)),
-                    resolveTs: new anchor.BN(Math.floor(new Date(c.resolveTs).getTime() / 1000)),
-                    status: statusObj,
-                    yesPoolLamports: new anchor.BN(Math.round((c.yesPoolSol || 0) * 1e9)),
-                    noPoolLamports: new anchor.BN(Math.round((c.noPoolSol || 0) * 1e9)),
-                  }
-                };
-              });
-          }
-        }
-      } catch (e) {
-        console.warn("Could not fetch cached markets from DB:", e);
-      }
-
-      setMarkets([...onChainMarkets, ...dbMarkets]);
-    } catch (err: unknown) {
-      console.error(err);
-      toast.error(`Failed to load markets: ${getFriendlyErrorMessage(err)}`);
-    } finally {
-      setLoading(false);
+  const filtered = useMemo(() => {
+    let list = markets;
+    if (activeCategory !== "All") {
+      list = list.filter((m) => m.category === activeCategory);
     }
-  };
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((m) => m.question.toLowerCase().includes(q));
+    }
+    if (sortBy === "liquidity") {
+      list = [...list].sort((a, b) => (b.liquidity || 0) - (a.liquidity || 0));
+    } else     if (sortBy === "newest") {
+      list = [...list].sort((a, b) => Number(b.id) - Number(a.id));
+    } else if (sortBy === "ending") {
+      list = [...list].sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
+    }
+    return list;
+  }, [markets, activeCategory, search, sortBy]);
 
-  useEffect(() => {
-    fetchMarkets();
-    const sub = connection.onLogs(program.programId, () => fetchMarkets(), "confirmed");
-    return () => { connection.removeOnLogsListener(sub); };
-  }, [program, connection]);
-
-  const handleToggleWatch = (key: string) => {
-    const next = toggleWatchlist(key);
-    setWatchlist(next);
-  };
-
-  const sortedAndFiltered = useMemo(() => {
-    return markets
-      .filter((m) => {
-        const matchesSearch =
-          m.account.question.toLowerCase().includes(search.toLowerCase()) ||
-          m.account.description.toLowerCase().includes(search.toLowerCase());
-        const catName = CATEGORIES[m.account.category] || "Other";
-        const matchesCat = selectedCategory === "All" || catName === selectedCategory;
-        const statusStr = getMarketStatusString(m.account.status);
-        const matchesStatus = selectedStatus === "All" || statusStr === selectedStatus;
-        const matchesWatch = !watchlistOnly || watchlist.includes(m.publicKey.toBase58());
-        return matchesSearch && matchesCat && matchesStatus && matchesWatch;
-      })
-      .sort((a, b) => {
-        const volA = bnToNum(a.account.yesPoolLamports) + bnToNum(a.account.noPoolLamports);
-        const volB = bnToNum(b.account.yesPoolLamports) + bnToNum(b.account.noPoolLamports);
-        if (sortBy === "volume") return volB - volA;
-        if (sortBy === "ends") return bnToNum(a.account.endTs) - bnToNum(b.account.endTs);
-        if (sortBy === "newest") return bnToNum(b.account.marketId) - bnToNum(a.account.marketId);
-        return volB - volA;
-      });
-  }, [markets, search, selectedCategory, selectedStatus, watchlistOnly, watchlist, sortBy]);
-
-  // livePrices now fetched internally by each LivePriceBar instance
-
-  // Stats banner
-  const openCount = markets.filter(m => m.account.status && "open" in m.account.status).length;
-  const totalVol = markets.reduce((acc, m) => acc + lamportsToSol(m.account.yesPoolLamports) + lamportsToSol(m.account.noPoolLamports), 0);
+  if (loading) return <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10"><LoadingState title="Loading markets..." /></main>;
 
   return (
-    <div className="space-y-6 animate-fade-in font-sans">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-white/8">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-[#e5e2e1] tracking-tight">
-            Markets
+          <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2 text-[#F4F5FA]">
+            Browse Markets
           </h1>
-          <p className="text-sm text-[#9e8e78] mt-1">
-            Trade on real-world outcomes · Powered by Solana
+          <p className="text-sm text-[#A5A8B8]">
+            {markets.length} live markets{search ? ` · ${filtered.length} shown` : ""}
           </p>
         </div>
-        {/* Quick stats */}
-        <div className="flex items-center gap-4 text-[11px] font-mono">
-          <div className="text-center">
-            <div className="font-bold text-[#e5e2e1] text-base">{openCount}</div>
-            <div className="text-[#9e8e78]">Open markets</div>
-          </div>
-          <div className="w-px h-8 bg-white/10" />
-          <div className="text-center">
-            <div className="font-bold text-[#22c55e] text-base">{totalVol.toFixed(1)} SOL</div>
-            <div className="text-[#9e8e78]">Total volume</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Search + Sort Row */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9e8e78]" />
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A5A8B8]" />
           <input
             type="text"
             placeholder="Search markets..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0d] border border-[#9e8e78]/25 rounded-lg text-sm text-[#e5e2e1] placeholder-[#9e8e78]/60 focus:outline-none focus:border-[#ffd89c]/50 transition-colors"
+            className="w-48 bg-[#0A0B12] border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-[#F4F5FA] placeholder:text-[#A5A8B8] focus:outline-none focus:border-[#7B3FE4] transition-colors"
           />
-        </div>
-        <div className="flex gap-2">
-          {(["trending", "volume", "ends", "newest"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSortBy(s)}
-              className={`px-3 py-2 rounded-lg text-[11px] font-semibold capitalize cursor-pointer transition-all border ${
-                sortBy === s
-                  ? "bg-[#ffd89c]/10 border-[#ffd89c]/40 text-[#ffd89c]"
-                  : "bg-[#0d0d0d] border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1] hover:border-[#9e8e78]/40"
-              }`}
-            >
-              {s === "trending" ? <Flame className="w-3 h-3 inline mr-1" /> : null}
-              {s === "volume" ? <BarChart2 className="w-3 h-3 inline mr-1" /> : null}
-              {s === "ends" ? <Clock className="w-3 h-3 inline mr-1" /> : null}
-              {s === "newest" ? <Zap className="w-3 h-3 inline mr-1" /> : null}
-              {s === "trending" ? "Hot" : s === "ends" ? "Ending" : s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
-          ))}
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none border-b border-white/8">
-        {["All", ...CATEGORIES].map((cat) => (
+      <div className="flex items-center gap-2 mb-8 overflow-x-auto no-scrollbar">
+        {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer transition-all border ${
-              selectedCategory === cat
-                ? "bg-white text-[#131313] border-transparent font-bold"
-                : "bg-transparent border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1] hover:border-[#9e8e78]/40"
+            onClick={() => setActiveCategory(cat)}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+              activeCategory === cat
+                ? "bg-[#7B3FE4] text-white"
+                : "text-[#A5A8B8] border border-white/10 hover:border-[#7B3FE4]/50 hover:text-[#F4F5FA]"
             }`}
           >
-            {cat !== "All" && <span className="mr-1">{CATEGORY_ICONS[cat]}</span>}
             {cat}
           </button>
         ))}
-
-        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={() => setWatchlistOnly(!watchlistOnly)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold cursor-pointer transition-all border ${
-              watchlistOnly
-                ? "bg-[#ffd89c]/10 border-[#ffd89c]/40 text-[#ffd89c]"
-                : "bg-transparent border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1]"
-            }`}
-          >
-            <Star className={`w-3 h-3 ${watchlistOnly ? "fill-current" : ""}`} />
-            Watchlist
-          </button>
-          {(["Open", "Settled", "All"] as const).map((s) => (
+        <div className="ml-auto flex items-center gap-1 border-l border-white/5 pl-3">
+          <ArrowUpDown className="w-3.5 h-3.5 text-[#A5A8B8]" />
+          {SORT_OPTIONS.map(({ key, label, icon: Icon }) => (
             <button
-              key={s}
-              onClick={() => setSelectedStatus(s)}
-              className={`px-3 py-2 rounded-full text-xs font-semibold cursor-pointer transition-all border ${
-                selectedStatus === s
-                  ? s === "Open"
-                    ? "bg-[#22c55e]/10 border-[#22c55e]/40 text-[#22c55e]"
-                    : "bg-[#9e8e78]/10 border-[#9e8e78]/40 text-[#9e8e78]"
-                  : "bg-transparent border-[#9e8e78]/20 text-[#9e8e78] hover:text-[#e5e2e1]"
+              key={key}
+              onClick={() => setSortBy(key)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${
+                sortBy === key
+                  ? "text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/20"
+                  : "text-[#A5A8B8] hover:text-[#F4F5FA]"
               }`}
             >
-              {s === "Open" && <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] inline-block mr-1.5" />}
-              {s}
+              <Icon className="w-3 h-3" />
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Results count */}
-      {!loading && (
-        <p className="text-[11px] text-[#9e8e78] font-mono">
-          Showing {sortedAndFiltered.length} market{sortedAndFiltered.length !== 1 ? "s" : ""}
-          {selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}
-        </p>
-      )}
-
-      {/* Markets Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => <MarketCardSkeleton key={i} />)}
-        </div>
-      ) : sortedAndFiltered.length === 0 ? (
+      {error ? (
+        <EmptyState title="Error" description={error} />
+      ) : filtered.length === 0 ? (
         <EmptyState
-          icon={TrendingUp}
-          title="No markets found"
-          description="Try adjusting your search or filters."
+          title={search ? "No matches" : "No markets yet"}
+          description={search ? "Try a different search or category." : "Be the first to propose a market."}
+          action={!search ? { label: "Create Market", href: "/create" } : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sortedAndFiltered.map((market, i) => {
-            const key = market.publicKey.toBase58();
-            const status = getMarketStatusString(market.account.status, market.account.endTs);
-            const isWatched = watchlist.includes(key);
-            const yesPool = lamportsToSol(market.account.yesPoolLamports);
-            const noPool = lamportsToSol(market.account.noPoolLamports);
-            const totalVolume = yesPool + noPool;
-            const yesPercent = totalVolume > 0 ? Math.round((yesPool / totalVolume) * 100) : 50;
-            const noPercent = 100 - yesPercent;
-            const feedHex = isOracleCategory(market.account.category) && market.account.oracleFeedId
-              ? feedIdBytesToHex(market.account.oracleFeedId)
-              : null;
-
-            const catName = CATEGORIES[market.account.category] || "Other";
-            const endTs = market.account.endTs.toNumber();
-            const now = Math.floor(Date.now() / 1000);
-            const isEndingSoon = endTs - now < 3600 && endTs > now && status === "Open";
-
-            return (
-              <motion.div
-                key={key}
-                custom={i}
-                variants={fadeIn}
-                initial="hidden"
-                animate="visible"
-                className="group relative bg-[#111111] border border-white/8 rounded-xl overflow-hidden hover:border-white/18 transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col"
-              >
-                {/* Status ribbon */}
-                {status === "Open" && (
-                  <div className={`absolute top-0 left-0 right-0 h-0.5 ${
-                    isEndingSoon ? "bg-gradient-to-r from-[#ef4444] to-[#f97316]" : "bg-gradient-to-r from-[#22c55e]/0 via-[#22c55e]/40 to-[#22c55e]/0"
-                  }`} />
-                )}
-
-                <div className="p-4 flex flex-col gap-3 flex-1">
-                  {/* Top row: category + status + watchlist */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/6 text-[#9e8e78] border border-white/8">
-                        {CATEGORY_ICONS[catName]} {catName}
-                      </span>
-                      {isEndingSoon && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20 animate-pulse">
-                          Ending soon
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`flex items-center gap-1 text-[9px] font-bold ${
-                        status === "Open" ? "text-[#22c55e]" : status === "Ended" ? "text-[#f97316]" : status === "Settled" ? "text-[#9e8e78]" : "text-[#ef4444]"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          status === "Open" ? "bg-[#22c55e] animate-pulse" : status === "Ended" ? "bg-[#f97316]" : status === "Settled" ? "bg-[#9e8e78]" : "bg-[#ef4444]"
-                        }`} />
-                        {status}
-                      </span>
-                      <button
-                        onClick={() => handleToggleWatch(key)}
-                        className="text-[#9e8e78] hover:text-[#ffd89c] cursor-pointer transition-colors"
-                      >
-                        <Star className={`w-3.5 h-3.5 ${isWatched ? "text-[#ffd89c] fill-[#ffd89c]" : ""}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Live price if oracle */}
-                  {feedHex && (
-                    <div className="text-[10px]">
-                      <LivePriceBar
-                        feedIdHex={feedHex}
-                        category={market.account.category}
-                        targetPrice={market.account.targetPrice.toNumber()}
-                        targetExpo={market.account.targetExpo}
-                        comparison={market.account.comparison}
-                        compact
-                      />
-                    </div>
-                  )}
-
-                  {/* Question */}
-                  <Link href={`/market/${key}`} className="flex-1">
-                    <h3 className="text-sm font-semibold text-[#e5e2e1] group-hover:text-white transition-colors leading-snug line-clamp-3 cursor-pointer">
-                      {market.account.question}
-                    </h3>
-                  </Link>
-
-                  {/* Probability display — Polymarket style */}
-                  <div className="space-y-2 mt-auto">
-                    <div className="flex items-center justify-between text-[11px] font-bold font-mono">
-                      <span className="text-[#22c55e]">Yes {yesPercent}%</span>
-                      <span className="text-[#ef4444]">{noPercent}% No</span>
-                    </div>
-                    <div className="relative h-1.5 w-full bg-[#ef4444]/20 rounded-full overflow-hidden">
-                      <div
-                        className="absolute left-0 top-0 h-full bg-[#22c55e] rounded-full transition-all duration-500"
-                        style={{ width: `${yesPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="px-4 py-3 border-t border-white/6 flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-[10px] font-mono text-[#9e8e78]">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <FlipCountdown endTs={endTs} compact />
-                    </span>
-                    <span className="flex items-center gap-1 text-[#ffd89c]/80">
-                      <TrendingUp className="w-3 h-3" />
-                      {totalVolume.toFixed(2)} SOL
-                    </span>
-                  </div>
-
-                  <Link href={`/market/${key}`}>
-                    <button className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
-                      status === "Open"
-                        ? "bg-white text-[#131313] hover:bg-white/90 shadow-sm"
-                        : "bg-white/6 text-[#9e8e78] hover:bg-white/10 border border-white/10"
-                    }`}>
-                      {status === "Open" ? "Trade" : "View"}
-                    </button>
-                  </Link>
-                </div>
-              </motion.div>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((m, i) => (
+            <Link key={m.id} href={`/market/${m.id}`}>
+              <MarketCard market={m} index={i} />
+            </Link>
+          ))}
         </div>
       )}
-    </div>
+    </main>
   );
 }

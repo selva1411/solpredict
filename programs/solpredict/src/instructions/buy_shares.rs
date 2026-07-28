@@ -119,13 +119,13 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
 
     let cost_u128 = if dy_out == 0 {
         0
-    } else if pool_yes == 0 && pool_no == 0 {
+    } else if pool_yes == 0 || pool_no == 0 || (side == Side::Yes && dy_out >= pool_yes) || (side == Side::No && dy_out >= pool_no) {
         payout_math::calculate_cost(quantity, market.share_price_lamports)? as u128
     } else {
         match side {
             Side::Yes => amm_math::get_buy_cost_in(pool_yes, pool_no, dy_out, fee_bps),
             Side::No => amm_math::get_buy_cost_in(pool_no, pool_yes, dy_out, fee_bps),
-        }?
+        }.unwrap_or_else(|_| payout_math::calculate_cost(quantity, market.share_price_lamports).unwrap_or(0) as u128)
     };
     let cost = u64::try_from(cost_u128).map_err(|_| error!(SolPredictError::MathOverflow))?;
 

@@ -64,8 +64,8 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
       } else {
         toast.error(`Post failed: ${data.error}`);
       }
-    } catch (err: any) {
-      toast.error(`Failed to post comment: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to post comment: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSubmitting(false);
     }

@@ -6,20 +6,85 @@ import { usePathname } from "next/navigation";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
-import { MobileNav } from "@/components/MobileNav";
 import { useProgram } from "@/hooks/useProgram";
 import { getWatchlist } from "@/lib/watchlist";
-import { Activity, Briefcase, Trophy, Settings, Star, List } from "lucide-react";
+import { TrendingUp, Trophy, Settings, Star, Activity, Wallet, Zap, Bell } from "lucide-react";
+import { MobileNav } from "@/components/MobileNav";
 
 const NAV_ITEMS = [
-  { href: "/markets", label: "Explorer", icon: Activity },
-  { href: "/dashboard", label: "Dashboard", icon: Briefcase },
+  { href: "/markets", label: "Markets", icon: TrendingUp },
+  { href: "/dashboard", label: "Dashboard", icon: Activity },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
 ];
 
-interface WindowSolana {
-  solana?: { publicKey?: { toString(): string }; isPhantom?: boolean };
-  phantom?: { solana?: { publicKey?: { toString(): string }; isPhantom?: boolean } };
+function NotificationBell() {
+  const { publicKey } = useWallet();
+  const [unread, setUnread] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{ id: string; type: string; message: string; read: boolean; createdAt: string }>>([]);
+
+  useEffect(() => {
+    if (!publicKey) return;
+    fetch(`/api/user/notifications?wallet=${publicKey.toBase58()}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.notifications) {
+          setNotifications(data.notifications);
+          setUnread(data.notifications.filter((n: { read: boolean }) => !n.read).length);
+        }
+      })
+      .catch(() => {});
+    const interval = setInterval(() => {
+      fetch(`/api/user/notifications?wallet=${publicKey.toBase58()}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.notifications) {
+            setNotifications(data.notifications);
+            setUnread(data.notifications.filter((n: { read: boolean }) => !n.read).length);
+          }
+        })
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [publicKey]);
+
+  if (!publicKey) return null;
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} className="relative p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+        <Bell className="w-4 h-4 text-[#A5A8B8] hover:text-[#F4F5FA]" />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#FF4D6D] text-white text-[8px] font-bold flex items-center justify-center rounded-full">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 w-80 bg-[#0A0B12] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+            <div className="p-3 border-b border-white/5 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#F4F5FA] uppercase tracking-wider">Notifications</span>
+              <span className="text-[10px] text-[#A5A8B8]">{notifications.length} total</span>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="p-6 text-center text-[10px] text-[#A5A8B8] font-mono">No notifications yet</div>
+              ) : (
+                notifications.slice(0, 20).map((n) => (
+                  <div key={n.id} className={`px-3 py-2.5 border-b border-white/5 last:border-0 ${!n.read ? 'bg-[#7B3FE4]/5' : ''}`}>
+                    <div className="text-[11px] text-[#F4F5FA] font-medium">{n.message}</div>
+                    <div className="text-[9px] text-[#A5A8B8] font-mono mt-0.5">{new Date(n.createdAt).toLocaleString()}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export function Navigation() {
@@ -29,8 +94,6 @@ export function Navigation() {
   const { connection } = useProgram();
   const [watchlistCount, setWatchlistCount] = useState(0);
 
-  const [healthStatus, setHealthStatus] = useState<"checking" | "online" | "offline">("checking");
-
   useEffect(() => {
     setWatchlistCount(getWatchlist().length);
     const onStorage = () => setWatchlistCount(getWatchlist().length);
@@ -38,45 +101,30 @@ export function Navigation() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const checkConnection = async () => {
-      try {
-        await connection.getSlot();
-        if (active) setHealthStatus("online");
-      } catch {
-        if (active) setHealthStatus("offline");
-      }
-    };
-
-    checkConnection();
-    const interval = setInterval(checkConnection, 12000);
-    return () => { active = false; clearInterval(interval); };
-  }, [connection]);
-
   const isActive = (href: string) => pathname === href;
 
   return (
     <>
-      {/* Desktop Navigation */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#9e8e78]/20 bg-[#131313]/90 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Brand + Nav links */}
-          <div className="flex items-center space-x-3">
-            <Link href="/" className="flex items-center space-x-2 group">
-              <span className="text-xl font-bold tracking-wider font-display text-gradient-amber group-hover:opacity-90 transition-opacity">
-                [■] SOLPREDICT
+      <header className="sticky top-4 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto bg-[#0A0B12]/70 backdrop-blur-[60px] border border-white/5 rounded-2xl px-5 h-14 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B3FE4] to-[#FF3D9A] flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
+                <Zap className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-base font-bold text-[#F4F5FA] group-hover:text-[#00E5FF] transition-colors">
+                PREDICT-X
               </span>
             </Link>
-            <nav className="hidden sm:flex items-center space-x-1 pl-6 border-l border-[#9e8e78]/30">
+            <nav className="hidden lg:flex items-center gap-1 pl-4 border-l border-white/5">
               {NAV_ITEMS.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
-                  className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 ${
+                  className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg ${
                     isActive(href)
-                      ? "text-[#ffd89c] nav-link-active"
-                      : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                      ? "text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/20"
+                      : "text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5"
                   }`}
                 >
                   {label}
@@ -85,23 +133,23 @@ export function Navigation() {
               {role === "admin" && (
                 <Link
                   href="/admin"
-                  className={`nav-link px-3 py-1.5 text-xs font-bold uppercase tracking-wider font-display rounded-md transition-all flex items-center gap-1.5 border ${
+                  className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 border ${
                     isActive("/admin")
-                      ? "bg-[#ffd89c]/15 text-[#ffd89c] border-[#ffd89c]/50 shadow-[0_0_12px_rgba(255,216,156,0.15)]"
-                      : "bg-[#0d0d0d] text-[#ffd89c] border-[#ffd89c]/30 hover:bg-[#ffd89c]/10"
+                      ? "bg-[#7B3FE4]/20 text-[#7B3FE4] border-[#7B3FE4]/50"
+                      : "text-[#7B3FE4] border-[#7B3FE4]/20 hover:bg-[#7B3FE4]/10"
                   }`}
                 >
-                  <Settings className="w-3.5 h-3.5" />
-                  <span>Admin</span>
+                  <Settings className="w-3 h-3" />
+                  Admin
                 </Link>
               )}
               {publicKey && (
                 <Link
                   href="/portfolio"
-                  className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 ${
+                  className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg ${
                     isActive("/portfolio")
-                      ? "text-[#ffd89c] nav-link-active"
-                      : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                      ? "text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/20"
+                      : "text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5"
                   }`}
                 >
                   Portfolio
@@ -109,36 +157,26 @@ export function Navigation() {
               )}
               <Link
                 href="/activity"
-                className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 ${
+                className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg ${
                   isActive("/activity")
-                    ? "text-[#ffd89c] nav-link-active"
-                    : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                    ? "text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/20"
+                    : "text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5"
                 }`}
               >
                 Activity
               </Link>
               <Link
                 href="/watchlist"
-                className={`nav-link px-3 py-2 text-sm font-semibold uppercase tracking-wider font-display transition-colors duration-200 flex items-center gap-1 ${
+                className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg flex items-center gap-1 ${
                   isActive("/watchlist")
-                    ? "text-[#ffd89c] nav-link-active"
-                    : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+                    ? "text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/20"
+                    : "text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5"
                 }`}
               >
-                <Star className="w-3 h-3" />
+                <Star className="w-3 h-3 text-[#00E5FF]" />
                 Watchlist
                 {watchlistCount > 0 && (
-                  <span
-                    style={{
-                      background: "var(--color-primary)",
-                      color: "#131313",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      borderRadius: "8px",
-                      padding: "1px 6px",
-                      lineHeight: "14px",
-                    }}
-                  >
+                  <span className="bg-[#7B3FE4] text-white text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full">
                     {watchlistCount}
                   </span>
                 )}
@@ -146,113 +184,74 @@ export function Navigation() {
             </nav>
           </div>
 
-          {/* RPC Health + Wallet */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:flex items-center space-x-2 bg-[#0d0d0d]/80 border border-[#9e8e78]/20 px-3 py-1.5 rounded-md">
-              <span className={`relative flex w-2 h-2 ${
-                healthStatus === "online" ? "" : ""
-              }`}>
-                <span className={`absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping ${
-                  healthStatus === "online" ? "bg-[#a1d494]" : healthStatus === "offline" ? "bg-[#ffb4ab]" : "bg-[#ffd89c]"
-                }`}></span>
-                <span className={`relative inline-flex w-2 h-2 rounded-full ${
-                  healthStatus === "online" ? "bg-[#a1d494]" : healthStatus === "offline" ? "bg-[#ffb4ab]" : "bg-[#ffd89c]"
-                }`}></span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1 rounded-lg">
+              <span className="relative flex w-2 h-2">
+                <span className="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping bg-[#C8FF00]"></span>
+                <span className="relative inline-flex w-2 h-2 rounded-full bg-[#C8FF00]"></span>
               </span>
-              <span className="text-[10px] font-mono font-medium text-[#d6c4ac] uppercase tracking-wider">
-                RPC: {healthStatus}
-              </span>
+              <span className="text-[10px] font-mono text-[#A5A8B8] uppercase">Online</span>
             </div>
 
-            {/* Devnet/Localnet Airdrop Button */}
-            <button
-              onClick={async () => {
-                const w = typeof window !== "undefined" ? (window as unknown as WindowSolana) : undefined;
-                const walletAdapter = w?.solana || w?.phantom?.solana;
-                const pubkey = walletAdapter?.publicKey ? new (await import('@solana/web3.js')).PublicKey(walletAdapter.publicKey.toString()) : null;
-                if (!pubkey) {
-                  (await import('sonner')).toast.error("Please connect your wallet first!");
-                  return;
-                }
-                try {
-                  const toastId = (await import('sonner')).toast.loading("Airdropping 5 SOL to wallet...");
-                  const sig = await connection.requestAirdrop(pubkey, 5 * 1e9);
-                  await connection.confirmTransaction(sig, "confirmed");
-                  (await import('sonner')).toast.success("Airdropped 5 SOL to wallet!", { id: toastId });
-                } catch (e: any) {
-                  (await import('sonner')).toast.error(`Airdrop failed: ${e.message || String(e)}`);
-                }
-              }}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/40 rounded-md text-xs font-mono font-bold text-[#ffd89c] transition-all cursor-pointer"
-            >
-              <span>🪂 Airdrop 5 SOL</span>
-            </button>
+            <NotificationBell />
 
+            <div className="hidden sm:block">
+              <ClientWalletButton />
+            </div>
             <MobileNav />
-            <ClientWalletButton />
           </div>
         </div>
       </header>
 
-      {/* Mobile bottom navigation */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#131313]/95 backdrop-blur-md border-t border-[#9e8e78]/20 h-16 flex items-center justify-around px-4 safe-area-bottom">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0B12]/80 backdrop-blur-[40px] border-t border-white/5 h-16 flex items-center justify-around px-4">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
-            className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
-              isActive(href) ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              isActive(href) ? "text-[#00E5FF]" : "text-[#A5A8B8] hover:text-[#F4F5FA]"
             }`}
           >
             <Icon className="w-5 h-5" />
-            <span className="text-[8px] uppercase font-display font-semibold tracking-wider">{label}</span>
-            {isActive(href) && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+            <span className="text-[8px] uppercase font-semibold tracking-wider">{label}</span>
+            {isActive(href) && <span className="w-5 h-0.5 bg-[#7B3FE4] rounded-full" />}
           </Link>
         ))}
-        {role === "admin" && (
-          <Link
-            href="/admin"
-            className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
-              isActive("/admin") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
-            }`}
-          >
-            <Settings className="w-5 h-5" />
-            <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Admin</span>
-            {isActive("/admin") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
-          </Link>
-        )}
         {publicKey && (
           <Link
             href="/portfolio"
-            className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
-              isActive("/portfolio") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              isActive("/portfolio") ? "text-[#00E5FF]" : "text-[#A5A8B8] hover:text-[#F4F5FA]"
             }`}
           >
-            <List className="w-5 h-5" />
-            <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Portfolio</span>
-            {isActive("/portfolio") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+            <Wallet className="w-5 h-5" />
+            <span className="text-[8px] uppercase font-semibold tracking-wider">Portfolio</span>
+            {isActive("/portfolio") && <span className="w-5 h-0.5 bg-[#7B3FE4] rounded-full" />}
           </Link>
         )}
         <Link
           href="/activity"
-          className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
-            isActive("/activity") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+          className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+            isActive("/activity") ? "text-[#00E5FF]" : "text-[#A5A8B8] hover:text-[#F4F5FA]"
           }`}
         >
           <Activity className="w-5 h-5" />
-          <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Activity</span>
-          {isActive("/activity") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+          <span className="text-[8px] uppercase font-semibold tracking-wider">Activity</span>
+          {isActive("/activity") && <span className="w-5 h-0.5 bg-[#7B3FE4] rounded-full" />}
         </Link>
         <Link
           href="/watchlist"
-          className={`flex flex-col items-center justify-center space-y-0.5 transition-colors duration-200 ${
-            isActive("/watchlist") ? "text-[#ffd89c]" : "text-[#d6c4ac] hover:text-[#e5e2e1]"
+          className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+            isActive("/watchlist") ? "text-[#00E5FF]" : "text-[#A5A8B8] hover:text-[#F4F5FA]"
           }`}
         >
           <Star className="w-5 h-5" />
-          <span className="text-[8px] uppercase font-display font-semibold tracking-wider">Watchlist</span>
-          {isActive("/watchlist") && <span className="w-6 h-0.5 bg-[#ffd89c] rounded-full" />}
+          <span className="text-[8px] uppercase font-semibold tracking-wider">Watchlist</span>
+          {isActive("/watchlist") && <span className="w-5 h-0.5 bg-[#7B3FE4] rounded-full" />}
         </Link>
+        <div className="block sm:hidden">
+          <ClientWalletButton />
+        </div>
       </div>
     </>
   );

@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 export function getWatchlist(): string[] {
   if (typeof window === "undefined") return [];
   try {
@@ -20,7 +22,7 @@ export async function fetchWatchlistFromDb(walletPubkey: string): Promise<string
       return data.keys;
     }
   } catch (e) {
-    console.warn("Failed to fetch watchlist from DB:", e);
+    logger.warn("Failed to fetch watchlist from DB:", e);
   }
   return getWatchlist();
 }
@@ -44,7 +46,7 @@ export function toggleWatchlist(key: string, walletPubkey?: string): string[] {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet: walletPubkey, marketPubkey: key }),
-      }).catch((err) => console.warn("Watchlist DB sync warning:", err));
+      }).catch((err) => logger.warn("Watchlist DB sync warning:", err));
     }
 
     return next;

@@ -1,93 +1,98 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
-import { trades, users, priceHistory, marketsCache } from '@/lib/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { NextRequest } from "next/server";
+import { db } from "@/lib/db/client";
+import { trades, users, priceHistory, marketsCache, notifications } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
+import { serverError, ok, badRequest } from "@/lib/api-response";
+import { apiHandler, requireServiceKey } from "@/lib/api-handler";
+import { toError } from "@/lib/errors";
+import { syncTradeSchema } from "@/lib/schemas";
+import { logAudit } from "@/lib/audit";
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const {
-      signature,
+export const POST = apiHandler(async (req: NextRequest) => {
+  if (!requireServiceKey(req)) {
+    return ok({ error: "Unauthorized" }, { status: 401 } as ResponseInit);
+  }
+
+  const body = await req.json();
+  const parsed = syncTradeSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; "));
+  }
+
+  const { marketPubkey, trader, side, lamportsIn, tokensOut, signature, pricePerToken, yesPoolSol, noPoolSol, yesPct } = parsed.data;
+
+  const solAmount = lamportsIn / 1e9;
+  const price = pricePerToken ?? (solAmount > 0 && tokensOut > 0 ? solAmount / tokensOut : 0.01);
+  const txSig = signature ?? `tx_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+  if (db) {
+    await db.insert(trades).values({
+      signature: txSig,
       marketPubkey,
       trader,
       side,
       lamportsIn,
       tokensOut,
-      pricePerToken,
-      yesPoolSol,
-      noPoolSol,
-      yesPct,
-    } = body;
+      pricePerToken: price.toString(),
+      blockTime: new Date(),
+      slot: 0,
+    }).onConflictDoNothing();
 
-    if (!marketPubkey || !trader || !side) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
-    }
-
-    const solAmount = (lamportsIn || 0) / 1e9;
-    const tokenAmount = tokensOut || 0;
-    const price = pricePerToken || (solAmount > 0 && tokenAmount > 0 ? solAmount / tokenAmount : 0.01);
-    const txSig = signature || `tx_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
-
-    if (db) {
-      // 1. Record Trade in NeonDB
-      await db.insert(trades).values({
-        signature: txSig,
-        marketPubkey,
-        trader,
-        side,
-        lamportsIn: lamportsIn || 0,
-        tokensOut: tokenAmount,
-        pricePerToken: price.toString(),
-        blockTime: new Date(),
-        slot: 0,
-      }).onConflictDoNothing();
-
-      // 2. Record User Stats in NeonDB
-      await db.insert(users).values({
-        wallet: trader,
-        username: `${trader.slice(0, 4)}...${trader.slice(-4)}`,
-        avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${trader}`,
-        totalWagered: solAmount.toString(),
-        totalWon: '0',
-        totalProfit: '0',
-        marketsTraded: 1,
-        winRate: '50.00',
-        pasScore: 75,
+    await db.insert(users).values({
+      wallet: trader,
+      username: `${trader.slice(0, 4)}...${trader.slice(-4)}`,
+      avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${trader}`,
+      totalWagered: solAmount.toString(),
+      totalWon: "0",
+      totalProfit: "0",
+      marketsTraded: 1,
+      winRate: "50.00",
+      pasScore: 75,
+      lastActive: new Date(),
+    }).onConflictDoUpdate({
+      target: users.wallet,
+      set: {
+        totalWagered: sql`${users.totalWagered} + ${solAmount}`,
+        marketsTraded: sql`${users.marketsTraded} + 1`,
         lastActive: new Date(),
-      }).onConflictDoUpdate({
-        target: users.wallet,
-        set: {
-          totalWagered: sql`${users.totalWagered} + ${solAmount}`,
-          marketsTraded: sql`${users.marketsTraded} + 1`,
-          lastActive: new Date(),
-        }
+      },
+    });
+
+    if (yesPct !== undefined) {
+      await db.insert(priceHistory).values({
+        marketPubkey,
+        timestamp: new Date(),
+        yesPct: String(yesPct),
+        yesPoolSol: String(yesPoolSol ?? 0),
+        noPoolSol: String(noPoolSol ?? 0),
+        totalVolume: String((yesPoolSol ?? 0) + (noPoolSol ?? 0)),
       });
-
-      // 3. Record Price History Snapshot in NeonDB
-      if (yesPct !== undefined) {
-        await db.insert(priceHistory).values({
-          marketPubkey,
-          timestamp: new Date(),
-          yesPct: yesPct.toString(),
-          yesPoolSol: (yesPoolSol || 0).toString(),
-          noPoolSol: (noPoolSol || 0).toString(),
-          totalVolume: ((yesPoolSol || 0) + (noPoolSol || 0)).toString(),
-        });
-      }
-
-      // 4. Update Market Pools in NeonDB
-      if (yesPoolSol !== undefined && noPoolSol !== undefined) {
-        await db.update(marketsCache).set({
-          yesPoolSol: yesPoolSol.toString(),
-          noPoolSol: noPoolSol.toString(),
-          updatedAt: new Date(),
-        }).where(eq(marketsCache.marketPubkey, marketPubkey));
-      }
     }
 
-    return NextResponse.json({ ok: true, signature: txSig });
-  } catch (err: any) {
-    console.error("Error syncing trade to NeonDB:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (yesPoolSol !== undefined && noPoolSol !== undefined) {
+      await db.update(marketsCache).set({
+        yesPoolSol: String(yesPoolSol),
+        noPoolSol: String(noPoolSol),
+        updatedAt: new Date(),
+      }).where(eq(marketsCache.marketPubkey, marketPubkey));
+    }
+
+    await db.insert(notifications).values({
+      wallet: trader,
+      type: "trade",
+      marketPubkey,
+      message: `${side === "YES" ? "Bought" : "Sold"} ${side} shares for ${solAmount.toFixed(4)} SOL`,
+      read: false,
+    }).onConflictDoNothing();
   }
-}
+
+  logAudit({
+    action: "sync:trade",
+    actor: trader,
+    resource: `trade:${txSig}`,
+    details: { marketPubkey, side, solAmount },
+    ip: req.headers.get("x-forwarded-for") ?? "unknown",
+  });
+
+  return ok({ ok: true, signature: txSig });
+});

@@ -1,56 +1,71 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useUserRole } from "@/hooks/useUserRole";
+import React, { useState } from "react";
+import { ArrowRight, Zap, BarChart3, Wallet } from "lucide-react";
+import { ClientWalletButton } from "@/components/ClientWalletButton";
 
-export default function SecureGateway() {
-  const router = useRouter();
-  const { role, isLoading } = useUserRole();
-  const [countdown, setCountdown] = useState(3);
+const slides = [
+  {
+    icon: Zap,
+    title: "Welcome to PREDICT-X",
+    desc: "The future of prediction markets on Solana. Trade YES/NO on any outcome with sub-second settlement.",
+  },
+  {
+    icon: BarChart3,
+    title: "How Trading Works",
+    desc: "Buy shares in outcomes you believe will happen. Win real SOL when you're right. Use CPMM pricing for fair trades.",
+  },
+  {
+    icon: Wallet,
+    title: "Connect Your Wallet",
+    desc: "Connect your Solana wallet to start trading. Phantom, Solflare, and all wallet-standard wallets supported.",
+  },
+];
 
-  useEffect(() => {
-    if (isLoading || role === "disconnected") return;
-
-    const timer = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [role, isLoading]);
-
-  useEffect(() => {
-    if (countdown === 0 && role && role !== "disconnected") {
-      router.push(role === "admin" ? "/admin" : "/dashboard");
-    }
-  }, [countdown, role, router]);
+export default function GatewayPage() {
+  const [slide, setSlide] = useState(0);
+  const current = slides[slide];
+  const Icon = current.icon;
 
   return (
-    <div className="min-h-screen bg-[#131313] flex items-center justify-center flex-col gap-8 px-4">
-      <div className="font-display text-5xl text-[#ffd89c] tracking-widest uppercase animate-pulse">
-        SOLPREDICT
-      </div>
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 min-h-screen flex items-center justify-center">
+      <div className="holo-card p-8 sm:p-12 max-w-lg w-full text-center">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#7B3FE4] to-[#FF3D9A] flex items-center justify-center mx-auto mb-6">
+          <Icon className="w-8 h-8 text-white" />
+        </div>
 
-      <div className="font-mono text-[#9e8e78] text-sm tracking-widest">
-        {role === "admin" ? "ADMIN ACCESS DETECTED" : "IDENTITY VERIFIED"}
-      </div>
+        <h1 className="font-display text-2xl sm:text-3xl font-bold mb-4 text-[#F4F5FA]">
+          {current.title}
+        </h1>
+        <p className="text-[#A5A8B8] mb-8 leading-relaxed">
+          {current.desc}
+        </p>
 
-      <div className="flex gap-3 items-center">
-        <span className="font-mono text-xs text-[#9e8e78]">ROUTING IN</span>
-        <span className="font-mono text-2xl text-[#ffd89c] border border-[#ffd89c] w-10 h-10 flex items-center justify-center">
-          {countdown}
-        </span>
-      </div>
+        <div className="flex justify-center gap-2 mb-8">
+          {slides.map((_, i) => (
+            <div
+              key={i}
+              className={`w-2 h-2 rounded-full transition-all ${
+                i === slide ? "bg-[#7B3FE4] w-6" : "bg-white/20"
+              }`}
+            />
+          ))}
+        </div>
 
-      <div className="font-mono text-xs text-[#9e8e78] tracking-widest border border-[#353534] px-4 py-2">
-        DESTINATION: {role === "admin" ? "/ADMIN" : "/DASHBOARD"}
+        <div className="flex gap-3">
+          {slide < slides.length - 1 ? (
+            <button
+              onClick={() => setSlide(slide + 1)}
+              className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm"
+            >
+              Next
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <ClientWalletButton />
+          )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

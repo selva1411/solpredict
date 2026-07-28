@@ -1,38 +1,54 @@
-'use client'
-import { Component, ReactNode } from 'react'
+"use client";
 
-interface Props {
-  children: ReactNode
-  label?: string
+import React from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
 }
 
-interface State {
-  hasError: boolean
-  message: string
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, message: '' }
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
-  static getDerivedStateFromError(e: Error) {
-    return { hasError: true, message: e.message }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[ErrorBoundary]", error, errorInfo.componentStack);
   }
 
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="flex items-center justify-center h-32 border border-[#353534] font-mono text-xs text-[#9e8e78]">
-          <div className="text-center space-y-1">
-            <div className="text-[#ffb4ab]">
-              ⚠ {this.props.label ?? 'Component'} failed to render
-            </div>
-            <div className="text-[#353534] text-[10px]">
-              {this.state.message}
-            </div>
+        <div className="holo-card p-8 text-center flex flex-col items-center justify-center space-y-4 min-h-[200px]">
+          <AlertTriangle className="w-10 h-10 text-[#FF4D6D]" />
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-[#F4F5FA]">Something went wrong</h3>
+            <p className="text-xs text-[#A5A8B8] max-w-sm">
+              {this.state.error?.message || "An unexpected error occurred."}
+            </p>
           </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Try Again
+          </button>
         </div>
-      )
+      );
     }
-    return this.props.children
+    return this.props.children;
   }
 }

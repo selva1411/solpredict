@@ -206,44 +206,48 @@ export function useProgram() {
       };
     };
 
-    const originalMarket = (rawProgram.account as any).market;
+    const rawAccount = rawProgram.account as object;
+    const originalMarket = (rawAccount as Record<string, unknown>).market as object;
     const wrappedMarket = new Proxy(originalMarket, {
-      get(target: any, prop: string | symbol) {
+      get(target: object, prop: string | symbol) {
+        const t = target as Record<string, unknown>;
         if (prop === "fetch") {
-          return async (address: any, ...args: any[]) => {
-            const res = await target.fetch(address, ...args);
-            return wrapMarketAccount(res);
+          return async (address: PublicKey, ...args: unknown[]) => {
+            const fetchFn = t.fetch as (address: PublicKey, ...args: unknown[]) => Promise<object>;
+            return wrapMarketAccount(await fetchFn(address, ...args));
           };
         }
         if (prop === "all") {
-          return async (...args: any[]) => {
-            const res = await target.all(...args);
-            return res.map((item: any) => ({
+          return async (...args: unknown[]) => {
+            const allFn = t.all as (...args: unknown[]) => Promise<Array<Record<string, unknown>>>;
+            const res = await allFn(...args);
+            return res.map((item: Record<string, unknown>) => ({
               ...item,
               account: wrapMarketAccount(item.account)
             }));
           };
         }
-        const val = target[prop];
-        return typeof val === "function" ? val.bind(target) : val;
+        const val = t[prop as string];
+        return typeof val === "function" ? (val as (...args: unknown[]) => unknown).bind(target) : val;
       }
     });
 
     const wrappedProgram = new Proxy(rawProgram, {
-      get(target: any, prop: string | symbol) {
+      get(target: object, prop: string | symbol) {
+        const t = target as Record<string, unknown>;
         if (prop === "account") {
-          return new Proxy(target.account, {
-            get(accountTarget: any, accountProp: string | symbol) {
-              if (accountProp === "market") {
-                return wrappedMarket;
-              }
-              const val = accountTarget[accountProp];
-              return typeof val === "function" ? val.bind(accountTarget) : val;
+          const targetAccount = t.account as object;
+          return new Proxy(targetAccount, {
+            get(accountTarget: object, accountProp: string | symbol) {
+              const at = accountTarget as Record<string, unknown>;
+              if (accountProp === "market") return wrappedMarket;
+              const val = at[accountProp as string];
+              return typeof val === "function" ? (val as (...args: unknown[]) => unknown).bind(accountTarget) : val;
             }
           });
         }
-        const val = target[prop];
-        return typeof val === "function" ? val.bind(target) : val;
+        const val = t[prop as string];
+        return typeof val === "function" ? (val as (...args: unknown[]) => unknown).bind(target) : val;
       }
     });
 

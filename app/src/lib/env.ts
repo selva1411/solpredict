@@ -1,18 +1,19 @@
 import { PublicKey, Cluster } from "@solana/web3.js";
+import { logger } from "@/lib/logger";
 
 type ClusterName = "mainnet-beta" | "devnet" | "testnet" | "localnet";
 
 function requiredEnv(name: string, fallback = ""): string {
   const v = process.env[name] ?? fallback;
   if (!v && typeof window !== "undefined") {
-    console.warn(`[ENV] Missing ${name}; using empty fallback`);
+    logger.warn(`[ENV] Missing ${name}; using empty fallback`);
   }
   return v;
 }
 
 export const ENV = {
   get rpcUrl(): string {
-    return process.env.NEXT_PUBLIC_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "http://127.0.0.1:8899";
+    return process.env.NEXT_PUBLIC_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "http://localhost:3000/api/rpc";
   },
 
   get heliusApiKey(): string {
@@ -31,7 +32,7 @@ export const ENV = {
 
   get programId(): PublicKey {
     const id = process.env.NEXT_PUBLIC_PROGRAM_ID
-      ?? "4xWgYxuq73Eeupb11fzVSgddBHmQzArXFr32bwM2Hq22";
+      ?? "3fwu7iEUNxQEmEX1B1Dq4hzvqYNuDMECQEd2yzNdjAYx";
     return new PublicKey(id);
   },
 

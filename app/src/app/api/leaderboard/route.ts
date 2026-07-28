@@ -1,11 +1,8 @@
-import { NextResponse } from 'next/server';
 import { getLeaderboardData } from '@/lib/db/store';
+import { ok } from '@/lib/api-response';
+import { apiHandler } from '@/lib/api-handler';
 
-export async function GET() {
-  try {
-    const leaderboard = await getLeaderboardData();
-    return NextResponse.json({ ok: true, leaderboard });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
+export const GET = apiHandler(async () => {
+  const leaderboard = await getLeaderboardData();
+  return ok({ ok: true, leaderboard: leaderboard ?? [] });
+}, { cacheMaxAge: 30, cacheTags: ["leaderboard"] });

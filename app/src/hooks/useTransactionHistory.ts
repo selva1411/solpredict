@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
-
+import type { ParsedInstruction, PartiallyDecodedInstruction, ParsedTransactionWithMeta } from "@solana/web3.js";
 
 export interface TxEvent {
   signature: string;
@@ -11,6 +11,8 @@ export interface TxEvent {
   amount?: number;
   outcome?: "yes" | "no";
 }
+
+type ParsedIx = ParsedInstruction | PartiallyDecodedInstruction;
 
 export function useTransactionHistory(limit = 20) {
   const { publicKey } = useWallet();
@@ -37,7 +39,7 @@ export function useTransactionHistory(limit = 20) {
           }
         })
       );
-      setTxs(details.filter(Boolean) as TxEvent[]);
+      setTxs(details.filter((t): t is TxEvent => t !== null));
     } catch {
       setTxs([]);
     } finally {
@@ -52,38 +54,42 @@ export function useTransactionHistory(limit = 20) {
   return { transactions: txs, loading, refetch: fetchHistory };
 }
 
+function parseInstructionType(ix: ParsedIx): TxEvent["type"] {
+  const programId = ix.programId.toString();
+
+  if (programId.includes("Memo") || programId.includes("System")) {
+    return "other";
+  }
+
+  if ("parsed" in ix && ix.parsed) {
+    const p = ix.parsed as Record<string, unknown>;
+    const type = p.type as string | undefined;
+    if (type?.toLowerCase().includes("buy")) return "buy";
+    if (type?.toLowerCase().includes("sell")) return "sell";
+    if (type?.toLowerCase().includes("claim")) return "claim";
+    if (type?.toLowerCase().includes("refund")) return "refund";
+    if (type?.toLowerCase().includes("settle")) return "settle";
+  }
+
+  if ("data" in ix && ix.data) {
+    const decoded = Buffer.from(ix.data, "base64").toString("hex");
+    if (decoded.includes("buy")) return "buy";
+    if (decoded.includes("sell")) return "sell";
+    if (decoded.includes("claim")) return "claim";
+    if (decoded.includes("refund")) return "refund";
+  }
+
+  return "other";
+}
+
 function parseTx(
   signature: string,
   blockTime: number,
-  tx: any
+  tx: ParsedTransactionWithMeta | null,
 ): TxEvent | null {
   if (!tx) return null;
-  const ix = tx.transaction.message.instructions?.[0];
+  const ix = tx.transaction.message.instructions?.[0] as ParsedIx | undefined;
   if (!ix) return { signature, timestamp: blockTime, type: "other" };
 
-  const programIx = (ix as any).programId?.toString() ?? "";
-  const parsed = (ix as any).parsed;
-  const data = (ix as any).data;
-
-  if (programIx.includes("Memo") || programIx.includes("System")) {
-    return { signature, timestamp: blockTime, type: "other" };
-  }
-
-  if (data) {
-    const decoded = Buffer.from(data, "base64").toString("hex");
-    if (decoded.includes("buy") || decoded.includes("01") && decoded.length > 10) {
-      return { signature, timestamp: blockTime, type: "buy" };
-    }
-    if (decoded.includes("sell")) {
-      return { signature, timestamp: blockTime, type: "sell" };
-    }
-    if (decoded.includes("claim")) {
-      return { signature, timestamp: blockTime, type: "claim" };
-    }
-    if (decoded.includes("refund")) {
-      return { signature, timestamp: blockTime, type: "refund" };
-    }
-  }
-
-  return { signature, timestamp: blockTime, type: "other" };
+  return { signature, timestamp: blockTime, type: parseInstructionType(ix) };
 }

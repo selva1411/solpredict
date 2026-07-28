@@ -97,9 +97,9 @@ pub fn handler(
 
     // ---- Input Validation ----
 
-    // 1. End time must be at least 1 hour in the future
+    // 1. End time must be in the future (at least 60 seconds)
     require!(
-        end_ts > clock.unix_timestamp + 3600,
+        end_ts >= clock.unix_timestamp + 60,
         SolPredictError::EndTimeTooSoon
     );
 

@@ -4,7 +4,10 @@ import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 
 const PORT = parseInt(process.env.WS_PORT || "3001", 10);
+const NEXT_PORT = parseInt(process.env.NEXT_PORT || "3000", 10);
+const API_BASE = `http://127.0.0.1:${NEXT_PORT}/api`;
 const HEARTBEAT_INTERVAL = 30_000;
+const DB_POLL_MS = 5_000;
 
 interface Client {
   ws: WebSocket;
@@ -33,6 +36,63 @@ function sendTo(ws: WebSocket, event: string, data: unknown) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ event, data, timestamp: Date.now() }));
   }
+}
+
+// --- DB Polling ---
+interface PollCache {
+  markets: string;
+  activities: string;
+  leaderboard: string;
+}
+
+const cache: PollCache = { markets: "", activities: "", leaderboard: "" };
+
+async function pollMarkets() {
+  try {
+    const res = await fetch(`${API_BASE}/markets/cached`);
+    if (!res.ok) return;
+    const body = await res.json();
+    const serialized = JSON.stringify(body.markets || []);
+    if (serialized !== cache.markets) {
+      cache.markets = serialized;
+      broadcast("markets", "update", body.markets || []);
+    }
+  } catch { /* next.js not ready yet */ }
+}
+
+async function pollActivities() {
+  try {
+    const res = await fetch(`${API_BASE}/activity/recent`);
+    if (!res.ok) return;
+    const body = await res.json();
+    const serialized = JSON.stringify(body.activities || []);
+    if (serialized !== cache.activities) {
+      cache.activities = serialized;
+      broadcast("trades", "update", body.activities || []);
+      broadcast("global", "activity", body.activities || []);
+    }
+  } catch { /* next.js not ready yet */ }
+}
+
+async function pollLeaderboard() {
+  try {
+    const res = await fetch(`${API_BASE}/leaderboard`);
+    if (!res.ok) return;
+    const body = await res.json();
+    const serialized = JSON.stringify(body.leaderboard || []);
+    if (serialized !== cache.leaderboard) {
+      cache.leaderboard = serialized;
+      broadcast("leaderboard", "update", body.leaderboard || []);
+    }
+  } catch { /* next.js not ready yet */ }
+}
+
+function startDbPolling() {
+  pollMarkets();
+  pollActivities();
+  setInterval(pollMarkets, DB_POLL_MS);
+  setInterval(pollActivities, DB_POLL_MS);
+  setInterval(pollLeaderboard, 30_000);
 }
 
 const server = createServer();
@@ -105,7 +165,7 @@ wss.on("connection", (ws) => {
   });
 });
 
-const interval = setInterval(() => {
+const heartbeatInterval = setInterval(() => {
   for (const [ws, client] of clients) {
     if (!client.alive) {
       ws.terminate();
@@ -117,10 +177,11 @@ const interval = setInterval(() => {
   }
 }, HEARTBEAT_INTERVAL);
 
-wss.on("close", () => clearInterval(interval));
+wss.on("close", () => clearInterval(heartbeatInterval));
 
 server.listen(PORT, () => {
   console.log(`[WS] WebSocket server listening on ws://0.0.0.0:${PORT}`);
+  startDbPolling();
 });
 
 export { broadcast, clients, sendTo };

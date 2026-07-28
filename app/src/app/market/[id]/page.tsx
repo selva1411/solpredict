@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -28,7 +29,7 @@ import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
 import { OrderBookDepth } from "@/components/OrderBookDepth";
-import { LivePriceChartPanel } from "@/components/LivePriceChartPanel";
+const LivePriceChartPanel = dynamic(() => import("@/components/LivePriceChartPanel").then(m => m.LivePriceChartPanel), { ssr: false });
 import { AiMarketWhisperer } from "@/components/AiMarketWhisperer";
 import { MarketComments } from "@/components/MarketComments";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
@@ -103,7 +104,7 @@ interface ActivityItem {
 function ProbabilityChart({ data }: { data: number[] }) {
   if (data.length <= 1) {
     return (
-      <div className="h-32 flex items-center justify-center text-xs font-mono text-[#d6c4ac] border border-[#9e8e78]/20 bg-[#0d0d0d] rounded">
+      <div className="h-32 flex items-center justify-center text-xs font-mono text-[#A5A8B8] border border-[rgba(165,168,184,0.4)]/20 bg-[#0A0B12] rounded">
         Insufficient activity records for charting.
       </div>
     );
@@ -120,8 +121,8 @@ function ProbabilityChart({ data }: { data: number[] }) {
   }).join(" ");
 
   return (
-    <div className="w-full bg-[#0d0d0d] border border-[#9e8e78]/30 p-4 rounded space-y-2 select-none">
-      <div className="flex justify-between items-center text-[10px] font-mono text-[#d6c4ac] uppercase font-bold">
+    <div className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/30 p-4 rounded space-y-2 select-none">
+      <div className="flex justify-between items-center text-[10px] font-mono text-[#A5A8B8] uppercase font-bold">
         <span>Probability History Trend</span>
         <span className="text-[#a1d494]">YES %</span>
       </div>
@@ -147,7 +148,7 @@ function ProbabilityChart({ data }: { data: number[] }) {
           {/* Line Path */}
           <polyline
             fill="none"
-            stroke="#ffd89c"
+            stroke="#00E5FF"
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -164,7 +165,7 @@ function ProbabilityChart({ data }: { data: number[] }) {
                 cx={x}
                 cy={y}
                 r="4"
-                className="fill-[#131313] stroke-[#ffd89c]"
+                className="fill-[#131313] stroke-[#00E5FF]"
                 strokeWidth="2"
               />
             );
@@ -348,7 +349,7 @@ export default function MarketDetailPage() {
     } catch (err) {
       console.error("Error fetching user orders:", err);
     }
-  }, [wallet?.publicKey, program, marketPda]);
+  }, [wallet, program, marketPda]);
 
   // Fetch market details and transactions
   const fetchMarket = async () => {
@@ -511,7 +512,7 @@ export default function MarketDetailPage() {
       fetchMarket();
       fetchUserOrders();
       fetchUserBalances();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTxState("error");
       toast.error(`Order Placement Failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
@@ -551,7 +552,7 @@ export default function MarketDetailPage() {
       fetchMarket();
       fetchUserOrders();
       fetchUserBalances();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(`Fill Order Failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
       setSubmitting(false);
@@ -581,7 +582,7 @@ export default function MarketDetailPage() {
       toast.success(`Limit Order cancelled! (Sig: ${sig.slice(0, 8)}...)`);
       fetchMarket();
       fetchUserOrders();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(`Cancel Order Failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
       setSubmitting(false);
@@ -738,16 +739,18 @@ export default function MarketDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-8">
-        <div className="h-8 bg-white/5 border border-white/10 rounded w-1/3" />
-        <div className="grid md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 space-y-8">
-            <div className="board-panel p-10 h-96 skeleton-shimmer bg-[#131313]" />
-            <div className="board-panel p-10 h-64 skeleton-shimmer bg-[#131313]" />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="space-y-8">
+          <div className="h-8 bg-white/5 border border-white/10 rounded w-1/3" />
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-2 space-y-8">
+              <div className="holo-card p-10 h-96 shimmer bg-[#0A0B12]" />
+              <div className="holo-card p-10 h-64 shimmer bg-[#0A0B12]" />
+            </div>
+            <div className="holo-card p-10 h-80 shimmer bg-[#0A0B12]" />
           </div>
-          <div className="board-panel p-10 h-80 skeleton-shimmer bg-[#131313]" />
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -964,13 +967,13 @@ export default function MarketDetailPage() {
     <div className="space-y-0">
       {status !== "Open" ? (
         <div className="py-8 text-center space-y-4">
-          <div className="mx-auto w-12 h-12 bg-[#ffd89c]/10 text-[#ffd89c] rounded flex items-center justify-center border border-[#ffd89c]/25">
+          <div className="mx-auto w-12 h-12 bg-[#00E5FF]/10 text-[#00E5FF] rounded flex items-center justify-center border border-[#00E5FF]/25">
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-[#e5e2e1] uppercase">TRADING TERMINATED</h4>
-            <p className="text-xs text-[#d6c4ac]">
-              This board has settled. Go to your <Link href="/dashboard" className="text-[#ffd89c] hover:underline font-bold">Dashboard</Link> to withdraw payout.
+            <h4 className="text-sm font-bold text-[#F4F5FA] uppercase">TRADING TERMINATED</h4>
+            <p className="text-xs text-[#A5A8B8]">
+              This board has settled. Go to your <Link href="/dashboard" className="text-[#00E5FF] hover:underline font-bold">Dashboard</Link> to withdraw payout.
             </p>
           </div>
         </div>
@@ -978,15 +981,15 @@ export default function MarketDetailPage() {
         <div className="space-y-0">
 
           {/* ── Buy / Sell Tabs ── */}
-          <div className="flex border-b border-[#9e8e78]/20">
+          <div className="flex border-b border-[rgba(165,168,184,0.4)]/20">
             {(["buy", "sell"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setTradeTab(tab)}
                 className={`flex-1 py-3 text-sm font-bold uppercase tracking-widest transition-all cursor-pointer ${
                   tradeTab === tab
-                    ? "border-b-2 border-[#ffd89c] text-[#ffd89c]"
-                    : "text-[#9e8e78] hover:text-[#d6c4ac]"
+                    ? "border-b-2 border-[#00E5FF] text-[#00E5FF]"
+                    : "text-[#A5A8B8] hover:text-[#A5A8B8]"
                 }`}
               >
                 {tab}
@@ -1003,44 +1006,44 @@ export default function MarketDetailPage() {
                   onClick={() => setTradeSide("YES")}
                   className={`group relative flex flex-col items-center justify-center py-4 rounded-lg border-2 transition-all cursor-pointer ${
                     tradeSide === "YES"
-                      ? "border-[#22c55e] bg-[#22c55e]/12 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
-                      : "border-[#9e8e78]/25 bg-[#0d0d0d] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/5"
+                      ? "border-[#C8FF00] bg-[#C8FF00]/12 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
+                      : "border-[rgba(165,168,184,0.4)]/25 bg-[#0A0B12] hover:border-[#C8FF00]/50 hover:bg-[#C8FF00]/5"
                   }`}
                 >
                   <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
-                    tradeSide === "YES" ? "text-[#22c55e]" : "text-[#9e8e78] group-hover:text-[#22c55e]"
+                    tradeSide === "YES" ? "text-[#C8FF00]" : "text-[#A5A8B8] group-hover:text-[#C8FF00]"
                   }`}>Yes</span>
                   <span className={`text-2xl font-black font-mono ${
-                    tradeSide === "YES" ? "text-[#22c55e]" : "text-[#e5e2e1]"
+                    tradeSide === "YES" ? "text-[#C8FF00]" : "text-[#F4F5FA]"
                   }`}>{yesProb}¢</span>
-                  <span className="text-[10px] text-[#22c55e] font-mono font-semibold mt-0.5">{yesSharePriceSol.toFixed(4)} SOL</span>
-                  <span className="text-[9px] text-[#9e8e78] mt-0.5 font-mono">{yesPool.toFixed(2)} SOL pool</span>
+                  <span className="text-[10px] text-[#C8FF00] font-mono font-semibold mt-0.5">{yesSharePriceSol.toFixed(4)} SOL</span>
+                  <span className="text-[9px] text-[#A5A8B8] mt-0.5 font-mono">{yesPool.toFixed(2)} SOL pool</span>
                 </button>
                 <button
                   onClick={() => setTradeSide("NO")}
                   className={`group relative flex flex-col items-center justify-center py-4 rounded-lg border-2 transition-all cursor-pointer ${
                     tradeSide === "NO"
-                      ? "border-[#ef4444] bg-[#ef4444]/12 shadow-[0_0_20px_rgba(239,68,68,0.15)]"
-                      : "border-[#9e8e78]/25 bg-[#0d0d0d] hover:border-[#ef4444]/50 hover:bg-[#ef4444]/5"
+                      ? "border-[#FF4D6D] bg-[#FF4D6D]/12 shadow-[0_0_20px_rgba(239,68,68,0.15)]"
+                      : "border-[rgba(165,168,184,0.4)]/25 bg-[#0A0B12] hover:border-[#FF4D6D]/50 hover:bg-[#FF4D6D]/5"
                   }`}
                 >
                   <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
-                    tradeSide === "NO" ? "text-[#ef4444]" : "text-[#9e8e78] group-hover:text-[#ef4444]"
+                    tradeSide === "NO" ? "text-[#FF4D6D]" : "text-[#A5A8B8] group-hover:text-[#FF4D6D]"
                   }`}>No</span>
                   <span className={`text-2xl font-black font-mono ${
-                    tradeSide === "NO" ? "text-[#ef4444]" : "text-[#e5e2e1]"
+                    tradeSide === "NO" ? "text-[#FF4D6D]" : "text-[#F4F5FA]"
                   }`}>{noProb}¢</span>
-                  <span className="text-[10px] text-[#ef4444] font-mono font-semibold mt-0.5">{noSharePriceSol.toFixed(4)} SOL</span>
-                  <span className="text-[9px] text-[#9e8e78] mt-0.5 font-mono">{noPool.toFixed(2)} SOL pool</span>
+                  <span className="text-[10px] text-[#FF4D6D] font-mono font-semibold mt-0.5">{noSharePriceSol.toFixed(4)} SOL</span>
+                  <span className="text-[9px] text-[#A5A8B8] mt-0.5 font-mono">{noPool.toFixed(2)} SOL pool</span>
                 </button>
               </div>
 
               {/* Amount input */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-[#9e8e78] uppercase tracking-wider">Amount (Shares)</label>
+                  <label className="text-xs font-semibold text-[#A5A8B8] uppercase tracking-wider">Amount (Shares)</label>
                   {wallet?.publicKey && (
-                    <span className="text-[10px] font-mono text-[#9e8e78]">
+                    <span className="text-[10px] font-mono text-[#A5A8B8]">
                       {tradeSide === "YES" ? `${userYesBalance.toFixed(1)} YES` : `${userNoBalance.toFixed(1)} NO`} held
                     </span>
                   )}
@@ -1048,18 +1051,18 @@ export default function MarketDetailPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 10))}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 hover:border-[#9e8e78]/60 text-[#e5e2e1] font-mono font-bold text-base cursor-pointer transition-all"
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 hover:border-[rgba(165,168,184,0.4)]/60 text-[#F4F5FA] font-mono font-bold text-base cursor-pointer transition-all"
                   >−</button>
                   <input
                     type="number"
                     value={quantity}
                     min={1}
                     onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 bg-[#0d0d0d] border border-[#9e8e78]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60"
+                    className="flex-1 bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
                   />
                   <button
                     onClick={() => setQuantity(quantity + 10)}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 hover:border-[#9e8e78]/60 text-[#e5e2e1] font-mono font-bold text-base cursor-pointer transition-all"
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 hover:border-[rgba(165,168,184,0.4)]/60 text-[#F4F5FA] font-mono font-bold text-base cursor-pointer transition-all"
                   >+</button>
                 </div>
                 <div className="grid grid-cols-5 gap-1">
@@ -1067,45 +1070,45 @@ export default function MarketDetailPage() {
                     <button key={v} onClick={() => setQuantity(v)}
                       className={`py-1 rounded text-[10px] font-mono cursor-pointer transition-all border ${
                         quantity === v
-                          ? "border-[#ffd89c]/60 bg-[#ffd89c]/10 text-[#ffd89c]"
-                          : "border-[#9e8e78]/20 bg-[#0d0d0d] text-[#9e8e78] hover:text-[#e5e2e1] hover:border-[#9e8e78]/40"
+                          ? "border-[#00E5FF]/60 bg-[#00E5FF]/10 text-[#00E5FF]"
+                          : "border-[rgba(165,168,184,0.4)]/20 bg-[#0A0B12] text-[#A5A8B8] hover:text-[#F4F5FA] hover:border-[rgba(165,168,184,0.4)]/40"
                       }`}>{v}</button>
                   ))}
                 </div>
               </div>
 
               {/* Advanced: Limit Order toggle */}
-              <div className="border border-[#9e8e78]/20 rounded-lg overflow-hidden">
+              <div className="border border-[rgba(165,168,184,0.4)]/20 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#9e8e78] hover:text-[#d6c4ac] cursor-pointer transition-colors bg-[#0d0d0d]"
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#A5A8B8] hover:text-[#A5A8B8] cursor-pointer transition-colors bg-[#0A0B12]"
                 >
                   <span>Advanced: Limit Order</span>
                   <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {showAdvanced && (
-                  <div className="px-3 pb-3 pt-2 bg-[#0d0d0d] space-y-3 border-t border-[#9e8e78]/15">
+                  <div className="px-3 pb-3 pt-2 bg-[#0A0B12] space-y-3 border-t border-[rgba(165,168,184,0.4)]/15">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsLimitOrder(!isLimitOrder)}
                         className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
-                          isLimitOrder ? "bg-[#ffd89c]" : "bg-[#353534]"
+                          isLimitOrder ? "bg-[#00E5FF]" : "bg-[#353534]"
                         }`}
                       >
                         <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
                           isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
                         }`} />
                       </button>
-                      <span className="text-[11px] text-[#d6c4ac]">Place as limit order</span>
+                      <span className="text-[11px] text-[#A5A8B8]">Place as limit order</span>
                     </div>
                     {isLimitOrder && (
                       <div className="space-y-1">
-                        <label className="text-[10px] text-[#9e8e78] uppercase tracking-wider">Limit Price (SOL/share)</label>
+                        <label className="text-[10px] text-[#A5A8B8] uppercase tracking-wider">Limit Price (SOL/share)</label>
                         <input
                           type="number" step="0.01" min="0.01" max="0.99"
                           value={limitPriceSol}
                           onChange={(e) => setLimitPriceSol(Math.max(0.01, Math.min(0.99, Number(e.target.value))))}
-                          className="w-full bg-[#131313] border border-[#9e8e78]/40 rounded px-3 py-1.5 text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60"
+                          className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
                         />
                       </div>
                     )}
@@ -1114,29 +1117,29 @@ export default function MarketDetailPage() {
               </div>
 
               {/* Order Summary */}
-              <div className="bg-[#0d0d0d] rounded-lg border border-[#9e8e78]/20 p-3 space-y-2 text-[11px] font-mono">
-                <div className="flex justify-between text-[#9e8e78]">
+              <div className="bg-[#0A0B12] rounded-lg border border-[rgba(165,168,184,0.4)]/20 p-3 space-y-2 text-[11px] font-mono">
+                <div className="flex justify-between text-[#A5A8B8]">
                   <span>Price per share</span>
-                  <span className="text-[#e5e2e1]">{isLimitOrder ? `${limitPriceSol.toFixed(4)} SOL` : `${activeSharePriceSol.toFixed(4)} SOL`}</span>
+                  <span className="text-[#F4F5FA]">{isLimitOrder ? `${limitPriceSol.toFixed(4)} SOL` : `${activeSharePriceSol.toFixed(4)} SOL`}</span>
                 </div>
-                <div className="flex justify-between text-[#9e8e78]">
+                <div className="flex justify-between text-[#A5A8B8]">
                   <span>Quantity</span>
-                  <span className="text-[#e5e2e1]">{quantity} shares</span>
+                  <span className="text-[#F4F5FA]">{quantity} shares</span>
                 </div>
-                <div className="flex justify-between text-[#e5e2e1] font-bold border-t border-[#9e8e78]/15 pt-2">
+                <div className="flex justify-between text-[#F4F5FA] font-bold border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
                   <span>Total Investment Amount</span>
-                  <span className="text-[#ffd89c] font-mono text-xs">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
+                  <span className="text-[#00E5FF] font-mono text-xs">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
                 </div>
-                <div className="flex justify-between border-t border-[#9e8e78]/15 pt-2">
-                  <span className="text-[#9e8e78]">Est. Payout on Win</span>
+                <div className="flex justify-between border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
+                  <span className="text-[#A5A8B8]">Est. Payout on Win</span>
                   <span className={`font-bold ${
-                    tradeSide === "YES" ? "text-[#22c55e]" : "text-[#ef4444]"
+                    tradeSide === "YES" ? "text-[#C8FF00]" : "text-[#FF4D6D]"
                   }`}>{potentialPayout.toFixed(4)} SOL</span>
                 </div>
                 {potentialPayout > 0 && (
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-[#9e8e78]">Est. Net Profit</span>
-                    <span className="text-[#22c55e] font-bold">
+                    <span className="text-[#A5A8B8]">Est. Net Profit</span>
+                    <span className="text-[#C8FF00] font-bold">
                       +{(potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)).toFixed(4)} SOL
                       {" "}(+{(((potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)) / Math.max(0.0001, (isLimitOrder ? quantity * limitPriceSol : tradeCost))) * 100).toFixed(0)}% return)
                     </span>
@@ -1150,8 +1153,8 @@ export default function MarketDetailPage() {
                 onClick={isLimitOrder ? () => handlePlaceLimitOrder(true) : handleBuy}
                 className={`w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2 ${
                   tradeSide === "YES"
-                    ? "bg-[#22c55e] hover:bg-[#16a34a] text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)]"
-                    : "bg-[#ef4444] hover:bg-[#dc2626] text-white shadow-[0_4px_14px_rgba(239,68,68,0.3)]"
+                    ? "bg-[#C8FF00] hover:bg-[#16a34a] text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)]"
+                    : "bg-[#FF4D6D] hover:bg-[#dc2626] text-white shadow-[0_4px_14px_rgba(239,68,68,0.3)]"
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
@@ -1162,20 +1165,20 @@ export default function MarketDetailPage() {
               </button>
 
               {/* Tx status */}
-              {txState === "signing" && <p className="text-center text-xs font-mono text-[#ffd89c] animate-pulse">⏳ Approve in wallet...</p>}
-              {txState === "confirming" && <p className="text-center text-xs font-mono text-[#ffd89c] animate-pulse">⛓ Confirming on-chain...</p>}
+              {txState === "signing" && <p className="text-center text-xs font-mono text-[#00E5FF] animate-pulse">⏳ Approve in wallet...</p>}
+              {txState === "confirming" && <p className="text-center text-xs font-mono text-[#00E5FF] animate-pulse">⛓ Confirming on-chain...</p>}
               {txState === "success" && txSig && (
-                <p className="text-center text-xs font-mono text-[#22c55e]">
+                <p className="text-center text-xs font-mono text-[#C8FF00]">
                   ✓ Done —{" "}
                   <a href={`https://solscan.io/tx/${txSig}?cluster=localnet`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a>
                 </p>
               )}
-              {txState === "error" && <p className="text-center text-xs font-mono text-[#ef4444]">✗ Transaction failed</p>}
+              {txState === "error" && <p className="text-center text-xs font-mono text-[#FF4D6D]">✗ Transaction failed</p>}
 
               {/* Active limit orders */}
               {userOrders.length > 0 && (
-                <div className="pt-2 border-t border-[#9e8e78]/20 space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#9e8e78]">Your Open Orders</p>
+                <div className="pt-2 border-t border-[rgba(165,168,184,0.4)]/20 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#A5A8B8]">Your Open Orders</p>
                   {userOrders.map((ordAcc, idx) => {
                     const ord = ordAcc.account;
                     const sideStr = "yes" in ord.side ? "YES" : "NO";
@@ -1183,17 +1186,17 @@ export default function MarketDetailPage() {
                     const qty2 = ord.quantity.toNumber();
                     const filled = ord.filledQuantity.toNumber();
                     return (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-[#0d0d0d] border border-[#9e8e78]/20 text-[10px] font-mono">
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/20 text-[10px] font-mono">
                         <div>
-                          <span className={ord.isBuy ? "text-[#22c55e] font-bold" : "text-[#ef4444] font-bold"}>
+                          <span className={ord.isBuy ? "text-[#C8FF00] font-bold" : "text-[#FF4D6D] font-bold"}>
                             {ord.isBuy ? "BUY" : "SELL"} {sideStr}
                           </span>
-                          <span className="text-[#9e8e78] ml-2">@ {priceSol} SOL</span>
-                          <span className="text-[#9e8e78] ml-2">{filled}/{qty2} filled</span>
+                          <span className="text-[#A5A8B8] ml-2">@ {priceSol} SOL</span>
+                          <span className="text-[#A5A8B8] ml-2">{filled}/{qty2} filled</span>
                         </div>
                         <button
                           onClick={() => handleCancelOrder(ordAcc)}
-                          className="text-[#ef4444] hover:text-[#ff6b6b] cursor-pointer underline"
+                          className="text-[#FF4D6D] hover:text-[#ff6b6b] cursor-pointer underline"
                         >Cancel</button>
                       </div>
                     );
@@ -1206,13 +1209,13 @@ export default function MarketDetailPage() {
             <div className="space-y-4 pt-4">
               {/* User balances */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="p-3 rounded-lg bg-[#0d0d0d] border border-[#22c55e]/20 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-[#9e8e78] font-bold">YES Shares</div>
-                  <div className="text-lg font-black font-mono text-[#22c55e] mt-0.5">{userYesBalance.toFixed(1)}</div>
+                <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#C8FF00]/20 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-[#A5A8B8] font-bold">YES Shares</div>
+                  <div className="text-lg font-black font-mono text-[#C8FF00] mt-0.5">{userYesBalance.toFixed(1)}</div>
                 </div>
-                <div className="p-3 rounded-lg bg-[#0d0d0d] border border-[#ef4444]/20 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-[#9e8e78] font-bold">NO Shares</div>
-                  <div className="text-lg font-black font-mono text-[#ef4444] mt-0.5">{userNoBalance.toFixed(1)}</div>
+                <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#FF4D6D]/20 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-[#A5A8B8] font-bold">NO Shares</div>
+                  <div className="text-lg font-black font-mono text-[#FF4D6D] mt-0.5">{userNoBalance.toFixed(1)}</div>
                 </div>
               </div>
 
@@ -1223,9 +1226,9 @@ export default function MarketDetailPage() {
                     className={`py-2.5 rounded-lg border-2 text-sm font-bold uppercase tracking-wide cursor-pointer transition-all ${
                       sellSide === s
                         ? s === "YES"
-                          ? "border-[#22c55e] bg-[#22c55e]/10 text-[#22c55e]"
-                          : "border-[#ef4444] bg-[#ef4444]/10 text-[#ef4444]"
-                        : "border-[#9e8e78]/25 bg-[#0d0d0d] text-[#9e8e78]"
+                          ? "border-[#C8FF00] bg-[#C8FF00]/10 text-[#C8FF00]"
+                          : "border-[#FF4D6D] bg-[#FF4D6D]/10 text-[#FF4D6D]"
+                        : "border-[rgba(165,168,184,0.4)]/25 bg-[#0A0B12] text-[#A5A8B8]"
                     }`}
                   >{s}</button>
                 ))}
@@ -1234,57 +1237,57 @@ export default function MarketDetailPage() {
               {/* Amount */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-[#9e8e78] uppercase tracking-wider">Sell Quantity</label>
+                  <label className="text-xs font-semibold text-[#A5A8B8] uppercase tracking-wider">Sell Quantity</label>
                   <button
                     onClick={() => setSellQuantity(Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance))}
-                    className="text-[10px] text-[#ffd89c] hover:underline cursor-pointer font-mono font-bold"
+                    className="text-[10px] text-[#00E5FF] hover:underline cursor-pointer font-mono font-bold"
                   >
                     MAX ({Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance)})
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 text-[#e5e2e1] font-mono font-bold cursor-pointer">−</button>
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 text-[#F4F5FA] font-mono font-bold cursor-pointer">−</button>
                   <input type="number" value={sellQuantity} min={1}
                     onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 bg-[#0d0d0d] border border-[#9e8e78]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60" />
+                    className="flex-1 bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60" />
                   <button onClick={() => setSellQuantity(sellQuantity + 5)}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[#9e8e78]/30 text-[#e5e2e1] font-mono font-bold cursor-pointer">+</button>
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 text-[#F4F5FA] font-mono font-bold cursor-pointer">+</button>
                 </div>
               </div>
 
               {/* Advanced: Limit Sell Ask toggle */}
-              <div className="border border-[#9e8e78]/20 rounded-lg overflow-hidden">
+              <div className="border border-[rgba(165,168,184,0.4)]/20 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#9e8e78] hover:text-[#d6c4ac] cursor-pointer transition-colors bg-[#0d0d0d]"
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#A5A8B8] hover:text-[#A5A8B8] cursor-pointer transition-colors bg-[#0A0B12]"
                 >
                   <span>Advanced: Limit Sell (Ask)</span>
                   <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {showAdvanced && (
-                  <div className="px-3 pb-3 pt-2 bg-[#0d0d0d] space-y-3 border-t border-[#9e8e78]/15">
+                  <div className="px-3 pb-3 pt-2 bg-[#0A0B12] space-y-3 border-t border-[rgba(165,168,184,0.4)]/15">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsLimitOrder(!isLimitOrder)}
                         className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
-                          isLimitOrder ? "bg-[#ffd89c]" : "bg-[#353534]"
+                          isLimitOrder ? "bg-[#00E5FF]" : "bg-[#353534]"
                         }`}
                       >
                         <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
                           isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
                         }`} />
                       </button>
-                      <span className="text-[11px] text-[#d6c4ac]">Place as limit sell (ask)</span>
+                      <span className="text-[11px] text-[#A5A8B8]">Place as limit sell (ask)</span>
                     </div>
                     {isLimitOrder && (
                       <div className="space-y-1">
-                        <label className="text-[10px] text-[#9e8e78] uppercase tracking-wider">Min Sell Price (SOL/share)</label>
+                        <label className="text-[10px] text-[#A5A8B8] uppercase tracking-wider">Min Sell Price (SOL/share)</label>
                         <input
                           type="number" step="0.01" min="0.01" max="0.99"
                           value={limitPriceSol}
                           onChange={(e) => setLimitPriceSol(Math.max(0.01, Math.min(0.99, Number(e.target.value))))}
-                          className="w-full bg-[#131313] border border-[#9e8e78]/40 rounded px-3 py-1.5 text-sm font-mono text-[#e5e2e1] focus:outline-none focus:border-[#ffd89c]/60"
+                          className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
                         />
                       </div>
                     )}
@@ -1293,14 +1296,14 @@ export default function MarketDetailPage() {
               </div>
 
               {/* Summary */}
-              <div className="bg-[#0d0d0d] rounded-lg border border-[#9e8e78]/20 p-3 space-y-2 text-[11px] font-mono">
+              <div className="bg-[#0A0B12] rounded-lg border border-[rgba(165,168,184,0.4)]/20 p-3 space-y-2 text-[11px] font-mono">
                 <div className="flex justify-between">
-                  <span className="text-[#9e8e78]">Shares to sell</span>
-                  <span className="text-[#e5e2e1]">{sellQuantity} {sellSide}</span>
+                  <span className="text-[#A5A8B8]">Shares to sell</span>
+                  <span className="text-[#F4F5FA]">{sellQuantity} {sellSide}</span>
                 </div>
-                <div className="flex justify-between border-t border-[#9e8e78]/15 pt-2">
-                  <span className="text-[#9e8e78]">Est. payout</span>
-                  <span className="text-[#22c55e] font-bold">
+                <div className="flex justify-between border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
+                  <span className="text-[#A5A8B8]">Est. payout</span>
+                  <span className="text-[#C8FF00] font-bold">
                     {isLimitOrder ? (sellQuantity * limitPriceSol).toFixed(4) : (sellQuantity * sharePriceSol).toFixed(4)} SOL
                   </span>
                 </div>
@@ -1311,8 +1314,8 @@ export default function MarketDetailPage() {
                 onClick={isLimitOrder ? () => handlePlaceLimitOrder(false) : handleSell}
                 className={`w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all ${
                   sellSide === "YES"
-                    ? "bg-[#22c55e]/15 text-[#22c55e] border-2 border-[#22c55e]/40 hover:bg-[#22c55e]/25"
-                    : "bg-[#ef4444]/15 text-[#ef4444] border-2 border-[#ef4444]/40 hover:bg-[#ef4444]/25"
+                    ? "bg-[#C8FF00]/15 text-[#C8FF00] border-2 border-[#C8FF00]/40 hover:bg-[#C8FF00]/25"
+                    : "bg-[#FF4D6D]/15 text-[#FF4D6D] border-2 border-[#FF4D6D]/40 hover:bg-[#FF4D6D]/25"
                 } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {submitting ? "Processing..." : isLimitOrder ? `Place Limit Sell Ask (${sellQuantity} ${sellSide})` : `Instant Sell ${sellQuantity} ${sellSide} Shares`}
@@ -1326,8 +1329,8 @@ export default function MarketDetailPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans">
-      <Link href="/markets" className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider font-display text-[#d6c4ac] hover:text-[#e5e2e1] transition-colors">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <Link href="/markets" className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider font-display text-[#A5A8B8] hover:text-[#F4F5FA] transition-colors">
         <ArrowLeft className="w-4 h-4" />
         <span>Explorer Board</span>
       </Link>
@@ -1338,14 +1341,14 @@ export default function MarketDetailPage() {
           {/* Main info panel */}
           <div className="glass-panel p-6 sm:p-8 space-y-6">
             <div className="flex items-center space-x-3">
-              <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[#9e8e78]/30 text-[#ffd89c]">
+              <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[rgba(165,168,184,0.4)]/30 text-[#00E5FF]">
                 {categoryStr}
               </span>
-              <span className="text-xs font-mono text-[#d6c4ac]">BOARD ID #{market.marketId?.toString()}</span>
+              <span className="text-xs font-mono text-[#A5A8B8]">BOARD ID #{market.marketId?.toString()}</span>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#e5e2e1] uppercase leading-tight flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#F4F5FA] uppercase leading-tight flex-1">
                 {market.question}
               </h1>
               <div className="flex items-center gap-2">
@@ -1353,28 +1356,28 @@ export default function MarketDetailPage() {
                   onClick={handleWatchlistToggle}
                   className={`p-2.5 rounded border transition-colors flex items-center justify-center cursor-pointer ${
                     isWatched
-                      ? "border-[#ffd89c] bg-[#ffd89c]/10 text-[#ffd89c]"
-                      : "border-[#9e8e78]/30 bg-black/20 text-[#d6c4ac] hover:text-[#e5e2e1] hover:border-[#9e8e78]/60"
+                      ? "border-[#00E5FF] bg-[#00E5FF]/10 text-[#00E5FF]"
+                      : "border-[rgba(165,168,184,0.4)]/30 bg-black/20 text-[#A5A8B8] hover:text-[#F4F5FA] hover:border-[rgba(165,168,184,0.4)]/60"
                   }`}
                   title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
                 >
-                  <Star className={`w-4 h-4 ${isWatched ? "fill-current text-[#ffd89c]" : ""}`} />
+                  <Star className={`w-4 h-4 ${isWatched ? "fill-current text-[#00E5FF]" : ""}`} />
                 </button>
 
                 <div className="relative">
                   <button
                     onClick={() => setShowShareOptions(!showShareOptions)}
-                    className="p-2.5 rounded border border-[#9e8e78]/30 bg-black/20 text-[#d6c4ac] hover:text-[#e5e2e1] hover:border-[#9e8e78]/60 transition-colors flex items-center justify-center cursor-pointer"
+                    className="p-2.5 rounded border border-[rgba(165,168,184,0.4)]/30 bg-black/20 text-[#A5A8B8] hover:text-[#F4F5FA] hover:border-[rgba(165,168,184,0.4)]/60 transition-colors flex items-center justify-center cursor-pointer"
                     title="Share market"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
                   
                   {showShareOptions && (
-                    <div className="absolute right-0 mt-2 w-40 bg-[#0d0d0d] border border-[#9e8e78]/50 p-1.5 rounded shadow-2xl z-30 font-mono text-[10px] space-y-1">
+                    <div className="absolute right-0 mt-2 w-40 bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/50 p-1.5 rounded shadow-2xl z-30 font-mono text-[10px] space-y-1">
                       <button
                         onClick={copyShareLink}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#e5e2e1] transition-colors flex items-center gap-2 cursor-pointer"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F5FA] transition-colors flex items-center gap-2 cursor-pointer"
                       >
                         🔗 Copy link
                       </button>
@@ -1382,9 +1385,9 @@ export default function MarketDetailPage() {
                         href={twitterShareUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#e5e2e1] transition-colors flex items-center gap-2 block"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F5FA] transition-colors flex items-center gap-2 block"
                       >
-                        <svg className="w-3 h-3 fill-current text-[#ffd89c]" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3 fill-current text-[#00E5FF]" viewBox="0 0 24 24">
                           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                         </svg>
                         Share on X
@@ -1393,7 +1396,7 @@ export default function MarketDetailPage() {
                         href={telegramShareUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#e5e2e1] transition-colors flex items-center gap-2 block"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F5FA] transition-colors flex items-center gap-2 block"
                       >
                         <Send className="w-3 h-3 text-[#a1d494]" /> Telegram
                       </a>
@@ -1403,38 +1406,38 @@ export default function MarketDetailPage() {
               </div>
             </div>
 
-            <p className="text-sm text-[#d6c4ac] leading-relaxed font-medium">
+            <p className="text-sm text-[#A5A8B8] leading-relaxed font-medium">
               {market.description}
             </p>
 
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pt-4 border-t border-[#9e8e78]/30">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pt-4 border-t border-[rgba(165,168,184,0.4)]/30">
               {isOracleCategory(market.category) ? (
                 <>
                   <div className="space-y-1 font-mono">
-                    <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Target Price</div>
-                    <div className="text-base sm:text-lg font-bold text-[#e5e2e1]">
+                    <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Target Price</div>
+                    <div className="text-base sm:text-lg font-bold text-[#F4F5FA]">
                       {formatTargetPrice(market.targetPrice, market.targetExpo)}
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
-                    <div className="text-base sm:text-lg font-bold text-[#e5e2e1] font-display uppercase tracking-wide">
+                    <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
+                    <div className="text-base sm:text-lg font-bold text-[#F4F5FA] font-display uppercase tracking-wide">
                       {market.comparison === 0 ? "Greater Than" : "Less Than"}
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="col-span-2 xl:col-span-2 space-y-1">
-                  <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Settlement Mode</div>
-                  <div className="text-sm font-bold text-[#ffd89c] font-display uppercase tracking-wide flex items-center gap-1.5 pt-0.5">
+                  <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Settlement Mode</div>
+                  <div className="text-sm font-bold text-[#00E5FF] font-display uppercase tracking-wide flex items-center gap-1.5 pt-0.5">
                     ⚖️ Manual Settle
                   </div>
                 </div>
               )}
 
               <div className="space-y-1 col-span-2 xl:col-span-1">
-                <div className="text-[10px] text-[#d6c4ac] uppercase tracking-wider font-display font-bold">Ending clock</div>
+                <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Ending clock</div>
                 <div className="pt-1">
                   <FlipCountdown endTs={market.endTs.toNumber()} compact />
                 </div>
@@ -1442,7 +1445,7 @@ export default function MarketDetailPage() {
             </div>
 
             {isOracleCategory(market.category) && feedHex && (
-              <div className="pt-4 border-t border-[#9e8e78]/30">
+              <div className="pt-4 border-t border-[rgba(165,168,184,0.4)]/30">
                 <LivePriceBar
                   feedIdHex={feedHex}
                   category={market.category}
@@ -1454,11 +1457,11 @@ export default function MarketDetailPage() {
             )}
 
             {isOracleCategory(market.category) && (
-              <div className="pt-4 border-t border-[#9e8e78]/30 text-xs font-mono text-[#d6c4ac] flex flex-col gap-1 text-left">
-                <div className="text-[10px] uppercase font-bold tracking-wider font-display text-[#d6c4ac]">Settlement Method</div>
-                <div className="text-[#ffd89c]">
+              <div className="pt-4 border-t border-[rgba(165,168,184,0.4)]/30 text-xs font-mono text-[#A5A8B8] flex flex-col gap-1 text-left">
+                <div className="text-[10px] uppercase font-bold tracking-wider font-display text-[#A5A8B8]">Settlement Method</div>
+                <div className="text-[#00E5FF]">
                   🔮 Oracle Settle (via Pyth Network feed{" "}
-                  <span className="text-[#e5e2e1] select-all">
+                  <span className="text-[#F4F5FA] select-all">
                     {getFeedIdHexString(market.oracleFeedId)}
                   </span>
                   )
@@ -1474,27 +1477,27 @@ export default function MarketDetailPage() {
 
           {/* Semicircle Probability Dial and Sparkline Trend */}
           <div className="glass-panel p-6 sm:p-8 space-y-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
-              <TrendingUp className="w-4 h-4 text-[#ffd89c]" />
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#A5A8B8] flex items-center space-x-2">
+              <TrendingUp className="w-4 h-4 text-[#00E5FF]" />
               <span>Implied Odds & Trend Dial</span>
             </h3>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-8 py-2">
               <div className="flex-1 w-full space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-2">
-                  <div className="p-3 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
-                    <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">YES Pool Weight</div>
+                  <div className="p-3 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
+                    <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">YES Pool Weight</div>
                     <div className="font-bold text-[#a1d494] text-sm pt-1">{yesPool.toFixed(2)} SOL</div>
                   </div>
-                  <div className="p-3 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
-                    <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">NO Pool Weight</div>
+                  <div className="p-3 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
+                    <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">NO Pool Weight</div>
                     <div className="font-bold text-[#ffb4ab] text-sm pt-1">{noPool.toFixed(2)} SOL</div>
                   </div>
                 </div>
 
                 {/* Probability trend Line Chart */}
                 {probHistory.current.length >= 1 && (
-                  <div className="pt-2 border-t border-[#9e8e78]/20">
+                  <div className="pt-2 border-t border-[rgba(165,168,184,0.4)]/20">
                     <ProbabilityChart data={probHistory.current} />
                   </div>
                 )}
@@ -1526,8 +1529,8 @@ export default function MarketDetailPage() {
 
           {/* Decoded On-chain Activity logs */}
           <div className="glass-panel p-6 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-[#ffd89c]" />
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#A5A8B8] flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-[#00E5FF]" />
               <span>Decoded On-Chain Transactions</span>
               <div className="ml-auto flex items-center gap-2">
                 <LiveIndicator isLive={activity.length > 0} label={activity.length > 0 ? "Streaming" : "Idle"} />
@@ -1549,21 +1552,21 @@ export default function MarketDetailPage() {
                   const isNo = item.side === "NO";
                   const isNew = index < 3;
 
-                  let badgeColor = "bg-white/5 text-[#e5e2e1]";
+                  let badgeColor = "bg-white/5 text-[#F4F5FA]";
                   if (isYes) badgeColor = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
                   if (isNo) badgeColor = "bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20";
-                  if (isSettle) badgeColor = "bg-[#ffd89c]/10 text-[#ffd89c] border border-[#ffd89c]/20";
+                  if (isSettle) badgeColor = "bg-[#00E5FF]/10 text-[#00E5FF] border border-[#00E5FF]/20";
 
                   return (
                     <div
                       key={item.signature + "-" + index}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[#9e8e78]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#ffd89c]/3 border-l-2 border-l-[#a1d494]" : ""}`}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[rgba(165,168,184,0.4)]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#00E5FF]/3 border-l-2 border-l-[#a1d494]" : ""}`}
                     >
                       <div className="flex items-center space-x-2.5 min-w-0">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>
                           {item.side}
                         </span>
-                        <span className="text-[#e5e2e1] text-[11px] truncate">
+                        <span className="text-[#F4F5FA] text-[11px] truncate">
                           {isSettle ? (
                             <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
                           ) : isClaim ? (
@@ -1578,7 +1581,7 @@ export default function MarketDetailPage() {
                           </span>
                         )}
                       </div>
-                      <div className="text-[#d6c4ac] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
+                      <div className="text-[#A5A8B8] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
                         <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
                         <span>{item.time}</span>
                       </div>
@@ -1591,38 +1594,38 @@ export default function MarketDetailPage() {
 
           {/* Trust Signals & Settlement Explainer Card */}
           <div className="glass-panel p-6 sm:p-8 space-y-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c] flex items-center space-x-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#00E5FF] flex items-center space-x-2">
               <Award className="w-4 h-4" />
               <span>⚖️ TRADER SAFETY & TRUST SIGNALS</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
-              <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
-                <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
-                <div className="font-bold text-[#e5e2e1] text-sm pt-1">
+              <div className="p-4 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
+                <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
+                <div className="font-bold text-[#F4F5FA] text-sm pt-1">
                   {lamportsToSol(treasuryBalance).toFixed(3)} SOL
                 </div>
-                <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Secure Escrow PDA</div>
+                <div className="text-[8px] text-[#A5A8B8]/60 pt-0.5">Secure Escrow PDA</div>
               </div>
 
-              <div className="p-4 bg-[#0d0d0d] rounded border border-[#9e8e78]/30">
-                <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Protocol Fee BPS</div>
-                <div className="font-bold text-[#e5e2e1] text-sm pt-1">
+              <div className="p-4 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
+                <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">Protocol Fee BPS</div>
+                <div className="font-bold text-[#F4F5FA] text-sm pt-1">
                   {feeBps !== null ? `${(feeBps / 100).toFixed(1)}%` : "— BPS"}
                 </div>
-                <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Max capped at 10%</div>
+                <div className="text-[8px] text-[#A5A8B8]/60 pt-0.5">Max capped at 10%</div>
               </div>
 
-              <div className="p-4 bg-[#0d0d0d] rounded border border-board-border/30">
-                <div className="text-[#d6c4ac] text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
+              <div className="p-4 bg-[#0A0B12] rounded border border-board-border/30">
+                <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
                 <div className="font-bold text-[#a1d494] text-sm pt-1">
                   {isOracleCategory(market.category) ? "Pyth Pull Oracle" : "Manual Settle"}
                 </div>
-                <div className="text-[8px] text-[#d6c4ac]/60 pt-0.5">Automated on-chain feed</div>
+                <div className="text-[8px] text-[#A5A8B8]/60 pt-0.5">Automated on-chain feed</div>
               </div>
             </div>
 
-            <div className="p-4 bg-[#0d0d0d] rounded border border-board-border/30 space-y-2 text-xs font-sans text-text-muted leading-relaxed">
+            <div className="p-4 bg-[#0A0B12] rounded border border-board-border/30 space-y-2 text-xs font-sans text-text-muted leading-relaxed">
               <h4 className="font-display font-bold text-text-primary text-[10px] uppercase tracking-wider">How Settlement Works</h4>
               <p>
                 This prediction board is secured by a decentralized smart contract treasury. 
@@ -1646,14 +1649,14 @@ export default function MarketDetailPage() {
           <div
             className={`glass-panel p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
           >
-            <div className="border-b border-[#9e8e78]/20 pb-3 mb-0">
+            <div className="border-b border-[rgba(165,168,184,0.4)]/20 pb-3 mb-0">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold font-display text-[#e5e2e1]">
+                <h3 className="text-sm font-bold font-display text-[#F4F5FA]">
                   Trade
                 </h3>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
-                  <span className="text-[#9e8e78]">Live · {yesProb}% YES</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C8FF00] animate-pulse inline-block" />
+                  <span className="text-[#A5A8B8]">Live · {yesProb}% YES</span>
                 </div>
               </div>
             </div>
@@ -1663,10 +1666,10 @@ export default function MarketDetailPage() {
       </div>
 
       {/* Mobile Sticky floating trade button for thumb-reach */}
-      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-[#131313] border-t border-[#9e8e78]/30 p-4 flex items-center justify-between shadow-2xl">
+      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-[#0A0B12] border-t border-[rgba(165,168,184,0.4)]/30 p-4 flex items-center justify-between shadow-2xl">
         <div className="text-left font-mono">
-          <div className="text-[8px] uppercase tracking-wider text-[#d6c4ac]">Current Odds</div>
-          <div className="text-xs font-bold text-[#ffd89c]">YES: {yesProb}% | NO: {noProb}%</div>
+          <div className="text-[8px] uppercase tracking-wider text-[#A5A8B8]">Current Odds</div>
+          <div className="text-xs font-bold text-[#00E5FF]">YES: {yesProb}% | NO: {noProb}%</div>
         </div>
         <button
           onClick={() => setIsMobileDrawerOpen(true)}
@@ -1691,15 +1694,15 @@ export default function MarketDetailPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="fixed bottom-16 left-0 right-0 z-50 bg-[#131313] border-t border-[#9e8e78] rounded-t-xl p-6 space-y-4"
+              className="fixed bottom-16 left-0 right-0 z-50 bg-[#0A0B12] border-t border-[rgba(165,168,184,0.4)] rounded-t-xl p-6 space-y-4"
             >
-              <div className="flex justify-between items-center border-b border-[#9e8e78]/30 pb-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c]">
+              <div className="flex justify-between items-center border-b border-[rgba(165,168,184,0.4)]/30 pb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider font-display text-[#00E5FF]">
                   [■] Mobile Prediction Desk
                 </h4>
                 <button 
                   onClick={() => setIsMobileDrawerOpen(false)}
-                  className="text-xs text-[#d6c4ac] hover:text-[#e5e2e1] font-mono px-2 py-1 rounded border border-[#9e8e78]/30"
+                  className="text-xs text-[#A5A8B8] hover:text-[#F4F5FA] font-mono px-2 py-1 rounded border border-[rgba(165,168,184,0.4)]/30"
                 >
                   CLOSE
                 </button>
@@ -1709,6 +1712,6 @@ export default function MarketDetailPage() {
           </>
         )}
       </AnimatePresence>
-    </div>
+    </main>
   );
 }

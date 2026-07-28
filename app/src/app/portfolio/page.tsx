@@ -1,306 +1,179 @@
 "use client";
+
+import { useState, useEffect } from "react";
+import { Wallet, TrendingUp, Award, BarChart3, AlertTriangle } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useUserPositions } from "@/hooks/useUserPositions";
-import { useMarkets } from "@/hooks/useMarkets";
-import { formatSol, categoryName } from "@/lib/format";
-import Link from "next/link";
+import { ClientWalletButton } from "@/components/ClientWalletButton";
+import { useSolPrice } from "@/hooks/useSolPrice";
+
+interface Position {
+  marketPubkey: string;
+  question: string;
+  side: "YES" | "NO";
+  shares: number;
+  avgPriceSol: number;
+  currentPriceSol: number;
+  valueSol: number;
+  pnlSol: number;
+  pnlPercent: number;
+}
+
+interface PortfolioStats {
+  netWorthSol: number;
+  pnl24hSol: number;
+  pnl24hPct: number;
+  winRate: number;
+}
 
 export default function PortfolioPage() {
   const { publicKey } = useWallet();
-  const { positions, dbPositions, loading: posLoading, hasOnChainData } = useUserPositions();
-  const { markets, loading: mkLoading } = useMarkets();
+  const { solPrice } = useSolPrice();
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [stats, setStats] = useState<PortfolioStats>({
+    netWorthSol: 0, pnl24hSol: 0, pnl24hPct: 0, winRate: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
-  const marketMap = new Map(markets.map((m) => [m.publicKey.toBase58(), m]));
-
-  // Use on-chain positions if available, otherwise fall back to DB positions
-  const useDbFallback = !hasOnChainData && dbPositions.length > 0;
-
-  const totalInvested = useDbFallback
-    ? dbPositions.reduce((s, p) => s + p.totalSpentLamports, 0)
-    : positions.reduce((s, p) => s + p.totalSpentLamports, 0);
-
-  const activePositions = useDbFallback
-    ? dbPositions.filter((p) => p.status === "open" || p.status === "Open")
-    : positions.filter((p) => {
-        const m = marketMap.get(p.market.toBase58());
-        return m && m.account.status === 0;
-      });
-
-  const settledPositions = useDbFallback
-    ? dbPositions.filter((p) => p.status === "settled" || p.status === "Settled")
-    : positions.filter((p) => {
-        const m = marketMap.get(p.market.toBase58());
-        return m && m.account.status === 1;
-      });
-
-  const cancelledPositions = useDbFallback
-    ? dbPositions.filter((p) => p.status === "cancelled" || p.status === "Cancelled")
-    : positions.filter((p) => {
-        const m = marketMap.get(p.market.toBase58());
-        return m && m.account.status === 2;
-      });
+  useEffect(() => {
+    if (!publicKey) { setLoading(false); return; }
+    setLoading(true);
+    setFetchError(false);
+    fetch(`/api/user/positions?wallet=${publicKey.toBase58()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.positions) {
+          setPositions(data.positions);
+          if (data.stats) setStats(data.stats);
+        }
+      })
+      .catch(() => { setFetchError(true); })
+      .finally(() => setLoading(false));
+  }, [publicKey]);
 
   if (!publicKey) {
     return (
-      <div
-        style={{
-          minHeight: "80vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--color-text-secondary)",
-          fontFamily: "var(--font-mono)",
-        }}
-      >
-        Connect your wallet to view portfolio
-      </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="holo-card p-12 text-center max-w-md mx-auto">
+          <Wallet className="w-12 h-12 mx-auto mb-4 text-[#7B3FE4]" />
+          <h2 className="font-display text-xl font-bold mb-2">Connect your wallet</h2>
+          <p className="text-sm text-[#A5A8B8] mb-5">
+            Connect a Solana wallet to view your positions and trade history.
+          </p>
+          <ClientWalletButton />
+        </div>
+      </main>
     );
   }
 
-  if (posLoading || mkLoading) {
+  if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "80vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--color-text-secondary)",
-          fontFamily: "var(--font-mono)",
-        }}
-      >
-        Loading portfolio...
-      </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="holo-card p-12 text-center">
+          <div className="animate-pulse text-[#A5A8B8]">Loading your portfolio...</div>
+        </div>
+      </main>
     );
   }
 
+  if (fetchError) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="holo-card py-16 text-center text-[#A5A8B8] flex flex-col items-center justify-center space-y-4">
+          <AlertTriangle className="w-12 h-12 opacity-30 text-[#FF4D6D]" />
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-[#F4F5FA] uppercase">Data Feed Error</h3>
+            <p className="text-xs max-w-sm mx-auto">Failed to load portfolio data from the server. Please try again.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const usdValue = solPrice > 0 ? (stats.netWorthSol * solPrice).toFixed(2) : null;
+
+  const statCards = [
+    { label: "Net Worth", value: `${stats.netWorthSol.toFixed(2)} SOL`, sub: usdValue ? `$${usdValue} USD` : undefined, icon: Wallet, color: "#00E5FF" },
+    { label: "24h P&L", value: `${stats.pnl24hSol >= 0 ? "+" : ""}${stats.pnl24hSol.toFixed(2)} SOL`, sub: `${stats.pnl24hPct >= 0 ? "+" : ""}${stats.pnl24hPct.toFixed(2)}%`, icon: TrendingUp, color: stats.pnl24hSol >= 0 ? "#C8FF00" : "#FF4D6D" },
+    { label: "Win Rate", value: `${(stats.winRate * 100).toFixed(0)}%`, icon: Award, color: "#7B3FE4" },
+    { label: "Positions", value: `${positions.length}`, icon: BarChart3, color: "#00E5FF" },
+  ];
+
   return (
-    <div style={{ maxWidth: "960px", margin: "0 auto", padding: "32px 16px" }}>
-      {/* Header */}
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "32px",
-            color: "var(--color-primary)",
-            marginBottom: "8px",
-          }}
-        >
-          Portfolio
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <div className="mb-8">
+        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
+          <span className="text-gradient">Portfolio</span>
         </h1>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--color-text-secondary)" }}>
-          {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
-        </p>
+        <p className="text-[#A5A8B8]">Your positions and performance</p>
       </div>
 
-      {/* Summary Bar */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: "12px",
-          marginBottom: "32px",
-        }}
-      >
-        <SummaryCard label="Total Invested" value={`${formatSol(totalInvested)} SOL`} color="var(--color-primary)" />
-        <SummaryCard label="Active Bets" value={activePositions.length.toString()} color="var(--color-yes)" />
-        <SummaryCard label="Settled" value={settledPositions.length.toString()} color="var(--color-crypto)" />
-        <SummaryCard label="Cancelled" value={cancelledPositions.length.toString()} color="var(--color-no)" />
-      </div>
-
-      {/* Positions */}
-      {!useDbFallback && positions.length === 0 && dbPositions.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "64px 0", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>
-          <p style={{ fontSize: "16px", marginBottom: "16px" }}>You haven&apos;t placed any bets yet</p>
-          <Link
-            href="/markets"
-            style={{
-              color: "var(--color-primary)",
-              border: "1px solid var(--color-primary)",
-              padding: "8px 24px",
-              borderRadius: "6px",
-              textDecoration: "none",
-              fontSize: "14px",
-            }}
-          >
-            View Markets
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {/* DB Fallback Positions */}
-          {useDbFallback && dbPositions.map((pos, idx) => (
-            <Link
-              key={pos.marketPubkey}
-              href={`/market/${pos.marketPubkey}`}
-              style={{ textDecoration: "none" }}
-            >
-              <div
-                style={{
-                  background: "var(--color-surface-variant)",
-                  border: "1px solid var(--color-outline)",
-                  borderRadius: "8px",
-                  padding: "16px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <p
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontSize: "14px",
-                      color: "var(--color-text-primary)",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    {pos.question || `Market ${pos.marketPubkey.slice(0, 8)}...`}
-                  </p>
-                  <div style={{ display: "flex", gap: "12px", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                    <span>YES: <span style={{ color: "var(--color-yes)" }}>{pos.yesAmount}</span></span>
-                    <span>NO: <span style={{ color: "var(--color-no)" }}>{pos.noAmount}</span></span>
-                    <span>Spent: <span style={{ color: "var(--color-text-primary)" }}>{formatSol(pos.totalSpentLamports)} SOL</span></span>
-                    <span>{pos.category}</span>
-                    <span style={{ color: "var(--color-outline)" }}>(from DB)</span>
-                  </div>
-                </div>
-                <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
-                  <span style={{ color: pos.status === "open" ? "var(--color-primary)" : "var(--color-text-secondary)" }}>
-                    {pos.status}
-                  </span>
-                </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        {statCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="holo-card p-5 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-[#A5A8B8] uppercase tracking-wider">{card.label}</p>
+                <Icon className="w-4 h-4" style={{ color: card.color }} />
               </div>
-            </Link>
-          ))}
+              <p className="font-display text-xl font-bold" style={{ color: card.color }}>
+                {card.value}
+              </p>
+              {card.sub && <p className="text-xs text-[#A5A8B8] mt-1">{card.sub}</p>}
+            </div>
+          );
+        })}
+      </div>
 
-          {/* On-chain Positions */}
-          {positions.map((pos) => {
-            const market = marketMap.get(pos.market.toBase58());
-            if (!market) return null;
-            const isWinner =
-              market.account.status === 1 &&
-              ((market.account.winningOutcome === 1 && pos.yesAmount > 0) ||
-                (market.account.winningOutcome === 2 && pos.noAmount > 0));
-            const isLoser =
-              market.account.status === 1 && !pos.claimed && !isWinner;
-            const claimable = isWinner && !pos.claimed;
-
-            return (
-              <Link
-                key={pos.publicKey.toBase58()}
-                href={`/market/${market.account.marketId}`}
-                style={{ textDecoration: "none" }}
-              >
-                <div
-                  style={{
-                    background: "var(--color-surface-variant)",
-                    border: `1px solid ${claimable ? "var(--color-yes)" : isLoser ? "var(--color-no)" : "var(--color-outline)"}`,
-                    borderRadius: "8px",
-                    padding: "16px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <p
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: "14px",
-                        color: "var(--color-text-primary)",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      {market.account.question.slice(0, 80)}
-                      {market.account.question.length > 80 ? "..." : ""}
-                    </p>
-                    <div style={{ display: "flex", gap: "12px", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                      <span>
-                        YES: <span style={{ color: "var(--color-yes)" }}>{pos.yesAmount}</span>
+      <div className="holo-card p-6">
+        <h3 className="font-display text-lg font-bold text-[#F4F5FA] mb-6">
+          Active Positions ({positions.length})
+        </h3>
+        {positions.length === 0 ? (
+          <p className="text-center text-[#A5A8B8] py-8">
+            No open positions. Browse markets to start trading.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-xs text-[#A5A8B8] uppercase tracking-wider border-b border-white/5">
+                  <th className="pb-3 pr-4">Market</th>
+                  <th className="pb-3 pr-4">Side</th>
+                  <th className="pb-3 pr-4 text-right">Shares</th>
+                  <th className="pb-3 pr-4 text-right">Avg Price</th>
+                  <th className="pb-3 pr-4 text-right">Current</th>
+                  <th className="pb-3 pr-4 text-right">P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((p, i) => (
+                  <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
+                    <td className="py-4 pr-4 font-medium text-[#F4F5FA] max-w-xs truncate">
+                      {p.question}
+                    </td>
+                    <td className="py-4 pr-4">
+                      <span className={`text-xs font-bold ${p.side === "YES" ? "text-[#C8FF00]" : "text-[#FF4D6D]"}`}>
+                        {p.side}
                       </span>
-                      <span>
-                        NO: <span style={{ color: "var(--color-no)" }}>{pos.noAmount}</span>
+                    </td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#A5A8B8]">{p.shares.toFixed(2)}</td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#A5A8B8]">{p.avgPriceSol.toFixed(3)}</td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#A5A8B8]">{p.currentPriceSol.toFixed(3)}</td>
+                    <td className={`py-4 pr-4 text-right font-mono font-bold ${p.pnlSol >= 0 ? "text-[#C8FF00]" : "text-[#FF4D6D]"}`}>
+                      {p.pnlSol >= 0 ? "+" : ""}{p.pnlSol.toFixed(3)}
+                      <span className="block text-[10px] opacity-70">
+                        ({p.pnlPercent >= 0 ? "+" : ""}{p.pnlPercent.toFixed(1)}%)
                       </span>
-                      <span>
-                        Spent: <span style={{ color: "var(--color-text-primary)" }}>{formatSol(pos.totalSpentLamports)} SOL</span>
-                      </span>
-                      <span style={{ color: categoryName(market.account.category) ? "var(--color-crypto)" : "var(--color-text-secondary)" }}>
-                        {categoryName(market.account.category)}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
-                    {claimable && (
-                      <span
-                        style={{
-                          color: "var(--color-yes)",
-                          border: "1px solid var(--color-yes)",
-                          borderRadius: "4px",
-                          padding: "4px 8px",
-                          fontSize: "11px",
-                        }}
-                      >
-                        Claim Available
-                      </span>
-                    )}
-                    {isLoser && (
-                      <span style={{ color: "var(--color-text-secondary)" }}>Lost</span>
-                    )}
-                    {pos.claimed && (
-                      <span style={{ color: "var(--color-outline)" }}>Claimed</span>
-                    )}
-                    {market.account.status === 2 && !pos.claimed && (
-                      <span
-                        style={{
-                          color: "var(--color-crypto)",
-                          border: "1px solid var(--color-crypto)",
-                          borderRadius: "4px",
-                          padding: "4px 8px",
-                          fontSize: "11px",
-                        }}
-                      >
-                        Refund Available
-                      </span>
-                    )}
-                    {market.account.status === 0 && (
-                      <span style={{ color: "var(--color-primary)" }}>Active</span>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        background: "var(--color-surface-variant)",
-        border: "1px solid var(--color-outline)",
-        borderRadius: "8px",
-        padding: "16px",
-        textAlign: "center",
-        fontFamily: "var(--font-mono)",
-      }}
-    >
-      <p style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{label}</p>
-      <p style={{ fontSize: "18px", fontWeight: 700, color }}>{value}</p>
-    </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }

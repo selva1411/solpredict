@@ -16,6 +16,14 @@ export function useUserRole() {
     let cancelled = false;
 
     async function determineRole() {
+      // In development, always allow admin access (no wallet required)
+      if (process.env.NODE_ENV === "development") {
+        setRole("admin");
+        setConfigExists(false);
+        setIsLoading(false);
+        return;
+      }
+
       if (!walletKey) {
         setRole("disconnected");
         setConfigExists(null);
@@ -33,10 +41,7 @@ export function useUserRole() {
         const onChainAdmin = configAcc.admin.toBase58();
         const isMatch = onChainAdmin === walletKey;
 
-        // In local development or if environment variable / override is set, treat connected wallet as admin
-        const isLocalDev = process.env.NODE_ENV === "development" || typeof window !== "undefined";
-
-        if (isMatch || isLocalDev) {
+        if (isMatch) {
           setRole("admin");
         } else {
           setRole("user");

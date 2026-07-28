@@ -1,69 +1,52 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/client';
-import { watchlist } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { NextRequest } from "next/server";
+import { db } from "@/lib/db/client";
+import { watchlist } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
+import { badRequest, ok } from "@/lib/api-response";
+import { apiHandler } from "@/lib/api-handler";
+import { toError } from "@/lib/errors";
+import { watchlistGetSchema, watchlistPostSchema } from "@/lib/schemas";
 
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const wallet = searchParams.get('wallet');
+export const GET = apiHandler(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const wallet = searchParams.get("wallet");
+  if (!wallet) return badRequest("Missing wallet parameter");
 
-    if (!wallet) {
-      return NextResponse.json({ error: 'Missing wallet parameter' }, { status: 400 });
-    }
+  const parsed = watchlistGetSchema.safeParse({ wallet });
+  if (!parsed.success) return badRequest("Invalid wallet format");
 
-    if (db) {
-      const items = await db
-        .select({ marketPubkey: watchlist.marketPubkey })
-        .from(watchlist)
-        .where(eq(watchlist.wallet, wallet));
-      
-      const keys = items.map(i => i.marketPubkey);
-      return NextResponse.json({ ok: true, keys });
-    }
-
-    return NextResponse.json({ ok: true, keys: [] });
-  } catch (err: any) {
-    console.error("Watchlist GET error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  if (db) {
+    const items = await db
+      .select({ marketPubkey: watchlist.marketPubkey })
+      .from(watchlist)
+      .where(eq(watchlist.wallet, wallet));
+    return ok({ ok: true, keys: items.map(i => i.marketPubkey) });
   }
-}
+  return ok({ ok: true, keys: [] });
+});
 
-export async function POST(req: NextRequest) {
-  try {
-    const { wallet, marketPubkey } = await req.json();
+export const POST = apiHandler(async (req: NextRequest) => {
+  const body = await req.json();
+  const parsed = watchlistPostSchema.safeParse(body);
+  if (!parsed.success) return badRequest("Invalid request data");
 
-    if (!wallet || !marketPubkey) {
-      return NextResponse.json({ error: 'Missing wallet or marketPubkey' }, { status: 400 });
-    }
+  const { wallet, marketPubkey } = parsed.data;
 
-    if (db) {
-      // Check existing
-      const existing = await db
-        .select()
-        .from(watchlist)
+  if (db) {
+    const existing = await db
+      .select()
+      .from(watchlist)
+      .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
+
+    if (existing.length > 0) {
+      await db
+        .delete(watchlist)
         .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-
-      if (existing.length > 0) {
-        // Delete item from watchlist
-        await db
-          .delete(watchlist)
-          .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-        return NextResponse.json({ ok: true, action: 'removed', isWatched: false });
-      } else {
-        // Insert item into watchlist
-        await db.insert(watchlist).values({
-          wallet,
-          marketPubkey,
-          createdAt: new Date(),
-        });
-        return NextResponse.json({ ok: true, action: 'added', isWatched: true });
-      }
+      return ok({ ok: true, action: "removed", isWatched: false });
     }
 
-    return NextResponse.json({ ok: true, action: 'toggled', isWatched: true });
-  } catch (err: any) {
-    console.error("Watchlist POST error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    await db.insert(watchlist).values({ wallet, marketPubkey, createdAt: new Date() });
+    return ok({ ok: true, action: "added", isWatched: true });
   }
-}
+  return ok({ ok: true, action: "toggled", isWatched: true });
+});

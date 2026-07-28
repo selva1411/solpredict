@@ -1,67 +1,67 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { insertTrade, upsertMarketCache } from '@/lib/db/store';
+import { NextRequest } from "next/server";
+import { insertTrade } from "@/lib/db/store";
+import { serverError, ok } from "@/lib/api-response";
+import { apiHandler } from "@/lib/api-handler";
+import { toError } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 
-export async function POST(req: NextRequest) {
-  try {
-    // Verify secret if set in environment
-    const secret = process.env.HELIUS_WEBHOOK_SECRET;
-    if (secret) {
-      const authHeader = req.headers.get('authorization');
-      if (authHeader !== `Bearer ${secret}` && authHeader !== secret) {
-        return NextResponse.json({ error: 'Unauthorized webhook request' }, { status: 401 });
-      }
+export const POST = apiHandler(async (req: NextRequest) => {
+  const secret = process.env.HELIUS_WEBHOOK_SECRET;
+  if (secret) {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader !== `Bearer ${secret}` && authHeader !== secret) {
+      return ok({ error: "Unauthorized" }, { status: 401 } as ResponseInit);
     }
-
-    const events = await req.json();
-    if (!Array.isArray(events)) {
-      return NextResponse.json({ ok: true, processed: 0 });
-    }
-
-    let count = 0;
-    for (const event of events) {
-      const { signature, timestamp, slot, instructions } = event;
-      if (!instructions) continue;
-
-      for (const ix of instructions) {
-        if (ix.programId !== process.env.NEXT_PUBLIC_PROGRAM_ID) continue;
-
-        const parsedType = ix.parsed?.type || ix.type;
-        const info = ix.parsed?.info || {};
-
-        if (parsedType === 'buyShares' || parsedType === 'sellShares') {
-          const { market, buyer, seller, side, quantity, cost, refund } = info;
-          const trader = buyer || seller || 'Unknown';
-          const isBuy = parsedType === 'buyShares';
-          const sideStr = typeof side === 'object' && 'yes' in side ? 'YES' : 'NO';
-          const amountLamports = cost || refund || 0;
-
-          await insertTrade({
-            signature: signature || `tx_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-            marketPubkey: market || 'Unknown',
-            trader,
-            side: sideStr as 'YES' | 'NO',
-            lamportsIn: Number(amountLamports),
-            tokensOut: Number(quantity || 0) * 1_000_000,
-            pricePerToken: amountLamports / Math.max(1, Number(quantity || 1) * 1_000_000),
-            blockTime: timestamp ? new Date(timestamp * 1000) : new Date(),
-            slot: slot || 0,
-          });
-          count++;
-        }
-      }
-    }
-
-    return NextResponse.json({ ok: true, processed: count });
-  } catch (err: any) {
-    console.error("Helius webhook processing error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
   }
-}
 
-export async function GET() {
-  return NextResponse.json({
+  const events = await req.json();
+  if (!Array.isArray(events)) return ok({ ok: true, processed: 0 });
+
+  let count = 0;
+  for (const event of events) {
+    const tx = event as Record<string, unknown>;
+    const type = tx.type as string | undefined;
+    if (type === "SWAP" || type === "TRANSFER") {
+      const tokenTransfers = (tx.tokenTransfers as Array<Record<string, unknown>>) || [];
+      const nativeTransfers = (tx.nativeTransfers as Array<Record<string, unknown>>) || [];
+
+      for (const transfer of tokenTransfers) {
+        const mint = String(transfer.mint ?? "");
+        const userAccount = String(transfer.userAccount ?? tx.feePayer ?? "");
+        const tokenAmount = Number(transfer.tokenAmount || 0);
+        const nativeAmount = nativeTransfers.length > 0 ? Number((nativeTransfers[0] as Record<string, unknown>).amount || 0) / 1e9 : 0;
+
+        await insertTrade({
+          signature: String(tx.signature ?? ""),
+          marketPubkey: mint,
+          trader: userAccount,
+          side: tokenAmount > 0 ? "YES" : "NO",
+          lamportsIn: Math.floor(nativeAmount * 1e9),
+          tokensOut: tokenAmount,
+          pricePerToken: tokenAmount > 0 ? nativeAmount / tokenAmount : 0,
+          blockTime: new Date((tx.timestamp as number || Date.now()) * 1000),
+          slot: 0,
+        });
+        count++;
+      }
+    }
+  }
+
+  logAudit({
+    action: "webhook:helius",
+    actor: "helius",
+    resource: "webhook",
+    details: { processed: count },
+    ip: req.headers.get("x-forwarded-for") ?? "unknown",
+  });
+
+  return ok({ ok: true, processed: count });
+});
+
+export const GET = apiHandler(async () => {
+  return ok({
     status: "online",
     service: "SolPredict Helius Webhook Indexer",
     timestamp: new Date().toISOString(),
   });
-}
+});

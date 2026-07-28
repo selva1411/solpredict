@@ -19,7 +19,7 @@ export function ClientWalletButton() {
   useEffect(() => {
     if (connected && publicKey && !hasRoutedRef.current) {
       hasRoutedRef.current = true;
-      router.push('/gateway');
+      router.push('/');
     }
     if (!connected) {
       hasRoutedRef.current = false;

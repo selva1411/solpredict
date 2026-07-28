@@ -8,7 +8,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
-import { txAccounts } from "@/lib/anchor-utils";
+import { txAccounts, sendWithRetry } from "@/lib/anchor-utils";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { 
@@ -26,14 +26,16 @@ import {
 import * as anchor from "@coral-xyz/anchor";
 import { EventParser } from "@coral-xyz/anchor";
 import { getConfigPda, getMarketPda, getMockPriceUpdatePda, getYesMintPda, getNoMintPda, getTreasuryPda } from "@/lib/pda";
-import { formatEventTime, findMarketQuestion, getMarketStatusString } from "@/lib/events";
+import { formatEventTime, findMarketQuestion, getMarketStatusString, AnchorMarketStatus } from "@/lib/events";
+import type { MarketCacheEntry } from "@/lib/db/store";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConnectWalletGate } from "@/components/dashboard/ConnectWalletGate";
-import { StatTile3D } from "@/components/dashboard/StatTile3D";
+const StatTile3D = dynamic(() => import("@/components/dashboard/StatTile3D").then(m => m.StatTile3D), { ssr: false });
 import { DashboardSection, DashboardHero } from "@/components/dashboard/DashboardSection";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
+import { ProposalsSection } from "@/components/admin/ProposalsSection";
 import { PYTH_FEED_REGISTRY, PythFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { EmptyState } from "@/components/StatePanels";
 
@@ -56,7 +58,7 @@ interface Market {
     comparison: number;
     endTs: anchor.BN;
     resolveTs: anchor.BN;
-    status: any;
+    status: AnchorMarketStatus;
     yesPoolLamports: anchor.BN;
     noPoolLamports: anchor.BN;
     feeCollected: anchor.BN;
@@ -64,6 +66,17 @@ interface Market {
     feeBps: number;
     [key: string]: unknown;
   };
+}
+
+interface ConfigAccount {
+  publicKey: PublicKey;
+  admin: PublicKey;
+  marketCount: number;
+  feeBps: number;
+  feeRateBps?: number;
+  minDuration?: number;
+  maxDuration?: number;
+  treasuryVault?: PublicKey;
 }
 
 interface AdminActivity {
@@ -84,7 +97,7 @@ function AdminPage() {
   const { role, isLoading: roleLoading } = useUserRole();
   const router = useRouter();
 
-  const [config, setConfig] = useState<any>(null);
+  const [config, setConfig] = useState<ConfigAccount | null>(null);
   const [configLoading, setConfigLoading] = useState<boolean>(true);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [uniqueTradersCount, setUniqueTradersCount] = useState<number>(0);
@@ -100,8 +113,11 @@ function AdminPage() {
   const [comparison, setComparison] = useState<number>(0); 
   const [durationSecs, setDurationSecs] = useState<number>(3600); 
   
+  const [activeAdminSection, setActiveAdminSection] = useState<"overview" | "proposals" | "markets" | "config">("overview");
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [settlePrices, setSettlePrices] = useState<Map<string, number>>(new Map());
+  const [leaderboardFallback, setLeaderboardFallback] = useState<Array<{ wallet: string; totalWagered: number }>>([]);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; marketPda: PublicKey | null }>({
     isOpen: false,
@@ -213,8 +229,8 @@ function AdminPage() {
           const json = await res.json();
           if (json.markets) {
             dbMarkets = json.markets
-              .filter((c: any) => !existingKeys.has(c.marketPubkey))
-              .map((c: any): Market => {
+              .filter((c: MarketCacheEntry) => !existingKeys.has(c.marketPubkey))
+              .map((c: MarketCacheEntry): Market => {
                 const catIdx = CATEGORIES.indexOf(c.category) >= 0 ? CATEGORIES.indexOf(c.category) : 4;
                 const statusObj = c.status === "settled" ? { settled: {} } : c.status === "cancelled" ? { cancelled: {} } : { open: {} };
                 return {
@@ -250,8 +266,15 @@ function AdminPage() {
       fetchAdminActivity(combinedMarkets);
 
       try {
-        const userPositions = await program.account.userPosition.all();
-        const distinctTraders = new Set(userPositions.map((pos: any) => pos.account.owner.toBase58()));
+        const userPositions = await program.account.userPosition.all().catch(() => []);
+        const distinctTraders = new Set(userPositions.map((pos) => pos.account.owner.toBase58()));
+
+        const leaderboardRes = await fetch("/api/leaderboard").then(r => r.json()).catch(() => null);
+        if (leaderboardRes?.ok && leaderboardRes.leaderboard) {
+          setLeaderboardFallback(leaderboardRes.leaderboard);
+          leaderboardRes.leaderboard.forEach((user: { wallet: string }) => distinctTraders.add(user.wallet));
+        }
+
         setUniqueTradersCount(distinctTraders.size);
       } catch (posErr) {
         console.error("Failed to fetch user positions for stats:", posErr);
@@ -352,17 +375,18 @@ function AdminPage() {
     if (!wallet?.publicKey) return;
     try {
       const configPda = getConfigPda(program.programId);
-      await program.methods
-        .initializeConfig(feeBps)
-        .accounts(txAccounts({
-          admin: wallet.publicKey,
-          config: configPda,
-        }))
-        .rpc();
+      await sendWithRetry(
+        program.methods
+          .initializeConfig(feeBps)
+          .accounts(txAccounts({
+            admin: wallet.publicKey,
+            config: configPda,
+          }))
+      );
 
       toast.success("Platform Config PDA successfully initialized!");
       fetchConfigAndMarkets();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(`Initialization failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
@@ -404,7 +428,7 @@ function AdminPage() {
 
       const configPda = getConfigPda(program.programId);
 
-      await program.methods
+      const createBuilder = program.methods
         .initializeMarket(
           question,
           description,
@@ -415,7 +439,7 @@ function AdminPage() {
           finalComparison,
           endTs,
           resolveTs,
-          new anchor.BN(10_000_000) // 0.01 SOL share price
+          new anchor.BN(10_000_000)
         )
         .accounts(txAccounts({
           admin: wallet.publicKey,
@@ -424,9 +448,9 @@ function AdminPage() {
           yesMint: yesMintPda,
           noMint: noMintPda,
           treasury: treasuryPda,
-        }))
-        .rpc();
+        }));
 
+      await sendWithRetry(createBuilder);
       toast.success(`Market ID #${nextMarketId} deployed successfully!`);
       
       setQuestion("");
@@ -435,7 +459,7 @@ function AdminPage() {
       setDurationSecs(3600);
       
       fetchConfigAndMarkets();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(`Deploy failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
@@ -452,7 +476,7 @@ function AdminPage() {
           description: market.account.description,
           category: CATEGORIES[market.account.category] || "Crypto",
           status,
-          winningOutcome,
+          winningOutcome: winningOutcome || undefined,
           yesPoolSol: lamportsToSol(market.account.yesPoolLamports),
           noPoolSol: lamportsToSol(market.account.noPoolLamports),
           endTs: market.account.endTs.toNumber(),
@@ -491,7 +515,7 @@ function AdminPage() {
       const exponent = market.account.targetExpo;
       const publishTime = new anchor.BN(Math.floor(Date.now() / 1000));
 
-      await program.methods
+      const priceUpdateBuilder = program.methods
         .mockCreatePriceUpdate(
           market.account.oracleFeedId,
           settlePriceScaled,
@@ -502,22 +526,24 @@ function AdminPage() {
         .accounts(txAccounts({
           payer: wallet.publicKey,
           priceUpdate: mockPriceUpdatePda,
-        }))
-        .rpc();
+        }));
 
-      await program.methods
+      await sendWithRetry(priceUpdateBuilder);
+
+      const settleBuilder = program.methods
         .settleMarket()
         .accounts(txAccounts({
           market: market.publicKey,
           config: configPda,
           priceUpdate: mockPriceUpdatePda,
-        }))
-        .rpc();
+        }));
+
+      await sendWithRetry(settleBuilder);
 
       toast.success(`Market resolved successfully on-chain!`);
       await syncMarketStatusToDb(market, "settled", winSide);
       fetchConfigAndMarkets();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       toast.error(`Resolution failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
@@ -542,14 +568,15 @@ function AdminPage() {
       }
 
       const configPda = getConfigPda(program.programId);
-      await program.methods
+      const cancelBuilder = program.methods
         .cancelMarket()
         .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
           market: marketPda,
-        }))
-        .rpc();
+        }));
+
+      await sendWithRetry(cancelBuilder);
 
       toast.success("Market cancelled on-chain. Traders may claim full refunds.");
       if (targetMarket) {
@@ -557,7 +584,7 @@ function AdminPage() {
       }
       setCancelModal({ isOpen: false, marketPda: null });
       fetchConfigAndMarkets();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(`Cancel failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
@@ -581,19 +608,20 @@ function AdminPage() {
 
       const configPda = getConfigPda(program.programId);
       
-      await program.methods
+      const manualSettleBuilder = program.methods
         .settleMarketManual(outcome)
         .accounts(txAccounts({
           admin: wallet.publicKey,
           config: configPda,
           market: market.publicKey,
-        }))
-        .rpc();
+        }));
+
+      await sendWithRetry(manualSettleBuilder);
 
       toast.success(`Market manually resolved successfully on-chain!`);
       await syncMarketStatusToDb(market, "settled", winSide);
       fetchConfigAndMarkets();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       toast.error(`Resolution failed: ${getFriendlyErrorMessage(err)}`);
     } finally {
@@ -601,9 +629,9 @@ function AdminPage() {
     }
   };
 
-  const isOracleSettleable = (feedId: number[]): boolean => {
+  function isOracleSettleable(feedId: number[]): boolean {
     return feedId.some(b => b !== 0);
-  };
+  }
 
   const handleSettleButtonClick = (market: Market) => {
     if (isOracleSettleable(market.account.oracleFeedId)) {
@@ -641,7 +669,7 @@ function AdminPage() {
       const configPda = getConfigPda(program.programId);
       const treasuryPda = getTreasuryPda(market.publicKey, program.programId);
 
-      await program.methods
+      const withdrawBuilder = program.methods
         .withdrawFees()
         .accounts(txAccounts({
           admin: wallet.publicKey,
@@ -649,12 +677,13 @@ function AdminPage() {
           market: market.publicKey,
           treasury: treasuryPda,
           systemProgram: SystemProgram.programId,
-        }))
-        .rpc();
+        }));
+
+      await sendWithRetry(withdrawBuilder);
 
       toast.success("Platform protocol fees successfully withdrawn on-chain!");
       fetchConfigAndMarkets();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(`Withdrawal failed: ${getFriendlyErrorMessage(err)}`);
     }
   };
@@ -667,19 +696,35 @@ function AdminPage() {
 
     markets.forEach((m) => {
       const status = getMarketStatusString(m.account.status, m.account.endTs);
-      totalVolumeLamports += m.account.yesPoolLamports.toNumber() + m.account.noPoolLamports.toNumber();
-      totalFeesCollectedLamports += m.account.feeCollected.toNumber();
-      if (status === "Open") openCount++;
-      if (status === "Settled") settledCount++;
+      const volume = m.account.yesPoolLamports.toNumber() + m.account.noPoolLamports.toNumber();
+      totalVolumeLamports += volume;
+      
+      const onChainFee = m.account.feeCollected ? m.account.feeCollected.toNumber() : 0;
+      totalFeesCollectedLamports += onChainFee > 0 ? onChainFee : Math.round(volume * ((config?.feeBps || 200) / 10000));
+
+      if (status === "Open" || status === "Ended") {
+        openCount++;
+      } else if (status === "Settled") {
+        settledCount++;
+      }
     });
 
+    let totalVolumeSol = lamportsToSol(totalVolumeLamports);
+    if (leaderboardFallback.length > 0) {
+      const lbSum = leaderboardFallback.reduce((acc: number, u) => acc + Number(u.totalWagered || 0), 0);
+      if (lbSum > totalVolumeSol) {
+        totalVolumeSol = Number(lbSum.toFixed(1));
+        totalFeesCollectedLamports = Math.round(totalVolumeSol * 1e9 * ((config?.feeBps || 200) / 10000));
+      }
+    }
+
     return {
-      totalVolume: lamportsToSol(totalVolumeLamports),
+      totalVolume: totalVolumeSol,
       totalFeesCollected: lamportsToSol(totalFeesCollectedLamports),
       openMarketsCount: openCount,
       settledMarketsCount: settledCount,
     };
-  }, [markets]);
+  }, [markets, config, leaderboardFallback]);
 
   const needsActionMarkets = useMemo(() => {
     return markets.filter((m) => {
@@ -702,6 +747,11 @@ function AdminPage() {
     return { oracleActionCount: oracle, manualActionCount: manual };
   }, [needsActionMarkets]);
 
+  const isWalletAdmin = useMemo(() => {
+    if (!wallet?.publicKey || !config?.admin) return false;
+    return wallet.publicKey.equals(config.admin);
+  }, [wallet, config]);
+
   if (role === "disconnected" && !roleLoading) {
     return (
       <ConnectWalletGate
@@ -714,44 +764,42 @@ function AdminPage() {
   if (configLoading) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-10 bg-white/5 border border-[#9e8e78]/30 rounded w-1/3" />
+        <div className="h-10 bg-white/5 border border-[rgba(165,168,184,0.5)]/30 rounded w-1/3" />
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-6">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-28 board-panel skeleton-shimmer bg-[#131313]" />
+            <div key={i} className="h-28 holo-card skeleton-shimmer bg-[#0A0B12]" />
           ))}
         </div>
       </div>
     );
   }
 
-  const getStatusString = getMarketStatusString;
-
   return (
-    <div className="space-y-10 animate-fade-in font-sans pb-12">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       {settleModal.isOpen && settleModal.market && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0a0a]/80 backdrop-blur-sm">
-          <div className="board-panel max-w-md w-full p-6 space-y-6 bg-[#131313] border-[#9e8e78] border relative shadow-2xl">
+          <div className="holo-card max-w-md w-full p-6 space-y-6 bg-[#0A0B12] border-[rgba(165,168,184,0.5)] border relative shadow-2xl">
             <div className="absolute top-3 left-4 flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-[#ffd89c] animate-pulse" />
-              <span className="text-[9px] font-mono tracking-widest text-[#ffd89c]">SETTLEMENT CONFIRMATION</span>
+              <span className="text-[9px] font-mono tracking-widest text-[#00E5FF]">SETTLEMENT CONFIRMATION</span>
             </div>
 
             <div className="pt-4 space-y-3 font-mono text-xs">
               <div className="space-y-1">
-                <div className="text-[10px] text-[#9e8e78] uppercase">Question:</div>
-                <div className="text-sm font-bold text-[#e5e2e1]">{settleModal.market.account.question}</div>
+                <div className="text-[10px] text-[#A5A8B8] uppercase">Question:</div>
+                <div className="text-sm font-bold text-[#F4F5FA]">{settleModal.market.account.question}</div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-[#9e8e78]/20 py-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-[rgba(165,168,184,0.5)]/20 py-3">
                 <div className="space-y-0.5">
-                  <div className="text-[10px] text-[#9e8e78] uppercase">Target Price:</div>
-                  <div className="text-sm font-bold text-[#ffd89c]">
+                  <div className="text-[10px] text-[#A5A8B8] uppercase">Target Price:</div>
+                  <div className="text-sm font-bold text-[#00E5FF]">
                     ${(settleModal.market.account.targetPrice.toNumber() / Math.pow(10, Math.abs(settleModal.market.account.targetExpo))).toFixed(2)}
                   </div>
                 </div>
                 <div className="space-y-0.5">
-                  <div className="text-[10px] text-[#9e8e78] uppercase">Condition:</div>
-                  <div className="text-sm font-bold text-[#ffd89c]">
+                  <div className="text-[10px] text-[#A5A8B8] uppercase">Condition:</div>
+                  <div className="text-sm font-bold text-[#00E5FF]">
                     {settleModal.market.account.comparison === 0 ? "Greater Than" : "Less Than"}
                   </div>
                 </div>
@@ -759,16 +807,16 @@ function AdminPage() {
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-[#9e8e78] uppercase">Settlement Price ($):</span>
+                  <span className="text-[10px] text-[#A5A8B8] uppercase">Settlement Price ($):</span>
                   {settleModal.isFetchingPrice && (
-                    <span className="text-[9px] text-[#ffd89c] animate-pulse">FETCHING REAL-TIME PYTH...</span>
+                    <span className="text-[9px] text-[#00E5FF] animate-pulse">FETCHING REAL-TIME PYTH...</span>
                   )}
                 </div>
                 <input
                   type="text"
                   value={settleModal.settlePrice ? `$${settleModal.settlePrice}` : ""}
                   readOnly
-                  className="w-full board-input py-2 px-3 text-sm font-mono border-[#9e8e78] bg-[#0d0d0d]/50 text-[#ffd89c] cursor-not-allowed opacity-80"
+                  className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 py-2 px-3 text-sm font-mono border-[rgba(165,168,184,0.5)] bg-[#0d0d0d]/50 text-[#00E5FF] cursor-not-allowed opacity-80"
                   placeholder="Auto-fetched from Pyth oracle"
                 />
               </div>
@@ -783,11 +831,11 @@ function AdminPage() {
                 const yesWins = isGreater ? enteredPrice > target : enteredPrice < target;
 
                 return (
-                  <div className="bg-[#0d0d0d] border border-[#9e8e78]/20 p-3 rounded text-center">
-                    <div className="text-[9px] text-[#9e8e78] uppercase">Projected Outcome:</div>
+                  <div className="bg-[#0d0d0d] border border-[rgba(165,168,184,0.5)]/20 p-3 rounded text-center">
+                    <div className="text-[9px] text-[#A5A8B8] uppercase">Projected Outcome:</div>
                     <div className="mt-1 text-md font-bold tracking-widest font-mono">
-                      At <span className="text-[#ffd89c]">${enteredPrice.toFixed(2)}</span>, outcome will be{" "}
-                      <span className={yesWins ? "text-[#a1d494]" : "text-[#ffb4ab]"}>
+                      At <span className="text-[#00E5FF]">${enteredPrice.toFixed(2)}</span>, outcome will be{" "}
+                      <span className={yesWins ? "text-[#C8FF00]" : "text-[#FF4D6D]"}>
                         {yesWins ? "YES" : "NO"}
                       </span>
                     </div>
@@ -800,7 +848,7 @@ function AdminPage() {
               <button
                 type="button"
                 onClick={() => setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false, livePrice: null })}
-                className="flex-1 btn-amber text-xs py-2 uppercase border border-[#9e8e78]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#d6c4ac]"
+                className="flex-1 btn-glow text-xs py-2 uppercase border border-[rgba(165,168,184,0.5)]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#A5A8B8]"
               >
                 Cancel
               </button>
@@ -816,7 +864,7 @@ function AdminPage() {
                     await handleMockSettle(m, price);
                   }
                 }}
-                className="flex-1 btn-amber text-xs py-2 uppercase cursor-pointer disabled:opacity-50"
+                className="flex-1 btn-glow text-xs py-2 uppercase cursor-pointer disabled:opacity-50"
               >
                 {settlingId ? "Settling..." : "Confirm Settlement"}
               </button>
@@ -827,56 +875,56 @@ function AdminPage() {
 
       {manualSettleModal.isOpen && manualSettleModal.market && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0a0a]/80 backdrop-blur-sm">
-          <div className="board-panel max-w-md w-full p-6 space-y-6 bg-[#131313] border-[#9e8e78] border relative shadow-2xl">
+          <div className="holo-card max-w-md w-full p-6 space-y-6 bg-[#0A0B12] border-[rgba(165,168,184,0.5)] border relative shadow-2xl">
             <div className="absolute top-3 left-4 flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-[#ffd89c] animate-pulse" />
-              <span className="text-[9px] font-mono tracking-widest text-[#ffd89c] bg-[#ffd89c]/10 px-1.5 py-0.5 rounded border border-[#ffd89c]/20 font-bold">MANUAL SETTLEMENT</span>
+              <span className="text-[9px] font-mono tracking-widest text-[#00E5FF] bg-[#ffd89c]/10 px-1.5 py-0.5 rounded border border-[#ffd89c]/20 font-bold">MANUAL SETTLEMENT</span>
             </div>
 
             {!manualSettleModal.showSecondaryConfirm ? (
               // Stage 1: Choose outcome
               <div className="space-y-6 pt-4">
                 <div className="space-y-1 text-left">
-                  <div className="text-[10px] text-[#9e8e78] font-mono uppercase">Question:</div>
-                  <div className="text-sm font-bold text-[#e5e2e1] font-display">{manualSettleModal.market.account.question}</div>
+                  <div className="text-[10px] text-[#A5A8B8] font-mono uppercase">Question:</div>
+                  <div className="text-sm font-bold text-[#F4F5FA] font-display">{manualSettleModal.market.account.question}</div>
                 </div>
 
                 {manualSettleModal.market.account.description && (
-                  <div className="space-y-1 bg-[#0d0d0d] p-3 border border-[#9e8e78]/15 rounded text-left">
-                    <div className="text-[10px] text-[#9e8e78] font-mono uppercase">Winning Condition:</div>
-                    <div className="text-[11px] text-[#d6c4ac] leading-relaxed font-mono">{manualSettleModal.market.account.description}</div>
+                  <div className="space-y-1 bg-[#0d0d0d] p-3 border border-[rgba(165,168,184,0.5)]/15 rounded text-left">
+                    <div className="text-[10px] text-[#A5A8B8] font-mono uppercase">Winning Condition:</div>
+                    <div className="text-[11px] text-[#A5A8B8] leading-relaxed font-mono">{manualSettleModal.market.account.description}</div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4 text-center font-mono text-xs border-y border-[#9e8e78]/20 py-3 bg-[#0d0d0d]/30">
+                <div className="grid grid-cols-2 gap-4 text-center font-mono text-xs border-y border-[rgba(165,168,184,0.5)]/20 py-3 bg-[#0d0d0d]/30">
                   <div className="space-y-0.5">
-                    <div className="text-[10px] text-[#9e8e78] uppercase">YES Pool:</div>
-                    <div className="text-sm font-bold text-[#a1d494]">
+                    <div className="text-[10px] text-[#A5A8B8] uppercase">YES Pool:</div>
+                    <div className="text-sm font-bold text-[#C8FF00]">
                       {(lamportsToSol(manualSettleModal.market.account.yesPoolLamports)).toFixed(2)} SOL
                     </div>
                   </div>
                   <div className="space-y-0.5">
-                    <div className="text-[10px] text-[#9e8e78] uppercase">NO Pool:</div>
-                    <div className="text-sm font-bold text-[#ffb4ab]">
+                    <div className="text-[10px] text-[#A5A8B8] uppercase">NO Pool:</div>
+                    <div className="text-sm font-bold text-[#FF4D6D]">
                       {(lamportsToSol(manualSettleModal.market.account.noPoolLamports)).toFixed(2)} SOL
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <div className="text-[10px] text-[#9e8e78] font-mono uppercase text-center">Select Winner:</div>
+                  <div className="text-[10px] text-[#A5A8B8] font-mono uppercase text-center">Select Winner:</div>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       type="button"
                       onClick={() => setManualSettleModal(prev => ({ ...prev, outcome: 1, showSecondaryConfirm: true }))}
-                      className="py-3 font-mono font-bold uppercase rounded border border-[#a1d494]/30 bg-[#a1d494]/10 hover:bg-[#a1d494]/20 text-[#a1d494] cursor-pointer transition-colors text-center"
+                      className="py-3 font-mono font-bold uppercase rounded border border-[#C8FF00]/30 bg-[#C8FF00]/10 hover:bg-[#C8FF00]/20 text-[#C8FF00] cursor-pointer transition-colors text-center"
                     >
                       [ YES WON ]
                     </button>
                     <button
                       type="button"
                       onClick={() => setManualSettleModal(prev => ({ ...prev, outcome: 2, showSecondaryConfirm: true }))}
-                      className="py-3 font-mono font-bold uppercase rounded border border-[#ffb4ab]/30 bg-[#ffb4ab]/10 hover:bg-[#ffb4ab]/20 text-[#ffb4ab] cursor-pointer transition-colors text-center"
+                      className="py-3 font-mono font-bold uppercase rounded border border-[#FF4D6D]/30 bg-[#FF4D6D]/10 hover:bg-[#FF4D6D]/20 text-[#FF4D6D] cursor-pointer transition-colors text-center"
                     >
                       [ NO WON ]
                     </button>
@@ -886,7 +934,7 @@ function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setManualSettleModal({ isOpen: false, market: null, outcome: null, showSecondaryConfirm: false })}
-                  className="w-full btn-amber text-xs py-2 uppercase border border-[#9e8e78]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#d6c4ac]"
+                  className="w-full btn-glow text-xs py-2 uppercase border border-[rgba(165,168,184,0.5)]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#A5A8B8]"
                 >
                   Cancel
                 </button>
@@ -894,30 +942,30 @@ function AdminPage() {
             ) : (
               // Stage 2: Confirm selection
               <div className="space-y-6 pt-4 font-mono text-xs text-center">
-                <div className="text-sm font-bold text-[#ffb4ab] uppercase tracking-wider flex items-center justify-center gap-2">
+                <div className="text-sm font-bold text-[#FF4D6D] uppercase tracking-wider flex items-center justify-center gap-2">
                   <AlertTriangle className="w-5 h-5 animate-pulse" /> EXTREME WARNING
                 </div>
 
-                <div className="space-y-4 text-[#d6c4ac] leading-relaxed text-[11px] bg-[#0d0d0d] p-4 border border-[#ffb4ab]/30 rounded text-left">
+                <div className="space-y-4 text-[#A5A8B8] leading-relaxed text-[11px] bg-[#0d0d0d] p-4 border border-[#FF4D6D]/30 rounded text-left">
                   <p>
                     You are about to settle this market with{" "}
-                    <span className={manualSettleModal.outcome === 1 ? "text-[#a1d494] font-bold" : "text-[#ffb4ab] font-bold"}>
+                    <span className={manualSettleModal.outcome === 1 ? "text-[#C8FF00] font-bold" : "text-[#FF4D6D] font-bold"}>
                       {manualSettleModal.outcome === 1 ? "YES" : "NO"}
                     </span>{" "}
                     as the winner.
                   </p>
                   <p>
                     This action is **irreversible** and will distribute{" "}
-                    <span className="text-[#ffd89c] font-bold">
+                    <span className="text-[#00E5FF] font-bold">
                       {getPayoutPoolSol(manualSettleModal.market, manualSettleModal.outcome! || 1).toFixed(3)} SOL
                     </span>{" "}
                     to all{" "}
-                    <span className={manualSettleModal.outcome === 1 ? "text-[#a1d494] font-bold" : "text-[#ffb4ab] font-bold"}>
+                    <span className={manualSettleModal.outcome === 1 ? "text-[#C8FF00] font-bold" : "text-[#FF4D6D] font-bold"}>
                       {manualSettleModal.outcome === 1 ? "YES" : "NO"}
                     </span>{" "}
                     share holders.
                   </p>
-                  <p className="text-[10px] text-[#9e8e78]">
+                  <p className="text-[10px] text-[#A5A8B8]">
                     Protocol fee collected: {lamportsToSol(
                       bnToNum(manualSettleModal.market.account.yesPoolLamports) +
                       bnToNum(manualSettleModal.market.account.noPoolLamports) -
@@ -930,7 +978,7 @@ function AdminPage() {
                   <button
                     type="button"
                     onClick={() => setManualSettleModal(prev => ({ ...prev, showSecondaryConfirm: false, outcome: null }))}
-                    className="flex-1 btn-amber text-xs py-2 uppercase border border-[#9e8e78]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#d6c4ac]"
+                    className="flex-1 btn-glow text-xs py-2 uppercase border border-[rgba(165,168,184,0.5)]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#A5A8B8]"
                   >
                     Go Back
                   </button>
@@ -945,7 +993,7 @@ function AdminPage() {
                         await handleManualSettle(m, outcome);
                       }
                     }}
-                    className="flex-1 btn-amber text-xs py-2 bg-[#ffb4ab] hover:bg-[#ffc9c2] text-[#131313] uppercase cursor-pointer disabled:opacity-50 font-bold"
+                    className="flex-1 btn-glow text-xs py-2 bg-[#FF4D6D] hover:bg-[#ffc9c2] text-[#131313] uppercase cursor-pointer disabled:opacity-50 font-bold"
                   >
                     {settlingId ? "Settling..." : "Confirm"}
                   </button>
@@ -979,6 +1027,32 @@ function AdminPage() {
         badgeLabel="ADMIN ACTIVE KEY:"
       />
 
+      {/* Admin Mismatch Warning Banner */}
+      {config && wallet?.publicKey && !isWalletAdmin && (
+        <motion.div
+          variants={cardVariants}
+          initial="hidden"
+          animate="visible"
+          className="p-4 sm:p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2 font-mono text-xs shadow-lg"
+        >
+          <div className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0 animate-pulse text-amber-400" />
+            <span>ADMIN KEY MISMATCH</span>
+          </div>
+          <p className="text-amber-200/90 leading-relaxed font-sans text-xs">
+            Your connected browser wallet <code className="bg-black/50 px-1.5 py-0.5 rounded text-white font-mono">{wallet.publicKey.toBase58()}</code> is not the on-chain Administrator authority.
+            The on-chain Config PDA was initialized by key <code className="bg-black/50 px-1.5 py-0.5 rounded text-amber-300 font-mono">{config.admin.toBase58()}</code>.
+          </p>
+          <div className="text-[11px] text-amber-300/80 pt-1 font-sans">
+            💡 <strong>To execute admin actions (Create Market, Settle, Cancel, Withdraw Fees):</strong>
+            <ul className="list-disc list-inside mt-1 space-y-0.5">
+              <li>Connect your wallet using authority key <code className="font-mono bg-black/50 px-1.5 py-0.5 text-white rounded">{config.admin.toBase58()}</code> (or import <code className="font-mono bg-black/50 px-1.5 py-0.5 text-white rounded">~/.config/solana/id.json</code> into Phantom/Solflare).</li>
+              <li>Or run <code className="font-mono bg-black/50 px-1.5 py-0.5 text-white rounded">npm run reset</code> in terminal to reset localnet, then click <strong>Initialize Config PDA</strong> with your active browser wallet.</li>
+            </ul>
+          </div>
+        </motion.div>
+      )}
+
       {/* 1. Platform Config Initialization Block */}
       {!config ? (
         <motion.section
@@ -987,31 +1061,30 @@ function AdminPage() {
           animate="visible"
           className="glass-panel p-8 space-y-6"
         >
-          <div className="flex items-center space-x-3 text-[#ffd89c]">
+          <div className="flex items-center space-x-3 text-[#00E5FF]">
             <AlertTriangle className="w-6 h-6 animate-pulse" />
             <h2 className="text-lg font-bold font-display uppercase tracking-wider">Config PDA Not Found</h2>
           </div>
-          <p className="text-xs text-[#d6c4ac] leading-relaxed">
+          <p className="text-xs text-[#A5A8B8] leading-relaxed">
             The platform-wide config singleton must be initialized once before markets can be created. The key initialized here will serve as the master Administrator authority.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end max-w-md">
             <div className="space-y-2">
-              <label className="text-xs font-mono text-[#d6c4ac] font-bold">Fee Basis Points (100 = 1%)</label>
+              <label className="text-xs font-mono text-[#A5A8B8] font-bold">Fee Basis Points (100 = 1%)</label>
               <input
                 type="number"
                 value={feeBps}
                 onChange={(e) => setFeeBps(Number(e.target.value))}
-                className="w-full board-input text-sm py-2 px-3 border-[#9e8e78]"
+                className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-sm py-2 px-3 border-[rgba(165,168,184,0.5)]"
               />
             </div>
-            <button onClick={handleInitializeConfig} className="btn-amber py-2 text-xs w-full sm:w-auto">
+            <button onClick={handleInitializeConfig} className="btn-glow py-2 text-xs w-full sm:w-auto">
               Initialize Config PDA
             </button>
           </div>
         </motion.section>
       ) : (
-        /* 2. Platform Stats Row */
-          <motion.section
+        <motion.section
             className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6"
             variants={staggerContainer}
             initial="hidden"
@@ -1027,91 +1100,167 @@ function AdminPage() {
 
       {config && (
         <>
-          {/* 3. Needs Action Panel (Expired Markets Settle List) */}
-          {needsActionMarkets.length > 0 && (
-            <DashboardSection
-              title="Markets Needing Settlement"
-              subtitle={`${oracleActionCount} oracle markets | ${manualActionCount} manual markets awaiting your decision`}
-              icon={AlertTriangle}
-              count={needsActionMarkets.length}
-              variant="alert"
+        {/* Admin Tab Navigation */}
+        <div className="flex gap-1 mb-8 border-b border-white/5 pb-1 overflow-x-auto no-scrollbar">
+          {(["overview", "proposals", "markets", "config"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveAdminSection(tab)}
+              className={`px-4 py-2 text-sm font-medium capitalize transition-all border-b-2 -mb-[1px] whitespace-nowrap ${
+                activeAdminSection === tab
+                  ? "text-[#00E5FF] border-[#00E5FF]"
+                  : "text-[#A5A8B8] border-transparent hover:text-[#F4F5FA]"
+              }`}
             >
-              <div className="divide-y divide-[#9e8e78]/20">
-                {needsActionMarkets.map((m) => {
-                  const marketKey = m.publicKey.toBase58();
-                  const isOracle = isOracleSettleable(m.account.oracleFeedId);
-                  return (
-                    <div key={marketKey} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                      <div className="space-y-1 min-w-0">
-                        <div className="text-sm font-bold text-[#e5e2e1] truncate">{m.account.question}</div>
-                        <div className="text-[10px] text-[#d6c4ac] font-mono flex flex-wrap items-center gap-2">
-                          <span>{getCategoryString(m.account.category)}</span>
-                          {isOracle ? (
-                            <span className="text-[#06b6d4] font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE</span>
-                          ) : (
-                            <span className="text-[#ffd89c] font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUAL</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          disabled={settlingId !== null}
-                          onClick={() => handleSettleButtonClick(m)}
-                          className="btn-amber text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50"
-                        >
-                          {settlingId === marketKey ? "Settling..." : "Settle"}
-                        </button>
+              {tab === "overview" && "Overview"}
+              {tab === "proposals" && "Proposals"}
+              {tab === "markets" && "Markets"}
+              {tab === "config" && "Config"}
+            </button>
+          ))}
+        </div>
+
+        {activeAdminSection === "overview" && (
+          <>
+        {/* 3. Needs Action Panel (Expired Markets Settle List) */}
+        {needsActionMarkets.length > 0 && (
+          <DashboardSection
+            title="Markets Needing Settlement"
+            subtitle={`${oracleActionCount} oracle markets | ${manualActionCount} manual markets awaiting your decision`}
+            icon={AlertTriangle}
+            count={needsActionMarkets.length}
+            variant="alert"
+          >
+            <div className="divide-y divide-[rgba(165,168,184,0.5)]/20">
+              {needsActionMarkets.map((m) => {
+                const marketKey = m.publicKey.toBase58();
+                const isOracle = isOracleSettleable(m.account.oracleFeedId);
+                return (
+                  <div key={marketKey} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="space-y-1 min-w-0">
+                      <div className="text-sm font-bold text-[#F4F5FA] truncate">{m.account.question}</div>
+                      <div className="text-[10px] text-[#A5A8B8] font-mono flex flex-wrap items-center gap-2">
+                        <span>{getCategoryString(m.account.category)}</span>
+                        {isOracle ? (
+                          <span className="text-[#06b6d4] font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE</span>
+                        ) : (
+                          <span className="text-[#00E5FF] font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUAL</span>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </DashboardSection>
-          )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        disabled={settlingId !== null}
+                        onClick={() => handleSettleButtonClick(m)}
+                        className="btn-glow text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50"
+                      >
+                        {settlingId === marketKey ? "Settling..." : "Settle"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </DashboardSection>
+        )}
 
-          {/* Create Market and Manage Table Layout */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
-            
-            {/* Create Market Form */}
-            <div className="space-y-4 sm:space-y-6">
-              <div className="flex items-center space-x-2 text-[#ffd89c]">
-                <Plus className="w-5 h-5" />
-                <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
+        {/* Audit Trail / Admin Activity Log */}
+        <DashboardSection title="Audit Trail Actions" icon={History} delay={0.15}>
+          <div className="glass-panel overflow-hidden hover-lift">
+            {activityLoading ? (
+              <div className="p-12 text-center text-[#A5A8B8] text-xs font-mono animate-pulse">
+                Fetching action logs...
               </div>
+            ) : adminActivity.length === 0 ? (
+              <EmptyState
+                title="No Audit Trail"
+                description="No admin log updates recorded on-chain."
+              />
+            ) : (
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full text-left border-collapse min-w-[500px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(165,168,184,0.5)]/30 text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8] bg-[#0d0d0d]">
+                      <th className="py-3 sm:py-4 px-3 sm:px-6">Timestamp</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6">Category</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6">Market</th>
+                      <th className="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[rgba(165,168,184,0.5)]/10 font-mono text-xs">
+                    {adminActivity.map((item, idx) => {
+                      let tagClass = "";
+                      if (item.type === "CREATE") tagClass = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+                      else if (item.type === "SETTLE") tagClass = "bg-[#C8FF00]/10 text-[#C8FF00] border border-[#C8FF00]/20";
+                      else if (item.type === "CANCEL") tagClass = "bg-[#FF4D6D]/10 text-[#FF4D6D] border border-[#FF4D6D]/20";
+                      else tagClass = "bg-[#ffd89c]/10 text-[#00E5FF] border border-[#ffd89c]/20";
 
-              <div className="glass-panel p-4 sm:p-6 space-y-4 hover-lift">
+                      return (
+                        <tr key={idx} className="table-row-3d hover:bg-white/5 transition-colors">
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#A5A8B8]">{item.timeStr}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${tagClass}`}>
+                              {item.type}
+                            </span>
+                          </td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#F4F5FA] max-w-[140px] sm:max-w-sm truncate font-bold">{item.question}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#A5A8B8] hidden sm:table-cell">{item.details}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </DashboardSection>
+          </>
+        )}
+
+        {/* MARKETS TAB */}
+        {activeAdminSection === "markets" && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
+          
+          {/* Create Market Form */}
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex items-center space-x-2 text-[#00E5FF]">
+              <Plus className="w-5 h-5" />
+              <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
+            </div>
+
+            <div className="glass-panel p-4 sm:p-6 space-y-4 hover-lift">
                 <form onSubmit={handleCreateMarket} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#d6c4ac]">Question Text</label>
+                    <label className="text-xs font-bold text-[#A5A8B8]">Question Text</label>
                     <input
                       type="text"
                       required
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       placeholder="Will SOL exceed $280 by tomorrow?"
-                      className="w-full board-input text-xs border-[#9e8e78]"
+                      className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs border-[rgba(165,168,184,0.5)]"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#d6c4ac]">Rules & Description</label>
+                    <label className="text-xs font-bold text-[#A5A8B8]">Rules & Description</label>
                     <textarea
                       required
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Settle using Pyth feed SOL/USD. Price must match condition..."
                       rows={3}
-                      className="w-full board-input text-xs border-[#9e8e78]"
+                      className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs border-[rgba(165,168,184,0.5)]"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-[#d6c4ac]">Category</label>
+                      <label className="text-xs font-bold text-[#A5A8B8]">Category</label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(Number(e.target.value))}
-                        className="w-full board-input text-xs bg-[#0d0d0d] border-[#9e8e78]"
+                        className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs bg-[#0d0d0d] border-[rgba(165,168,184,0.5)]"
                       >
                         {CATEGORIES.map((cat, i) => (
                           <option key={i} value={i}>{cat}</option>
@@ -1121,11 +1270,11 @@ function AdminPage() {
 
                     {isOracleCategory(category) && (
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#d6c4ac]">Comparison</label>
+                        <label className="text-xs font-bold text-[#A5A8B8]">Comparison</label>
                         <select
                           value={comparison}
                           onChange={(e) => setComparison(Number(e.target.value))}
-                          className="w-full board-input text-xs bg-[#0d0d0d] border-[#9e8e78]"
+                          className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs bg-[#0d0d0d] border-[rgba(165,168,184,0.5)]"
                         >
                           <option value={0}>Greater Than</option>
                           <option value={1}>Less Than</option>
@@ -1137,7 +1286,7 @@ function AdminPage() {
                   {isOracleCategory(category) ? (
                     <>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#d6c4ac]">Asset (auto-fills feed ID & target)</label>
+                        <label className="text-xs font-bold text-[#A5A8B8]">Asset (auto-fills feed ID & target)</label>
                         <select
                           value={selectedAssetKey}
                           onChange={(e) => {
@@ -1150,7 +1299,7 @@ function AdminPage() {
                               // Set a reasonable default target price (15% above current as guess)
                             }
                           }}
-                          className="w-full board-input text-xs bg-[#0d0d0d] border-[#9e8e78]"
+                          className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs bg-[#0d0d0d] border-[rgba(165,168,184,0.5)]"
                         >
                           <option value="">-- Select asset --</option>
                           {Object.entries(PYTH_FEED_REGISTRY).map(([key, entry]) => (
@@ -1161,60 +1310,60 @@ function AdminPage() {
                         </select>
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#d6c4ac]">Oracle Feed ID (Hex)</label>
+                        <label className="text-xs font-bold text-[#A5A8B8]">Oracle Feed ID (Hex)</label>
                         <input
                           type="text"
                           required
                           value={oracleFeedIdHex}
                           onChange={(e) => setOracleFeedIdHex(e.target.value)}
                           placeholder="0xef0d8b6fda..."
-                          className="w-full board-input text-xs border-[#9e8e78] font-mono text-[#ffd89c]"
+                          className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs border-[rgba(165,168,184,0.5)] font-mono text-[#00E5FF]"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-[#d6c4ac]">Target Price ($)</label>
+                          <label className="text-xs font-bold text-[#A5A8B8]">Target Price ($)</label>
                           <input
                             type="number"
                             step="0.01"
                             required
                             value={targetPriceVal}
                             onChange={(e) => setTargetPriceVal(Number(e.target.value))}
-                            className="w-full board-input text-xs border-[#9e8e78]"
+                            className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs border-[rgba(165,168,184,0.5)]"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-[#d6c4ac]">Duration (Secs)</label>
+                          <label className="text-xs font-bold text-[#A5A8B8]">Duration (Secs)</label>
                           <input
                             type="number"
                             required
                             min={5}
                             value={durationSecs}
                             onChange={(e) => setDurationSecs(Number(e.target.value))}
-                            className="w-full board-input text-xs border-[#9e8e78]"
+                            className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs border-[rgba(165,168,184,0.5)]"
                           />
-                          <p className="text-[10px] text-[#9e8e78]">Minimum: 5s (allow ~30s for tx to land)</p>
+                          <p className="text-[10px] text-[#A5A8B8]">Minimum: 5s (allow ~30s for tx to land)</p>
                         </div>
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className="space-y-1.5 bg-[#ffd89c]/5 border border-[#ffd89c]/20 p-3 rounded font-mono text-[10px] text-[#ffd89c] leading-normal text-left">
+                      <div className="space-y-1.5 bg-[#ffd89c]/5 border border-[#ffd89c]/20 p-3 rounded font-mono text-[10px] text-[#00E5FF] leading-normal text-left">
                         This market will be manually settled by the admin. Use the Description field
                         to clearly explain what the YES and NO outcomes mean (e.g. 'YES if the Giants
                         win, NO if they lose or the game is cancelled').
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#d6c4ac]">Duration (Secs)</label>
+                        <label className="text-xs font-bold text-[#A5A8B8]">Duration (Secs)</label>
                         <input
                           type="number"
                           required
                           min={5}
                           value={durationSecs}
                           onChange={(e) => setDurationSecs(Number(e.target.value))}
-                          className="w-full board-input text-xs border-[#9e8e78]"
+                          className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#7B3FE4] focus:ring-1 focus:ring-[#7B3FE4]/30 text-xs border-[rgba(165,168,184,0.5)]"
                         />
-                        <p className="text-[10px] text-[#9e8e78]">Minimum: 5s (allow ~30s for tx to land)</p>
+                        <p className="text-[10px] text-[#A5A8B8]">Minimum: 5s (allow ~30s for tx to land)</p>
                       </div>
                     </>
                   )}
@@ -1228,7 +1377,7 @@ function AdminPage() {
 
             {/* Manage Markets Table */}
             <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-              <div className="flex items-center space-x-2 text-[#ffd89c]">
+              <div className="flex items-center space-x-2 text-[#00E5FF]">
                 <Settings className="w-5 h-5" />
                 <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Manage Board</h2>
               </div>
@@ -1243,7 +1392,7 @@ function AdminPage() {
                   <div className="overflow-x-auto scrollbar-thin">
                     <table className="w-full text-left border-collapse min-w-[600px]">
                       <thead>
-                        <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
+                        <tr className="border-b border-[rgba(165,168,184,0.5)]/30 text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8] bg-[#0d0d0d]">
                           <th className="py-3 sm:py-4 px-3 sm:px-6">ID</th>
                           <th className="py-3 sm:py-4 px-3 sm:px-6">Question</th>
                           <th className="py-3 sm:py-4 px-3 sm:px-6">Status</th>
@@ -1251,9 +1400,9 @@ function AdminPage() {
                           <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
+                      <tbody className="divide-y divide-[rgba(165,168,184,0.5)]/10 font-mono text-xs">
                         {markets.map((m) => {
-                          const status = getStatusString(m.account.status, m.account.endTs);
+                          const status = getMarketStatusString(m.account.status, m.account.endTs);
                           const marketKey = m.publicKey.toBase58();
                           const yesPool = lamportsToSol(m.account.yesPoolLamports);
                           const noPool = lamportsToSol(m.account.noPoolLamports);
@@ -1261,8 +1410,8 @@ function AdminPage() {
 
                           return (
                             <tr key={marketKey} className="table-row-3d hover:bg-white/5 transition-colors">
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac]">#{m.account.marketId.toString()}</td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#e5e2e1] max-w-[140px] sm:max-w-xs truncate font-bold">{m.account.question}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#A5A8B8]">#{m.account.marketId.toString()}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#F4F5FA] max-w-[140px] sm:max-w-xs truncate font-bold">{m.account.question}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 {(() => {
                                   const now = Math.floor(Date.now() / 1000);
@@ -1271,14 +1420,14 @@ function AdminPage() {
                                   if ((status === "Open" || status === "Ended") && isPast) {
                                     if (feedIdNonZero) {
                                       return (
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#06b6d4]/15 text-[#ffd89c] border border-[#06b6d4]/20 inline-flex items-center gap-1">
-                                          <Zap className="w-3 h-3 text-[#ffd89c]" /> ORACLE SETTLE
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#06b6d4]/15 text-[#00E5FF] border border-[#06b6d4]/20 inline-flex items-center gap-1">
+                                          <Zap className="w-3 h-3 text-[#00E5FF]" /> ORACLE SETTLE
                                         </span>
                                       );
                                     } else {
                                       return (
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ffd89c]/15 text-[#ffd89c] border border-[#ffd89c]/20 inline-flex items-center gap-1">
-                                          <Gavel className="w-3 h-3 text-[#ffd89c]" /> MANUAL SETTLE
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ffd89c]/15 text-[#00E5FF] border border-[#ffd89c]/20 inline-flex items-center gap-1">
+                                          <Gavel className="w-3 h-3 text-[#00E5FF]" /> MANUAL SETTLE
                                         </span>
                                       );
                                     }
@@ -1286,32 +1435,32 @@ function AdminPage() {
                                   return (
                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                       status === "Open" 
-                                        ? "bg-[#a1d494]/15 text-[#a1d494] border border-[#a1d494]/20" 
+                                        ? "bg-[#C8FF00]/15 text-[#C8FF00] border border-[#C8FF00]/20" 
                                         : status === "Ended"
                                         ? "bg-[#f97316]/15 text-[#f97316] border border-[#f97316]/20"
                                         : status === "Settled" 
-                                        ? "bg-white/5 text-[#d6c4ac] border border-white/10" 
-                                        : "bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/20"
+                                        ? "bg-white/5 text-[#A5A8B8] border border-white/10" 
+                                        : "bg-[#FF4D6D]/15 text-[#FF4D6D] border border-[#FF4D6D]/20"
                                     }`}>
                                       {status}
                                     </span>
                                   );
                                 })()}
                               </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-[#e5e2e1]">{volume.toFixed(2)} SOL</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-[#F4F5FA]">{volume.toFixed(2)} SOL</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-center">
                                 {(status === "Open" || status === "Ended") && (
                                   <div className="flex items-center justify-center gap-2">
                                     <button
                                       disabled={settlingId !== null}
                                       onClick={() => handleSettleButtonClick(m)}
-                                      className="px-2.5 py-1 bg-[#a1d494] hover:bg-[#b7e4ac] text-[#131313] border border-[#9e8e78] rounded text-[9px] cursor-pointer font-bold"
+                                      className="px-2.5 py-1 bg-[#C8FF00] hover:bg-[#b7e4ac] text-[#131313] border border-[rgba(165,168,184,0.5)] rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Settle
                                     </button>
                                     <button
                                       onClick={() => setCancelModal({ isOpen: true, marketPda: m.publicKey })}
-                                      className="px-2.5 py-1 bg-[#ffb4ab] hover:bg-[#ffc9c2] text-[#131313] border border-[#9e8e78] rounded text-[9px] cursor-pointer font-bold"
+                                      className="px-2.5 py-1 bg-[#FF4D6D] hover:bg-[#ffc9c2] text-[#131313] border border-[rgba(165,168,184,0.5)] rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Cancel
                                     </button>
@@ -1320,11 +1469,11 @@ function AdminPage() {
                                 {status === "Settled" && (
                                   <div className="flex items-center justify-center">
                                     {m.account.feeWithdrawn ? (
-                                      <span className="text-[#a1d494] text-[10px] font-bold uppercase">Withdrawn</span>
+                                      <span className="text-[#C8FF00] text-[10px] font-bold uppercase">Withdrawn</span>
                                     ) : (
                                       <button
                                         onClick={() => handleWithdrawFees(m)}
-                                        className="px-2.5 py-1 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/30 rounded text-[9px] text-[#ffd89c] font-bold cursor-pointer uppercase"
+                                        className="px-2.5 py-1 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/30 rounded text-[9px] text-[#00E5FF] font-bold cursor-pointer uppercase"
                                       >
                                         Withdraw Fees ({ lamportsToSol(m.account.feeCollected).toFixed(3) } SOL)
                                       </button>
@@ -1332,7 +1481,7 @@ function AdminPage() {
                                   </div>
                                 )}
                                 {status === "Cancelled" && (
-                                  <span className="text-[#d6c4ac] text-[10px] italic">Refunds enabled</span>
+                                  <span className="text-[#A5A8B8] text-[10px] italic">Refunds enabled</span>
                                 )}
                               </td>
                             </tr>
@@ -1345,62 +1494,69 @@ function AdminPage() {
               </div>
             </div>
           </div>
-        </>
-      )}
+        )}
 
-      {/* 4. Admin Activity Log Section */}
-      {config && (
-        <DashboardSection title="Audit Trail Actions" icon={History} delay={0.15}>
-          <div className="glass-panel overflow-hidden hover-lift">
-            {activityLoading ? (
-              <div className="p-12 text-center text-[#d6c4ac] text-xs font-mono animate-pulse">
-                Fetching action logs...
-              </div>
-            ) : adminActivity.length === 0 ? (
-              <EmptyState
-                title="No Audit Trail"
-                description="No admin log updates recorded on-chain."
-              />
-            ) : (
-              <div className="overflow-x-auto scrollbar-thin">
-                <table className="w-full text-left border-collapse min-w-[500px]">
-                  <thead>
-                    <tr className="border-b border-[#9e8e78]/30 text-[10px] font-mono uppercase tracking-widest text-[#d6c4ac] bg-[#0d0d0d]">
-                      <th className="py-3 sm:py-4 px-3 sm:px-6">Timestamp</th>
-                      <th className="py-3 sm:py-4 px-3 sm:px-6">Category</th>
-                      <th className="py-3 sm:py-4 px-3 sm:px-6">Market</th>
-                      <th className="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Detail</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#9e8e78]/10 font-mono text-xs">
-                    {adminActivity.map((item, idx) => {
-                      let tagClass = "";
-                      if (item.type === "CREATE") tagClass = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
-                      else if (item.type === "SETTLE") tagClass = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
-                      else if (item.type === "CANCEL") tagClass = "bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20";
-                      else tagClass = "bg-[#ffd89c]/10 text-[#ffd89c] border border-[#ffd89c]/20";
+        {/* PROPOSALS TAB */}
+        {activeAdminSection === "proposals" && (
+          <ProposalsSection />
+        )}
 
-                      return (
-                        <tr key={idx} className="table-row-3d hover:bg-white/5 transition-colors">
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac]">{item.timeStr}</td>
-                          <td className="py-3 sm:py-4 px-3 sm:px-6">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${tagClass}`}>
-                              {item.type}
-                            </span>
-                          </td>
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#e5e2e1] max-w-[140px] sm:max-w-sm truncate font-bold">{item.question}</td>
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#d6c4ac] hidden sm:table-cell">{item.details}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+        {/* CONFIG TAB */}
+        {activeAdminSection === "config" && (
+          <motion.section
+            variants={cardVariants}
+            initial="hidden"
+            animate="visible"
+            className="glass-panel p-8 space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold font-display uppercase tracking-wider text-[#F4F5FA]">Platform Configuration</h2>
+              <button onClick={handleInitializeConfig} className="btn-glow py-2 text-xs">
+                Reinitialize Config PDA
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Admin Authority</div>
+                <div className="text-sm font-mono text-[#F4F5FA] break-all">{config?.admin.toBase58() || "—"}</div>
               </div>
-            )}
-          </div>
-        </DashboardSection>
+              <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Fee Rate (bps)</div>
+                <div className="text-sm font-mono text-[#F4F5FA]">{config?.feeRateBps || 0} bps</div>
+              </div>
+              <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Min Market Duration</div>
+                <div className="text-sm font-mono text-[#F4F5FA]">{(config?.minDuration || 0) / 3600}h</div>
+              </div>
+              <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Max Market Duration</div>
+                <div className="text-sm font-mono text-[#F4F5FA]">{(config?.maxDuration || 0) / 86400}d</div>
+              </div>
+            </div>
+            <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Treasury Vault</div>
+              <div className="text-sm font-mono text-[#F4F5FA] break-all">{config?.treasuryVault?.toBase58() || "—"}</div>
+            </div>
+            <div className="pt-4 border-t border-white/5">
+              <button
+                onClick={() => {
+                  if (markets.length > 0) {
+                    handleWithdrawFees(markets[0]);
+                  } else {
+                    toast.info("No markets available to withdraw fees from.");
+                  }
+                }}
+                disabled={withdrawing}
+                className="btn-glow text-xs py-2 px-6 cursor-pointer disabled:opacity-50"
+              >
+                {withdrawing ? "Withdrawing..." : "Withdraw Accumulated Fees"}
+              </button>
+            </div>
+          </motion.section>
+        )}
+      </>
       )}
-    </div>
+    </main>
   );
 }
 

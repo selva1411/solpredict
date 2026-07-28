@@ -4,94 +4,203 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 type MessageHandler = (data: Record<string, unknown>) => void;
 
+interface QueuedMessage {
+  type: string;
+  payload?: Record<string, unknown>;
+  queuedAt: number;
+}
+
 interface RealtimeState {
   connected: boolean;
   subscriptions: string[];
   error: string | null;
+  reconnectAttempt: number;
+  lastEventTimestamp: number | null;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || (typeof window !== "undefined"
-  ? `ws://${window.location.hostname}:${parseInt(process.env.NEXT_PUBLIC_WS_PORT || "3001")}`
-  : "ws://localhost:3001");
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL
+  || (typeof window !== "undefined" ? process.env.NEXT_PUBLIC_WS_PORT : "")
+  || "";
+
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_DELAY = 1000;
+const MAX_DELAY = 30000;
+const HEARTBEAT_INTERVAL = 15000;
+const HEARTBEAT_TIMEOUT = 5000;
+
+function getReconnectDelay(attempt: number): number {
+  const delay = Math.min(BASE_DELAY * Math.pow(2, attempt), MAX_DELAY);
+  const jitter = delay * 0.1 * (Math.random() - 0.5);
+  return Math.round(delay + jitter);
+}
 
 export function useRealtime(channel?: string, handler?: MessageHandler) {
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Map<string, Set<MessageHandler>>>(new Map());
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const heartbeatTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const reconnectAttemptRef = useRef(0);
   const handlerRef = useRef<MessageHandler | undefined>(handler);
   const subscriptionsRef = useRef<string[]>(["global"]);
+  const mountedRef = useRef(true);
+  const messageQueueRef = useRef<QueuedMessage[]>([]);
+  const lastEventTimestampRef = useRef<number | null>(null);
 
   const [state, setState] = useState<RealtimeState>({
     connected: false,
     subscriptions: ["global"],
     error: null,
+    reconnectAttempt: 0,
+    lastEventTimestamp: null,
   });
 
   useEffect(() => {
     handlerRef.current = handler;
   }, [handler]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = undefined;
+    }
+    if (heartbeatTimeoutRef.current) {
+      clearTimeout(heartbeatTimeoutRef.current);
+      heartbeatTimeoutRef.current = undefined;
+    }
+  }, []);
+
+  const startHeartbeat = useCallback((ws: WebSocket) => {
+    stopHeartbeat();
+
+    heartbeatTimerRef.current = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        stopHeartbeat();
+        return;
+      }
+      try {
+        ws.send(JSON.stringify({ type: "ping" }));
+        heartbeatTimeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          ws.close();
+        }, HEARTBEAT_TIMEOUT);
+      } catch {}
+    }, HEARTBEAT_INTERVAL);
+  }, [stopHeartbeat]);
+
+  const flushMessageQueue = useCallback((ws: WebSocket) => {
+    const queue = messageQueueRef.current;
+    messageQueueRef.current = [];
+    for (const msg of queue) {
+      ws.send(JSON.stringify({ type: msg.type, ...msg.payload }));
+    }
+  }, []);
+
+  const disconnect = useCallback(() => {
+    stopHeartbeat();
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = undefined;
+    }
+    reconnectAttemptRef.current = 0;
+    wsRef.current?.close();
+    wsRef.current = null;
+    setState(s => ({ ...s, connected: false, reconnectAttempt: 0 }));
+  }, [stopHeartbeat]);
+
+  const connectRef = useRef<(() => void) | null>(null);
+
   const connect = useCallback(() => {
+    if (!WS_URL) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      return;
+    }
 
     try {
       const ws = new WebSocket(WS_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        setState(s => ({ ...s, connected: true, error: null }));
+        if (!mountedRef.current) { ws.close(); return; }
+        reconnectAttemptRef.current = 0;
+        setState(s => ({ ...s, connected: true, error: null, reconnectAttempt: 0 }));
+        startHeartbeat(ws);
+
         for (const sub of subscriptionsRef.current) {
           ws.send(JSON.stringify({ type: "subscribe", channels: [sub] }));
         }
+
+        if (lastEventTimestampRef.current) {
+          ws.send(JSON.stringify({
+            type: "replay",
+            since: lastEventTimestampRef.current,
+          }));
+        }
+
+        flushMessageQueue(ws);
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+
+          if (msg.type === "pong") {
+            if (heartbeatTimeoutRef.current) {
+              clearTimeout(heartbeatTimeoutRef.current);
+              heartbeatTimeoutRef.current = undefined;
+            }
+            return;
+          }
+
+          lastEventTimestampRef.current = Date.now();
+          setState(s => ({ ...s, lastEventTimestamp: Date.now() }));
+
           const { event: eventName, data, channel: msgChannel } = msg;
 
           if (msgChannel) {
             const channelHandlers = handlersRef.current.get(msgChannel);
             if (channelHandlers) {
-              for (const h of channelHandlers) {
-                h(data || msg);
-              }
+              for (const h of channelHandlers) h(data || msg);
             }
           }
 
           if (eventName) {
             const eventHandlers = handlersRef.current.get(eventName);
             if (eventHandlers) {
-              for (const h of eventHandlers) {
-                h(data || msg);
-              }
+              for (const h of eventHandlers) h(data || msg);
             }
           }
         } catch {}
       };
 
       ws.onclose = () => {
+        stopHeartbeat();
+        if (!mountedRef.current) return;
         setState(s => ({ ...s, connected: false }));
-        reconnectTimerRef.current = setTimeout(connect, 3000);
+        const attempt = reconnectAttemptRef.current;
+        if (attempt >= MAX_RECONNECT_ATTEMPTS) return;
+        const delay = getReconnectDelay(attempt);
+        reconnectAttemptRef.current = attempt + 1;
+        reconnectTimerRef.current = setTimeout(() => connectRef.current?.(), delay);
       };
 
       ws.onerror = () => {
+        if (!mountedRef.current) return;
         setState(s => ({ ...s, error: "WebSocket connection error" }));
-        ws.close();
       };
     } catch {
+      if (!mountedRef.current) return;
       setState(s => ({ ...s, error: "Failed to create WebSocket" }));
     }
-  }, []);
+  }, [startHeartbeat, flushMessageQueue]);
 
-  const disconnect = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-    }
-    wsRef.current?.close();
-    wsRef.current = null;
-    setState(s => ({ ...s, connected: false }));
-  }, []);
+  connectRef.current = connect;
 
   const subscribe = useCallback((ch: string) => {
     if (!subscriptionsRef.current.includes(ch)) {
@@ -128,8 +237,11 @@ export function useRealtime(channel?: string, handler?: MessageHandler) {
   }, []);
 
   const send = useCallback((type: string, payload?: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, ...payload }));
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type, ...payload }));
+    } else {
+      messageQueueRef.current.push({ type, payload, queuedAt: Date.now() });
     }
   }, []);
 

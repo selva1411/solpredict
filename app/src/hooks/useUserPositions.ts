@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "./useProgram";
+import { useRealtime } from "./useRealtime";
 import { PublicKey } from "@solana/web3.js";
 
 export interface UserPosition {
@@ -33,6 +34,9 @@ export function useUserPositions(pollIntervalMs = 15_000) {
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [dbPositions, setDbPositions] = useState<DbPosition[]>([]);
   const [loading, setLoading] = useState(true);
+  const channel = publicKey ? `positions:${publicKey.toBase58()}` : undefined;
+  const rt = useRealtime(channel);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const fetchPositions = useCallback(async () => {
     if (!program || !publicKey) {
@@ -48,16 +52,19 @@ export function useUserPositions(pollIntervalMs = 15_000) {
           },
         },
       ]);
-      const parsed = all.map((item: any) => ({
-        publicKey: item.publicKey as PublicKey,
-        market: (item.account as any).market as PublicKey,
-        owner: (item.account as any).owner as PublicKey,
-        yesAmount: (item.account as any).yesAmount.toNumber(),
-        noAmount: (item.account as any).noAmount.toNumber(),
-        claimed: (item.account as any).claimed,
-        totalSpentLamports: (item.account as any).totalSpentLamports.toNumber(),
-        bump: (item.account as any).bump,
-      }));
+      const parsed: UserPosition[] = all.map((item) => {
+        const acct = item.account;
+        return {
+          publicKey: item.publicKey,
+          market: acct.market,
+          owner: acct.owner,
+          yesAmount: acct.yesAmount.toNumber(),
+          noAmount: acct.noAmount.toNumber(),
+          claimed: acct.claimed,
+          totalSpentLamports: acct.totalSpentLamports.toNumber(),
+          bump: acct.bump,
+        };
+      });
       setPositions(parsed);
     } catch {
       setPositions([]);
@@ -82,12 +89,30 @@ export function useUserPositions(pollIntervalMs = 15_000) {
   useEffect(() => {
     fetchPositions();
     fetchDbPositions();
-    const interval = setInterval(() => {
+  }, [fetchPositions, fetchDbPositions]);
+
+  useEffect(() => {
+    if (rt.connected) {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = undefined;
+    } else if (!pollingRef.current) {
+      pollingRef.current = setInterval(() => {
+        fetchPositions();
+        fetchDbPositions();
+      }, pollIntervalMs);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchPositions, fetchDbPositions, pollIntervalMs, rt.connected]);
+
+  useEffect(() => {
+    const unsub = rt.on("positions", () => {
       fetchPositions();
       fetchDbPositions();
-    }, pollIntervalMs);
-    return () => clearInterval(interval);
-  }, [fetchPositions, fetchDbPositions, pollIntervalMs]);
+    });
+    return () => unsub?.();
+  }, [fetchPositions, fetchDbPositions, rt]);
 
   const hasOnChainData = positions.length > 0;
   const mergedPositions = hasOnChainData ? positions : [];

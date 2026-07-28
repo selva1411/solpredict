@@ -3,39 +3,18 @@ import ActivityFeed from "@/components/ActivityFeed";
 
 export default function ActivityPage() {
   return (
-    <div style={{ maxWidth: "720px", margin: "0 auto", padding: "32px 16px" }}>
-      <div style={{ marginBottom: "24px" }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "32px",
-            color: "var(--color-primary)",
-          }}
-        >
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <div className="mb-6">
+        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2 text-[#F4F5FA]">
           Activity
         </h1>
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "13px",
-            color: "var(--color-text-secondary)",
-            marginTop: "4px",
-          }}
-        >
+        <p className="text-sm text-[#A5A8B8]">
           Recent transactions across all markets
         </p>
       </div>
-
-      <div
-        style={{
-          background: "var(--color-surface-variant)",
-          border: "1px solid var(--color-outline)",
-          borderRadius: "8px",
-          overflow: "hidden",
-        }}
-      >
+      <div className="holo-card p-5">
         <ActivityFeed limit={50} />
       </div>
-    </div>
+    </main>
   );
 }

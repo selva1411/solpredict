@@ -1,105 +1,69 @@
 "use client";
 
-import React from "react";
+import { useId } from "react";
 
 interface SparklineProps {
   data: number[];
   width?: number;
   height?: number;
   color?: string;
-  fillColor?: string;
+  fill?: boolean;
   strokeWidth?: number;
-  className?: string;
 }
 
 export function Sparkline({
   data,
-  width = 200,
-  height = 50,
-  color = "#8B5CF6",
-  fillColor,
-  strokeWidth = 2,
-  className = "",
+  width = 100,
+  height = 32,
+  color = "#C8FF00",
+  fill = true,
+  strokeWidth = 1.5,
 }: SparklineProps) {
-  if (data.length < 2) return null;
+  const rawId = useId();
+  const id = `spark-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
+
+  if (data.length < 2) return <svg width={width} height={height} />;
 
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  const padding = 2;
+  const stepX = width / (data.length - 1);
 
-  const points = data
-    .map((val, i) => {
-      const x = padding + (i / (data.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((val - min) / range) * (height - padding * 2);
-      return `${x},${y}`;
-    })
+  const points = data.map((v, i) => {
+    const x = i * stepX;
+    const y = height - ((v - min) / range) * (height - 4) - 2;
+    return [x, y] as const;
+  });
+
+  const pathD = points
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`)
     .join(" ");
 
-  const fillPoints = fillColor
-    ? `${padding},${height - padding} ${points} ${width - padding},${height - padding}`
-    : undefined;
-
-  const lastVal = data[data.length - 1];
-  const lastX = width - padding;
-  const lastY = height - padding - ((lastVal - min) / range) * (height - padding * 2);
+  const fillD = `${pathD} L ${width} ${height} L 0 ${height} Z`;
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className={className}
-      style={{ overflow: "visible" }}
-    >
-      {/* Fill area under the line */}
-      {fillColor && fillPoints && (
-        <polygon
-          points={fillPoints}
-          fill={fillColor}
-          opacity={0.15}
-        />
-      )}
-
-      {/* Main line */}
-      <polyline
-        points={points}
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {fill && <path d={fillD} fill={`url(#${id})`} />}
+      <path
+        d={pathD}
         fill="none"
         stroke={color}
         strokeWidth={strokeWidth}
-        strokeLinecap="round"
         strokeLinejoin="round"
+        strokeLinecap="round"
       />
-
-      {/* Endpoint dot */}
       <circle
-        cx={lastX}
-        cy={lastY}
-        r={3}
+        cx={points[points.length - 1][0]}
+        cy={points[points.length - 1][1]}
+        r={2.5}
         fill={color}
       />
-
-      {/* Glowing pulse on endpoint */}
-      <circle
-        cx={lastX}
-        cy={lastY}
-        r={6}
-        fill={color}
-        opacity={0.3}
-      >
-        <animate
-          attributeName="r"
-          values="4;8;4"
-          dur="2s"
-          repeatCount="indefinite"
-        />
-        <animate
-          attributeName="opacity"
-          values="0.3;0.1;0.3"
-          dur="2s"
-          repeatCount="indefinite"
-        />
-      </circle>
     </svg>
   );
 }

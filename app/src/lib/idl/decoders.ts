@@ -3,19 +3,23 @@
 
 import { PublicKey } from "@solana/web3.js";
 
+interface BNLike { toNumber(): number; toString(): string }
+
+function isBNLike(v: unknown): v is BNLike {
+  return typeof v === "object" && v !== null && typeof (v as Record<string, unknown>).toNumber === "function";
+}
+
 function toNum(v: unknown): number {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return v;
   if (typeof v === "bigint") return Number(v);
-  if (typeof (v as any).toNumber === "function") return (v as any).toNumber();
-  if (typeof (v as any).toString === "function") return Number((v as any).toString());
+  if (isBNLike(v)) return v.toNumber();
   return Number(v);
 }
 
 function toStr(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "string") return v;
-  if (typeof (v as any).toString === "function") return (v as any).toString();
   return String(v);
 }
 

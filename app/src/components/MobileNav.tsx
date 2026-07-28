@@ -3,28 +3,29 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, TrendingUp, Activity, PlusCircle, Wallet, User, Settings, Shield } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const { role } = useUserRole();
 
-  const navLinks = [
-    { href: "/markets", label: "Explorer" },
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/leaderboard", label: "Leaderboard" },
-    ...(role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
+  const tabs = [
+    { href: "/markets", icon: TrendingUp, label: "Markets" },
+    { href: "/activity", icon: Activity, label: "Activity" },
+    { href: "/create", icon: PlusCircle, label: "Create" },
+    { href: "/portfolio", icon: Wallet, label: "Portfolio" },
+    { href: "/profile", icon: User, label: "Profile" },
   ];
 
   return (
-    <div className="sm:hidden">
+    <div className="md:hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded bg-[#1c1c1c] border border-[#9e8e78]/30 hover:bg-[#242424] transition-colors cursor-pointer"
+        className="p-2 rounded bg-[#0A0B12] border border-white/10 hover:bg-[#11131C] transition-colors cursor-pointer"
         aria-label={isOpen ? "Close menu" : "Open menu"}
       >
-        {isOpen ? <X className="w-5 h-5 text-[#ffd89c]" /> : <Menu className="w-5 h-5 text-[#ffd89c]" />}
+        {isOpen ? <X className="w-5 h-5 text-[#F4F5FA]" /> : <Menu className="w-5 h-5 text-[#F4F5FA]" />}
       </button>
 
       <AnimatePresence>
@@ -34,23 +35,72 @@ export function MobileNav() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="absolute top-16 left-0 right-0 z-40 overflow-hidden border-b border-[#9e8e78]/30 bg-[#131313]/95"
+            className="absolute top-16 left-0 right-0 z-40 overflow-hidden border-b border-white/10 bg-[#0A0B12]/95 backdrop-blur-xl"
           >
             <nav className="flex flex-col px-4 py-4 space-y-1">
-              {navLinks.map((link) => (
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <Link
+                    key={tab.href}
+                    href={tab.href}
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    <Icon className="w-5 h-5" />
+                    {tab.label}
+                  </Link>
+                );
+              })}
+              {role === "admin" && (
                 <Link
-                  key={link.href}
-                  href={link.href}
+                  href="/admin"
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-3 text-sm font-medium text-[#d6c4ac] hover:text-[#e5e2e1] hover:bg-white/5 rounded transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#7B3FE4] hover:bg-[#7B3FE4]/10 rounded-lg transition-colors"
                 >
-                  {link.label}
+                  <Settings className="w-5 h-5" />
+                  Admin
                 </Link>
-              ))}
+              )}
             </nav>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export function MobileBottomNav() {
+  const { role } = useUserRole();
+  const tabs = [
+    { href: "/markets", icon: TrendingUp, label: "Markets" },
+    { href: "/activity", icon: Activity, label: "Activity" },
+    { href: "/create", icon: PlusCircle, label: "Create" },
+    { href: "/portfolio", icon: Wallet, label: "Portfolio" },
+    { href: "/profile", icon: User, label: "Profile" },
+  ];
+
+  const allTabs = role === "admin"
+    ? [...tabs, { href: "/admin", icon: Shield, label: "Admin" }]
+    : tabs;
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0B12]/90 backdrop-blur-xl border-t border-white/10">
+      <div className="flex items-center justify-around py-2">
+        {allTabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium text-[#A5A8B8] hover:text-[#00E5FF] transition-colors"
+            >
+              <Icon className="w-5 h-5" />
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

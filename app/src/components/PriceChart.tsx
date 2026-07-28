@@ -1,194 +1,101 @@
 "use client";
+
+import { useMemo } from "react";
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
+  ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis,
+  Tooltip, CartesianGrid,
 } from "recharts";
 import { usePythPriceHistory } from "@/hooks/usePythPriceHistory";
+import type { UiMarket } from "@/lib/market-adapter";
 
-interface Props {
-  feedIdHex?: string;
-  targetPrice?: number;
+interface PriceChartProps {
+  market: UiMarket;
+  yesPrice: number;
   height?: number;
 }
 
-function formatTime(ms: number) {
-  return new Date(ms).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
 }
 
-export default function PriceChart({ feedIdHex, targetPrice, height = 240 }: Props) {
-  const { history, currentPrice, error } = usePythPriceHistory(
-    feedIdHex ?? null
-  );
-  const loading = history.length === 0 && !error;
+export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) {
+  const { history: pythHistory, currentPrice } = usePythPriceHistory(market.oracleFeedId);
 
-  if (loading) {
-    return (
-      <div
-        style={{
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--color-text-secondary)",
-          fontFamily: "var(--font-mono)",
-          fontSize: "13px",
-        }}
-      >
-        Fetching live price...
-      </div>
-    );
-  }
+  const data = useMemo(() => {
+    if (!pythHistory || pythHistory.length === 0) return [];
+    return pythHistory.map((p) => ({
+      time: p.time,
+      price: p.price,
+      volume: 0,
+    }));
+  }, [pythHistory]);
 
-  if (error && history.length === 0) {
-    return (
-      <div
-        style={{
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--color-no)",
-          fontFamily: "var(--font-mono)",
-          fontSize: "13px",
-        }}
-      >
-        Price unavailable
-      </div>
-    );
-  }
-
-  if (history.length === 0) {
-    return (
-      <div
-        style={{
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--color-text-secondary)",
-          fontFamily: "var(--font-mono)",
-          fontSize: "13px",
-        }}
-      >
-        No price data
-      </div>
-    );
-  }
-
-  const min = Math.min(...history.map((p) => p.price)) * 0.998;
-  const max = Math.max(...history.map((p) => p.price)) * 1.002;
+  const chartData = data.length > 0 ? data : [];
 
   return (
-    <div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "28px",
-          fontWeight: 700,
-          color: "var(--color-primary)",
-          marginBottom: "8px",
-        }}
-      >
-        ${currentPrice?.toFixed(2) ?? "—"}
-        <span
-          style={{
-            fontSize: "13px",
-            color: "var(--color-text-secondary)",
-            marginLeft: "8px",
-          }}
-        >
-          SOL/USD live
-        </span>
+    <div className="holo-card p-5">
+      <div className="flex items-center justify-between mb-4 relative z-10">
+        <div>
+          <h3 className="font-display text-sm font-semibold">YES Price History</h3>
+          <p className="text-[10px] font-mono text-[#A5A8B8]">Pyth oracle feed · real-time</p>
+        </div>
+        <div className="flex items-center gap-4 text-[10px] font-mono">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#7B3FE4]"></span> Price
+          </span>
+        </div>
       </div>
 
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart
-          data={history}
-          margin={{ top: 4, right: 8, bottom: 0, left: 8 }}
-        >
+        <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
           <defs>
-            <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#ffd89c" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="#ffd89c" stopOpacity={0} />
+            <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7B3FE4" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="#7B3FE4" stopOpacity={0} />
             </linearGradient>
           </defs>
+          <CartesianGrid stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
             tickFormatter={formatTime}
-            tick={{
-              fill: "var(--color-text-secondary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-            }}
-            axisLine={false}
+            stroke="#A5A8B8"
+            tick={{ fontSize: 10, fontFamily: "monospace" }}
             tickLine={false}
-            interval="preserveStartEnd"
+            axisLine={false}
+            interval={10}
           />
           <YAxis
-            domain={[min, max]}
-            tickFormatter={(v: number) => `$${v.toFixed(0)}`}
-            tick={{
-              fill: "var(--color-text-secondary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-            }}
-            axisLine={false}
+            domain={["auto", "auto"]}
+            stroke="#A5A8B8"
+            tick={{ fontSize: 10, fontFamily: "monospace" }}
             tickLine={false}
-            width={60}
+            axisLine={false}
+            tickFormatter={(v) => `$${Number(v).toFixed(2)}`}
           />
           <Tooltip
             contentStyle={{
-              background: "var(--color-surface-variant)",
-              border: "1px solid var(--color-outline)",
-              borderRadius: "6px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "12px",
-              color: "var(--color-text-primary)",
+              background: "rgba(10,11,18,0.95)",
+              border: "1px solid rgba(123,63,228,0.4)",
+              borderRadius: "8px",
+              fontSize: "11px",
+              fontFamily: "monospace",
+              color: "#F4F5FA",
             }}
-            formatter={(v: any) => [`$${(Number(v) ?? 0).toFixed(4)}`, "SOL/USD"]}
-            labelFormatter={(label: any) => formatTime(Number(label) ?? 0)}
+            labelFormatter={(label) => formatTime(Number(label))}
+            formatter={(value: any) => [`$${Number(value).toFixed(3)}`, "Price"]}
           />
           <Area
             type="monotone"
             dataKey="price"
-            stroke="#ffd89c"
+            stroke="#7B3FE4"
             strokeWidth={2}
-            fill="url(#priceGrad)"
+            fill="url(#priceFill)"
             dot={false}
-            isAnimationActive={false}
+            activeDot={{ r: 4, fill: "#7B3FE4", stroke: "#fff", strokeWidth: 2 }}
           />
-        </AreaChart>
+        </ComposedChart>
       </ResponsiveContainer>
-
-      {targetPrice && (
-        <div
-          style={{
-            marginTop: "8px",
-            fontFamily: "var(--font-mono)",
-            fontSize: "12px",
-            color: "var(--color-text-secondary)",
-          }}
-        >
-          Target: <span style={{ color: "var(--color-yes)" }}>${targetPrice.toFixed(2)}</span>
-          {currentPrice && (
-            <span style={{ marginLeft: "12px" }}>
-              {currentPrice > targetPrice
-                ? <span style={{ color: "var(--color-yes)" }}>YES winning</span>
-                : <span style={{ color: "var(--color-no)" }}>NO winning</span>
-              }
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

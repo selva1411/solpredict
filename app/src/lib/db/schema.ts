@@ -92,6 +92,37 @@ export const watchlist = pgTable('watchlist', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (t) => ({ unq: unique().on(t.wallet, t.marketPubkey) }));
 
+export const marketProposals = pgTable('market_proposals', {
+  id: serial('id').primaryKey(),
+  proposalPubkey: varchar('proposal_pubkey', { length: 44 }).unique().notNull(),
+  proposer: varchar('proposer', { length: 44 }).notNull(),
+  question: text('question').notNull(),
+  description: text('description'),
+  category: varchar('category', { length: 20 }),
+  oracleFeedId: varchar('oracle_feed_id', { length: 66 }),
+  targetPrice: decimal('target_price', { precision: 20, scale: 8 }),
+  endTs: timestamp('end_ts'),
+  resolveTs: timestamp('resolve_ts'),
+  bondLamports: bigint('bond_lamports', { mode: 'number' }),
+  status: varchar('status', { length: 20 }).default('pending'),
+  approvedMarketPubkey: varchar('approved_market_pubkey', { length: 44 }),
+  rejectionReason: text('rejection_reason'),
+  createdAt: timestamp('created_at').defaultNow(),
+  resolvedAt: timestamp('resolved_at'),
+});
+
+export const priceAlerts = pgTable('price_alerts', {
+  id: serial('id').primaryKey(),
+  wallet: varchar('wallet', { length: 44 }).notNull(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).notNull(),
+  targetPrice: decimal('target_price', { precision: 20, scale: 8 }).notNull(),
+  comparison: varchar('comparison', { length: 10 }).default('above'),
+  triggered: boolean('triggered').default(false),
+  triggeredAt: timestamp('triggered_at'),
+  active: boolean('active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const leaderboardSnapshots = pgTable('leaderboard_snapshots', {
   id: serial('id').primaryKey(),
   wallet: varchar('wallet', { length: 44 }).notNull(),

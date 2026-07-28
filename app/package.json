@@ -7,13 +7,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "ws:start": "npx tsx server/ws-server.ts"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "ws:start": "npx tsx server/ws-server.ts",
+    "alerts:start": "npx tsx server/price-alert-checker.ts",
+    "dev:full": "concurrently -n next,ws,alerts -c cyan,green,yellow \"npm run dev\" \"npm run ws:start\" \"npm run alerts:start\""
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@coral-xyz/anchor": "^0.31.1",
     "@neondatabase/serverless": "^1.1.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
+    "@sentry/nextjs": "^10.68.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",
@@ -24,18 +31,25 @@
     "@types/three": "^0.185.1",
     "bn.js": "^5.2.5",
     "canvas-confetti": "^1.9.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "framer-motion": "^12.42.2",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
+    "next-themes": "^0.4.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.9.2",
+    "shadcn": "^4.14.1",
     "sonner": "^2.0.7",
+    "tailwind-merge": "^3.6.0",
     "three": "^0.185.1",
-    "ws": "^8.21.1"
+    "tw-animate-css": "^1.4.0",
+    "ws": "^8.21.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -46,10 +60,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

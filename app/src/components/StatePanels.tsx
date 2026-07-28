@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { HelpCircle, AlertTriangle, RefreshCw, Activity } from "lucide-react";
+import { HelpCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface LoadingStateProps {
@@ -13,7 +13,7 @@ interface LoadingStateProps {
 
 export function MarketCardSkeleton() {
   return (
-    <div className="glass-panel p-4 sm:p-5 flex flex-col justify-between h-76 border-[var(--glass-border)] animate-pulse">
+    <div className="holo-card p-4 sm:p-5 flex flex-col justify-between h-76 animate-pulse">
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1.5">
@@ -33,7 +33,7 @@ export function MarketCardSkeleton() {
         <div className="w-full h-3 bg-white/5 rounded skeleton-shimmer" />
         <div className="w-full h-3 bg-white/5 rounded skeleton-shimmer" />
       </div>
-      <div className="pt-3 border-t border-[var(--glass-border)] flex items-center justify-between">
+      <div className="pt-3 border-t border-white/5 flex items-center justify-between">
         <div className="w-20 h-3 bg-white/5 rounded skeleton-shimmer" />
         <div className="w-16 h-3 bg-white/5 rounded skeleton-shimmer" />
       </div>
@@ -49,17 +49,17 @@ export function LoadingState({ title, height = "h-76", count = 6 }: LoadingState
         <div className="h-10 bg-white/5 border border-white/10 rounded w-1/3" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className={`${height} board-panel skeleton-shimmer bg-[#131313]`} />
+            <div key={i} className={`${height} holo-card skeleton-shimmer`} />
           ))}
         </div>
-        <div className={`${height} board-panel skeleton-shimmer bg-[#131313]`} />
+        <div className={`${height} holo-card skeleton-shimmer`} />
       </div>
     );
   }
   return (
-    <div className={`grid sm:grid-cols-2 lg:grid-cols-3 gap-6`}>
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
       {[...Array(count)].map((_, i) => (
-        <div key={i} className={`board-panel skeleton-shimmer ${height} bg-board-panel`} />
+        <div key={i} className={`holo-card skeleton-shimmer ${height}`} />
       ))}
     </div>
   );
@@ -77,11 +77,11 @@ export function EmptyState({ icon: Icon = HelpCircle, title, description, action
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="board-panel py-16 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4"
+      className="holo-card py-16 text-center text-[#A5A8B8] flex flex-col items-center justify-center space-y-4"
     >
-      <Icon className="w-12 h-12 opacity-30 text-[#ffd89c]" />
+      <Icon className="w-12 h-12 opacity-30 text-[#00E5FF]" />
       <div className="space-y-1">
-        <h3 className="text-base font-bold font-display text-[#e5e2e1] uppercase">{title}</h3>
+        <h3 className="text-base font-bold text-[#F4F5FA] uppercase">{title}</h3>
         <p className="text-xs max-w-sm mx-auto">{description}</p>
       </div>
       {action && (
@@ -89,14 +89,14 @@ export function EmptyState({ icon: Icon = HelpCircle, title, description, action
           {action.href ? (
             <a
               href={action.href}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold btn-primary"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
             >
               {action.label}
             </a>
           ) : (
             <button
               onClick={action.onClick}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold btn-primary cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
             >
               {action.label}
             </button>
@@ -114,16 +114,16 @@ interface ErrorStateProps {
 
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
-    <div className="board-panel py-16 text-center text-[#d6c4ac] flex flex-col items-center justify-center space-y-4">
-      <AlertTriangle className="w-12 h-12 opacity-30 text-[#ffb4ab]" />
+    <div className="holo-card py-16 text-center text-[#A5A8B8] flex flex-col items-center justify-center space-y-4">
+      <AlertTriangle className="w-12 h-12 opacity-30 text-[#FF4D6D]" />
       <div className="space-y-1">
-        <h3 className="text-base font-bold font-display text-[#e5e2e1] uppercase">Data Feed Error</h3>
-        <p className="text-xs max-w-sm mx-auto">{message || "Failed to load data from the network. The board may be offline."}</p>
+        <h3 className="text-base font-bold text-[#F4F5FA] uppercase">Data Feed Error</h3>
+        <p className="text-xs max-w-sm mx-auto">{message || "Failed to load data from the network."}</p>
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold btn-primary cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Retry Connection
@@ -140,10 +140,10 @@ interface LiveIndicatorProps {
 
 export function LiveIndicator({ isLive = true, label }: LiveIndicatorProps) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider ${isLive ? "text-[#a1d494]" : "text-[#d6c4ac]"}`}>
-      <span className={`relative w-2 h-2 rounded-full ${isLive ? "bg-[#a1d494]" : "bg-[#9e8e78]"}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider ${isLive ? "text-[#C8FF00]" : "text-[#A5A8B8]"}`}>
+      <span className={`relative w-2 h-2 rounded-full ${isLive ? "bg-[#C8FF00]" : "bg-[#A5A8B8]"}`}>
         {isLive && (
-          <span className="absolute inset-0 rounded-full bg-[#a1d494] animate-ping opacity-50" />
+          <span className="absolute inset-0 rounded-full bg-[#C8FF00] animate-ping opacity-50" />
         )}
       </span>
       {label || (isLive ? "Live" : "Offline")}

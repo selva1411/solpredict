@@ -82,13 +82,20 @@ export interface AnchorMarketStatus {
 }
 
 export function getMarketStatusString(
-  status: AnchorMarketStatus | null | undefined,
+  status: AnchorMarketStatus | string | null | undefined,
   endTs?: number | anchor.BN | Date | null
 ): MarketStatus {
   if (!status) return "Open";
-  if (status.settled) return "Settled";
-  if (status.cancelled) return "Cancelled";
-  if (status.open) {
+
+  const statusStr = typeof status === "string" ? status.toLowerCase() : "";
+  const isSettled = statusStr === "settled" || Boolean((status as AnchorMarketStatus)?.settled);
+  const isCancelled = statusStr === "cancelled" || Boolean((status as AnchorMarketStatus)?.cancelled);
+  const isOpen = statusStr === "open" || statusStr === "ended" || Boolean((status as AnchorMarketStatus)?.open);
+
+  if (isSettled) return "Settled";
+  if (isCancelled) return "Cancelled";
+
+  if (isOpen) {
     if (endTs != null) {
       const now = Math.floor(Date.now() / 1000);
       let endSecs = 0;

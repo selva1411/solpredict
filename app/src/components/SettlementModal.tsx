@@ -71,10 +71,10 @@ export default function SettlementModal({ market, onClose, onSettled }: Props) {
       }
       onSettled();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       addToast({
         type: "error",
-        message: err.message ?? "Settlement failed",
+        message: err instanceof Error ? err.message : "Settlement failed",
       });
     } finally {
       setSettling(false);

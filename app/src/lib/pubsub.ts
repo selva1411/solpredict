@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { logger } from "@/lib/logger";
 
 const REDIS_URL = process.env.REDIS_URL;
 const USE_REDIS = Boolean(REDIS_URL);
@@ -51,7 +52,7 @@ async function getRedis(): Promise<{
 
     return { publisher: redisPublisher, subscriber: redisSubscriber };
   } catch (e) {
-    console.warn("Redis connection failed, falling back to in-memory pub/sub:", e);
+    logger.warn("Redis connection failed, falling back to in-memory pub/sub:", e);
     redisPublisher = null;
     redisSubscriber = null;
     return null;
@@ -67,7 +68,7 @@ export async function publish(channel: PubSubChannel, event: string, data: unkno
     try {
       await redis.publisher.publish(channel, JSON.stringify(message));
     } catch (e) {
-      console.warn("Redis publish failed:", e);
+      logger.warn("Redis publish failed:", e);
     }
   }
 }
