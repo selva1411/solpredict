@@ -13,7 +13,14 @@ function requiredEnv(name: string, fallback = ""): string {
 
 export const ENV = {
   get rpcUrl(): string {
-    return process.env.NEXT_PUBLIC_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "http://localhost:3000/api/rpc";
+    return process.env.NEXT_PUBLIC_RPC_URL
+      ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL
+      ?? "https://api.devnet.solana.com";
+  },
+
+  get wsEndpoint(): string {
+    return process.env.NEXT_PUBLIC_WS_ENDPOINT
+      ?? "ws://127.0.0.1:8900";
   },
 
   get heliusApiKey(): string {
@@ -32,7 +39,7 @@ export const ENV = {
 
   get programId(): PublicKey {
     const id = process.env.NEXT_PUBLIC_PROGRAM_ID
-      ?? "3fwu7iEUNxQEmEX1B1Dq4hzvqYNuDMECQEd2yzNdjAYx";
+      ?? "HVshSwptqBYKWM9MpZrA1bdP7zQ6RzJXVbr5PUR7wvtr";
     return new PublicKey(id);
   },
 

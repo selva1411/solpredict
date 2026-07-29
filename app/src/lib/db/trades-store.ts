@@ -1,58 +1,103 @@
 import { db } from './client';
-import { trades, users } from './schema';
-import { eq, sql } from 'drizzle-orm';
+import { trades, marketsCache, users } from './schema';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 
-export interface TradeEntry {
+export async function recordTradeInDb(data: {
   signature: string;
   marketPubkey: string;
   trader: string;
   side: "YES" | "NO";
   lamportsIn: number;
   tokensOut: number;
-  pricePerToken: number;
-  blockTime: Date;
-  slot: number;
+  pricePerToken?: number;
+  blockTime?: Date;
+  slot?: number;
+}) {
+  if (!db) return null;
+
+  try {
+    const price = data.pricePerToken ? data.pricePerToken.toString() : '0.50';
+    const [result] = await db.insert(trades).values({
+      signature: data.signature,
+      marketPubkey: data.marketPubkey,
+      trader: data.trader,
+      side: data.side,
+      lamportsIn: data.lamportsIn,
+      tokensOut: data.tokensOut,
+      pricePerToken: price,
+      blockTime: data.blockTime || new Date(),
+      slot: data.slot || 0,
+    }).onConflictDoNothing().returning();
+
+    // Update user stats in users table
+    const solVolume = (data.lamportsIn || 0) / 1e9;
+    await db.insert(users).values({
+      wallet: data.trader,
+      totalWagered: solVolume.toString(),
+      marketsTraded: 1,
+      lastActive: new Date(),
+    }).onConflictDoUpdate({
+      target: users.wallet,
+      set: {
+        totalWagered: sql`COALESCE(CAST(${users.totalWagered} AS NUMERIC), 0) + ${solVolume}`,
+        marketsTraded: sql`COALESCE(${users.marketsTraded}, 0) + 1`,
+        lastActive: new Date(),
+      }
+    });
+
+    return result;
+  } catch (err) {
+    logger.warn("recordTradeInDb failed:", err);
+    return null;
+  }
 }
 
-const memoryTrades: TradeEntry[] = [];
+export async function getRecentTradesFromDb(limit = 20) {
+  if (!db) return [];
 
-export async function insertTrade(trade: TradeEntry) {
-  memoryTrades.unshift(trade);
+  try {
+    const rows = await db.select({
+      id: trades.id,
+      signature: trades.signature,
+      marketPubkey: trades.marketPubkey,
+      trader: trades.trader,
+      side: trades.side,
+      lamportsIn: trades.lamportsIn,
+      tokensOut: trades.tokensOut,
+      pricePerToken: trades.pricePerToken,
+      blockTime: trades.blockTime,
+      question: marketsCache.question,
+    })
+    .from(trades)
+    .leftJoin(marketsCache, eq(trades.marketPubkey, marketsCache.marketPubkey))
+    .orderBy(desc(trades.blockTime))
+    .limit(limit);
 
-  if (db) {
-    try {
-      await db.insert(trades).values({
-        signature: trade.signature,
-        marketPubkey: trade.marketPubkey,
-        trader: trade.trader,
-        side: trade.side,
-        lamportsIn: trade.lamportsIn,
-        tokensOut: trade.tokensOut,
-        pricePerToken: trade.pricePerToken.toString(),
-        blockTime: trade.blockTime,
-        slot: trade.slot,
-      }).onConflictDoNothing();
+    return rows.map(r => ({
+      ...r,
+      question: r.question || `Market Trade (${r.marketPubkey.slice(0, 4)}...)`,
+    }));
+  } catch (err) {
+    logger.warn("getRecentTradesFromDb failed:", err);
+    return [];
+  }
+}
 
-      const solVolume = (trade.lamportsIn || 0) / 1e9;
-      await db.insert(users).values({
-        wallet: trade.trader,
-        username: `${trade.trader.slice(0, 4)}...${trade.trader.slice(-4)}`,
-        avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${trade.trader}`,
-        totalWagered: solVolume.toString(),
-        totalProfit: (solVolume * 0.25).toString(),
-        winRate: "72.50",
-        pasScore: 820,
-        marketsTraded: 1,
-      }).onConflictDoUpdate({
-        target: users.wallet,
-        set: {
-          totalWagered: sql`${users.totalWagered} + ${solVolume}`,
-          lastActive: new Date(),
-        }
-      });
-    } catch (err) {
-      logger.warn("DB insertTrade failed, using in-memory:", err);
-    }
+export async function getTradesByMarketFromDb(marketPubkey: string) {
+  if (!db) return [];
+  try {
+    return await db.select().from(trades).where(eq(trades.marketPubkey, marketPubkey)).orderBy(desc(trades.blockTime));
+  } catch {
+    return [];
+  }
+}
+
+export async function getTradesByWalletFromDb(wallet: string) {
+  if (!db) return [];
+  try {
+    return await db.select().from(trades).where(eq(trades.trader, wallet)).orderBy(desc(trades.blockTime));
+  } catch {
+    return [];
   }
 }

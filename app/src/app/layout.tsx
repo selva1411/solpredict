@@ -10,6 +10,7 @@ import { WebVitals } from "@/components/WebVitals";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { validateEnv } from "@/lib/env-validate";
+import ParticleBg from "@/components/ParticleBackgroundWrapper";
 
 if (typeof globalThis !== "undefined") {
   try { validateEnv(); } catch {}
@@ -53,6 +54,7 @@ export default function RootLayout({
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased pb-16 md:pb-0`}
         style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
       >
+        <ParticleBg />
         <WalletContextProvider>
           <ErrorBoundary>
             <Navigation />

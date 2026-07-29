@@ -9,8 +9,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   Crypto: "#ffd89c",
   Sports: "#a1d494",
   Politics: "#ffb4ab",
-  Tech: "#e5e2e1",
-  Other: "#9e8e78",
+  Tech: "#7B3FE4",
+  Other: "#A5A8B8",
 };
 
 interface Segment {
@@ -56,8 +56,8 @@ function CategoryRing({ segments }: RingProps) {
                 args={[radius, 0.14, 8, 32, Math.max(seg.endAngle - seg.startAngle, 0.05)]}
               />
               <meshStandardMaterial
-                color={CATEGORY_COLORS[seg.name] ?? "#9e8e78"}
-                emissive={CATEGORY_COLORS[seg.name] ?? "#9e8e78"}
+                color={CATEGORY_COLORS[seg.name] ?? "#A5A8B8"}
+                emissive={CATEGORY_COLORS[seg.name] ?? "#A5A8B8"}
                 emissiveIntensity={0.2}
                 metalness={0.7}
                 roughness={0.25}
@@ -100,7 +100,7 @@ export function CategoryRing3D({ segments, total }: CategoryRing3DProps) {
 
   return (
     <div className="space-y-4">
-      <div className="relative h-48 w-full rounded border border-[#9e8e78]/40 bg-[#0d0d0d] overflow-hidden">
+      <div className="relative h-48 w-full rounded border border-white/10 bg-[#0A0B12] overflow-hidden">
         <Suspense fallback={<div className="w-full h-full animate-pulse bg-white/5" />}>
           <Canvas camera={{ position: [0, 2.2, 3.2], fov: 42 }} gl={{ antialias: true }}>
             <ambientLight intensity={0.8} />
@@ -123,10 +123,10 @@ export function CategoryRing3D({ segments, total }: CategoryRing3DProps) {
           .map((item) => (
             <div key={item.name} className="space-y-1.5 font-mono">
               <div className="flex justify-between text-xs text-[#d6c4ac]">
-                <span className="text-[#e5e2e1] font-bold flex items-center gap-2">
+                <span className="text-[#F4F5FA] font-bold flex items-center gap-2">
                   <span
                     className="w-2.5 h-2.5 rounded"
-                    style={{ backgroundColor: CATEGORY_COLORS[item.name] ?? "#9e8e78" }}
+                    style={{ backgroundColor: CATEGORY_COLORS[item.name] ?? "#A5A8B8" }}
                   />
                   {item.name}
                 </span>
@@ -134,12 +134,12 @@ export function CategoryRing3D({ segments, total }: CategoryRing3DProps) {
                   {item.value.toFixed(2)} SOL ({item.percentage}%)
                 </span>
               </div>
-              <div className="h-2.5 bg-[#0d0d0d] border border-[#9e8e78]/40 rounded overflow-hidden">
+              <div className="h-2.5 bg-[#0A0B12] border border-white/10 rounded overflow-hidden">
                 <div
                   className="h-full transition-all duration-700 ease-out"
                   style={{
                     width: `${item.percentage}%`,
-                    backgroundColor: CATEGORY_COLORS[item.name] ?? "#9e8e78",
+                    backgroundColor: CATEGORY_COLORS[item.name] ?? "#A5A8B8",
                   }}
                 />
               </div>

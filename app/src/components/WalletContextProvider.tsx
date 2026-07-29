@@ -23,6 +23,7 @@ const queryClient = new QueryClient({
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const endpoint = useMemo(() => ENV.rpcUrl, []);
+  const wsEndpoint = useMemo(() => ENV.wsEndpoint, []);
 
   const wallets = useMemo(
     () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
@@ -30,7 +31,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={{ wsEndpoint }}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <QueryClientProvider client={queryClient}>

@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
+import { db } from "@/lib/db/client";
 import { getMarketComments, addMarketComment } from "@/lib/db/store";
-import { badRequest, ok } from "@/lib/api-response";
+import { badRequest, serverError, ok } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 import { commentPostSchema } from "@/lib/schemas";
 
 export const GET = apiHandler(async (req: NextRequest, context) => {
+  if (!db) return serverError("Database not configured");
   const params = await context?.params;
   const marketPubkey = params?.id ?? "";
   const comments = await getMarketComments(marketPubkey);
@@ -12,6 +14,7 @@ export const GET = apiHandler(async (req: NextRequest, context) => {
 });
 
 export const POST = apiHandler(async (req: NextRequest, context) => {
+  if (!db) return serverError("Database not configured");
   const params = await context?.params;
   const marketPubkey = params?.id ?? "";
   const body = await req.json();

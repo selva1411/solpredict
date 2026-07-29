@@ -28,7 +28,35 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
   });
 
   const fetchActivities = useCallback(async () => {
-    if (!connection) return;
+    const fetchFromDbApi = async () => {
+      try {
+        const res = await fetch('/api/activity/recent');
+        const data = await res.json();
+        if (data.ok && data.activities?.length > 0) {
+          const entries = data.activities.map((a: any) => ({
+            id: a.signature,
+            marketId: 0,
+            marketQuestion: a.question || (a.marketPubkey ? shortAddr(a.marketPubkey) : 'Market Trade'),
+            user: shortAddr(a.trader),
+            type: (a.side === 'YES' || a.side === 'NO') ? 'buy' : 'claim',
+            side: a.side?.toLowerCase() as 'yes' | 'no' | undefined,
+            timestamp: a.blockTime ? Math.floor(new Date(a.blockTime).getTime() / 1000) : Math.floor(Date.now() / 1000),
+          }));
+          setActivities(entries);
+        } else {
+          setActivities([]);
+        }
+      } catch {
+        setActivities([]);
+      }
+    };
+
+    if (!connection || !program?.programId) {
+      await fetchFromDbApi();
+      setLoading(false);
+      return;
+    }
+
     try {
       const entries: ActivityEntry[] = [];
       const sigs = await connection.getSignaturesForAddress(
@@ -80,28 +108,13 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
         } catch {
         }
       }
-      setActivities(entries);
-    } catch {
-      try {
-        const res = await fetch('/api/activity/recent');
-        const data = await res.json();
-        if (data.ok && data.activities?.length > 0) {
-          const entries = data.activities.map((a: any) => ({
-            id: a.signature,
-            marketId: 0,
-            marketQuestion: a.marketPubkey || '',
-            user: shortAddr(a.trader),
-            type: (a.side === 'YES' || a.side === 'NO') ? 'buy' : 'claim',
-            side: a.side?.toLowerCase() as 'yes' | 'no' | undefined,
-            timestamp: a.blockTime ? Math.floor(new Date(a.blockTime).getTime() / 1000) : Math.floor(Date.now() / 1000),
-          }));
-          setActivities(entries);
-        } else {
-          setActivities([]);
-        }
-      } catch {
-        setActivities([]);
+      if (entries.length > 0) {
+        setActivities(entries);
+      } else {
+        await fetchFromDbApi();
       }
+    } catch {
+      await fetchFromDbApi();
     } finally {
       setLoading(false);
     }

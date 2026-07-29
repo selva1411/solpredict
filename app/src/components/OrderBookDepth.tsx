@@ -145,9 +145,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
     : "—";
 
   return (
-    <div className="board-panel p-5 space-y-4 border-[#9e8e78]/40 bg-[#131313]">
+    <div className="holo-card p-5 space-y-4 border-white/10/40 bg-[#0A0B12]">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#9e8e78]/30 pb-3 gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10/30 pb-3 gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold uppercase tracking-wider font-display text-[#ffd89c]">
             CLOB Order Book
@@ -157,7 +157,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
           </span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1 bg-[#0d0d0d] p-0.5 rounded border border-[#9e8e78]/20 font-mono text-[10px]">
+          <div className="flex items-center space-x-1 bg-[#0A0B12] p-0.5 rounded border border-white/10/20 font-mono text-[10px]">
             {(["ALL", "YES", "NO"] as const).map(tab => (
               <button
                 key={tab}
@@ -165,7 +165,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                 className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
                   selectedSideFilter === tab
                     ? "bg-[#ffd89c] text-[#131313] font-bold"
-                    : "text-[#9e8e78] hover:text-[#e5e2e1]"
+                    : "text-[#A5A8B8] hover:text-[#F4F5FA]"
                 }`}
               >
                 {tab}
@@ -182,7 +182,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
       {/* Order Book Table */}
       <div className="space-y-1">
         {/* Column Headers */}
-        <div className="grid grid-cols-5 text-[9px] uppercase tracking-wider font-display text-[#d6c4ac] border-b border-[#9e8e78]/20 pb-1 font-semibold">
+        <div className="grid grid-cols-5 text-[9px] uppercase tracking-wider font-display text-[#d6c4ac] border-b border-white/10/20 pb-1 font-semibold">
           <div className="text-left">Side</div>
           <div className="text-center">Price</div>
           <div className="text-center">Qty</div>
@@ -202,9 +202,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                   <div className="text-left">
                     <span className="text-[#ef4444] font-bold text-[10px]">ASK {ask.side}</span>
                   </div>
-                  <div className="text-center text-[#e5e2e1] font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
+                  <div className="text-center text-[#F4F5FA] font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
                   <div className="text-center text-[#d6c4ac]">{remaining}</div>
-                  <div className="text-center text-[#9e8e78] text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
+                  <div className="text-center text-[#A5A8B8] text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
                       <button
@@ -214,7 +214,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                         ⚡ Fill
                       </button>
                     ) : (
-                      <span className="text-[9px] text-[#9e8e78]">{isUserOrder ? "Your Ask" : "Open"}</span>
+                      <span className="text-[9px] text-[#A5A8B8]">{isUserOrder ? "Your Ask" : "Open"}</span>
                     )}
                   </div>
                   <div
@@ -226,13 +226,13 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
             })}
           </div>
         ) : (
-          <div className="py-2 text-center text-[10px] font-mono text-[#d6c4ac]/50 border-b border-[#9e8e78]/10">
+          <div className="py-2 text-center text-[10px] font-mono text-[#d6c4ac]/50 border-b border-white/10/10">
             No active ask orders
           </div>
         )}
 
         {/* Spread divider */}
-        <div className="py-1.5 px-3 flex justify-between items-center text-[10px] font-mono text-[#ffd89c] font-bold border-y border-[#9e8e78]/20 bg-[#ffd89c]/5 rounded-sm">
+        <div className="py-1.5 px-3 flex justify-between items-center text-[10px] font-mono text-[#ffd89c] font-bold border-y border-white/10/20 bg-[#ffd89c]/5 rounded-sm">
           <span>BID: {bestBid} SOL</span>
           <span>SPREAD: {spreadSol} SOL</span>
           <span>ASK: {bestAsk} SOL</span>
@@ -250,9 +250,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                   <div className="text-left">
                     <span className="text-[#22c55e] font-bold text-[10px]">BID {bid.side}</span>
                   </div>
-                  <div className="text-center text-[#e5e2e1] font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
+                  <div className="text-center text-[#F4F5FA] font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
                   <div className="text-center text-[#d6c4ac]">{remaining}</div>
-                  <div className="text-center text-[#9e8e78] text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
+                  <div className="text-center text-[#A5A8B8] text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
                       <button
@@ -262,7 +262,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                         ⚡ Fill
                       </button>
                     ) : (
-                      <span className="text-[9px] text-[#9e8e78]">{isUserOrder ? "Your Bid" : "Open"}</span>
+                      <span className="text-[9px] text-[#A5A8B8]">{isUserOrder ? "Your Bid" : "Open"}</span>
                     )}
                   </div>
                   <div
@@ -280,20 +280,45 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
         )}
       </div>
 
-      {/* AMM Pool Summary Bar */}
-      <div className="pt-3 border-t border-[#9e8e78]/30 space-y-2">
-        <div className="flex justify-between text-[10px] font-mono text-[#d6c4ac]">
-          <span>YES Pool: <span className="text-[#22c55e] font-bold">{yesSol.toFixed(3)} SOL ({yesPct.toFixed(0)}%)</span></span>
-          <span>NO Pool: <span className="text-[#ef4444] font-bold">{noSol.toFixed(3)} SOL ({noPct.toFixed(0)}%)</span></span>
+      {/* AMM Pool Liquidity & Reserves Inspector */}
+      <div className="pt-3 border-t border-white/10/30 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#ffd89c]">
+            💧 CPMM Liquidity & AMM Reserves
+          </span>
+          <span className="text-[10px] font-mono text-[#00E5FF] font-bold">
+            Total Liquidity: {totalSol.toFixed(2)} SOL
+          </span>
         </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+          <div className="bg-white/5 p-2.5 rounded border border-[#22c55e]/30 space-y-1">
+            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">YES Pool Reserve</div>
+            <div className="text-[#22c55e] font-bold text-sm">{yesSol.toFixed(3)} SOL</div>
+            <div className="text-[9px] text-[#A5A8B8]">Weight: {yesPct.toFixed(1)}%</div>
+          </div>
+          <div className="bg-white/5 p-2.5 rounded border border-[#ef4444]/30 space-y-1">
+            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">NO Pool Reserve</div>
+            <div className="text-[#ef4444] font-bold text-sm">{noSol.toFixed(3)} SOL</div>
+            <div className="text-[9px] text-[#A5A8B8]">Weight: {noPct.toFixed(1)}%</div>
+          </div>
+        </div>
+
         <div className="w-full h-2.5 bg-[#ef4444]/20 rounded-full overflow-hidden flex border border-[#0d0d0d]">
           <div
             style={{ width: `${yesPct}%` }}
             className="h-full bg-[#22c55e] transition-all duration-700 ease-out"
           />
         </div>
-        <div className="text-center text-[9px] font-mono text-[#9e8e78]">
-          {bids.length + asks.length} active limit order{bids.length + asks.length !== 1 ? "s" : ""} on CLOB · Click ⚡ Fill to match order
+
+        <div className="bg-[#0A0B12] p-2.5 rounded border border-white/10 text-[9px] font-mono space-y-1 text-[#A5A8B8]">
+          <div className="flex justify-between text-[#F4F5FA] font-bold">
+            <span>CPMM Constant (k = x · y):</span>
+            <span className="text-[#00E5FF]">{(yesSol * noSol).toFixed(4)} SOL²</span>
+          </div>
+          <div>
+            Liquidity is provided by the Market Creator at deployment and grows dynamically as traders buy/sell outcome shares via constant-product AMM reserves.
+          </div>
         </div>
       </div>
     </div>

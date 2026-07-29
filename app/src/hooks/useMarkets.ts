@@ -57,42 +57,51 @@ export function useMarkets(pollIntervalMs = 10_000) {
       const res = await fetch('/api/markets/cached');
       const data = await res.json();
       if (data.ok && data.markets?.length > 0) {
-        const converted = data.markets.map((m: MarketCacheEntry) => ({
-          publicKey: new PublicKey(m.marketPubkey),
-          account: {
-            marketId: m.marketId,
-            authority: PublicKey.default,
-            question: m.question,
-            description: m.description || '',
-            category: CATEGORY_MAP[m.category] ?? 4,
-            oracleFeedId: [],
-            targetPrice: 0,
-            targetExpo: 0,
-            comparison: 0,
-            endTs: Math.floor(new Date(m.endTs).getTime() / 1000),
-            resolveTs: Math.floor(new Date(m.resolveTs).getTime() / 1000),
-            status: STATUS_MAP[m.status] ?? 0,
-            winningOutcome: m.winningOutcome === 'yes' ? 1 : m.winningOutcome === 'no' ? 2 : 0,
-            yesMint: PublicKey.default,
-            noMint: PublicKey.default,
-            yesPoolLamports: Math.round(m.yesPoolSol * 1e9),
-            noPoolLamports: Math.round(m.noPoolSol * 1e9),
-            yesSupply: m.yesSupply,
-            noSupply: m.noSupply,
-            totalPayoutPool: 0,
-            feeCollected: 0,
-            feeWithdrawn: false,
-            totalClaimed: 0,
-            settledPrice: 0,
-            settledExpo: 0,
-            settledAt: 0,
-            sharePriceLamports: 0,
-            bump: 0,
-            treasuryBump: 0,
-          },
-        }));
+        const converted = data.markets.map((m: MarketCacheEntry) => {
+          let pubkey = PublicKey.default;
+          try {
+            if (m.marketPubkey && m.marketPubkey.length >= 32) {
+              pubkey = new PublicKey(m.marketPubkey);
+            }
+          } catch {}
+          return {
+            publicKey: pubkey,
+            account: {
+              marketId: Number(m.marketId || 0),
+              authority: PublicKey.default,
+              question: m.question,
+              description: m.description || '',
+              category: CATEGORY_MAP[m.category] ?? 4,
+              oracleFeedId: [],
+              targetPrice: 0,
+              targetExpo: 0,
+              comparison: 0,
+              endTs: Math.floor(new Date(m.endTs).getTime() / 1000),
+              resolveTs: Math.floor(new Date(m.resolveTs).getTime() / 1000),
+              status: STATUS_MAP[m.status] ?? 0,
+              winningOutcome: m.winningOutcome === 'yes' ? 1 : m.winningOutcome === 'no' ? 2 : 0,
+              yesMint: PublicKey.default,
+              noMint: PublicKey.default,
+              yesPoolLamports: Math.round(Number(m.yesPoolSol || 0) * 1e9),
+              noPoolLamports: Math.round(Number(m.noPoolSol || 0) * 1e9),
+              yesSupply: Number(m.yesSupply || 0),
+              noSupply: Number(m.noSupply || 0),
+              totalPayoutPool: 0,
+              feeCollected: 0,
+              feeWithdrawn: false,
+              totalClaimed: 0,
+              settledPrice: 0,
+              settledExpo: 0,
+              settledAt: 0,
+              sharePriceLamports: 0,
+              bump: 0,
+              treasuryBump: 0,
+            },
+          };
+        });
         const sorted = converted.sort((a: any, b: any) => b.account.marketId - a.account.marketId);
         setMarkets(sorted as MarketAccount[]);
+        setError(null);
         return true;
       }
     } catch (e) {
@@ -102,7 +111,11 @@ export function useMarkets(pollIntervalMs = 10_000) {
   }, []);
 
   const fetchMarkets = useCallback(async () => {
-    if (!program) return;
+    if (!program) {
+      await fetchFromCache();
+      setLoading(false);
+      return;
+    }
     try {
       const all = await program.account.market.all();
       if (all.length > 0) {
@@ -151,11 +164,11 @@ export function useMarkets(pollIntervalMs = 10_000) {
         setMarkets(sorted as MarketAccount[]);
         setError(null);
       } else {
-        setError("No on-chain markets found, loading from cache");
+        setError("Loading markets from database");
         await fetchFromCache();
       }
     } catch {
-      setError("On-chain markets unavailable, loading from cache");
+      setError("On-chain markets unavailable, loading from database");
       await fetchFromCache();
     } finally {
       setLoading(false);

@@ -1,16 +1,17 @@
 import type { NextConfig } from "next";
 
-const cspHeader = `
-  default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval';
-  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  font-src 'self' https://fonts.gstatic.com;
-  img-src 'self' data: https: blob:;
-  connect-src 'self' https: wss: ws: http://127.0.0.1:8899 http://localhost:8899;
-  frame-ancestors 'none';
-  base-uri 'self';
-  form-action 'self';
-`.replace(/\s{2,}/g, " ").trim();
+const cspHeader = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https: http:",
+  "style-src-elem 'self' 'unsafe-inline' https: http:",
+  "font-src 'self' https: data:",
+  "img-src 'self' data: https: blob:",
+  "connect-src 'self' https: wss: ws: http://127.0.0.1:* http://localhost:*",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
 
 const nextConfig: NextConfig = {
   transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],

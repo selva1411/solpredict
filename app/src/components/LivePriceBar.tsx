@@ -45,7 +45,7 @@ export function LivePriceBar({
 
   if (!isOracleCat) {
     return (
-      <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-[#ffd89c]/10 border border-[#ffd89c]/30 text-[#ffd89c] inline-flex items-center gap-1">
+      <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-[#7B3FE4]/10 border border-[#7B3FE4]/30 text-[#7B3FE4] inline-flex items-center gap-1">
         ⚖️ Manually resolved
       </span>
     );
@@ -88,7 +88,7 @@ export function LivePriceBar({
     return (
       <span className="inline-flex items-center gap-1.5 text-[10px] font-mono">
         <span className="text-[#06b6d4] font-bold">{entry?.symbol ?? feedIdHex.slice(0, 8)}</span>
-        <span className="text-[#e5e2e1]">{formatPrice(livePrice)}</span>
+        <span className="text-[#F4F5FA]">{formatPrice(livePrice)}</span>
         <span className={yesWinning ? "text-[#a1d494]" : "text-[#ffb4ab]"}>
           {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct).toFixed(1)}%
         </span>
@@ -104,7 +104,7 @@ export function LivePriceBar({
         <div className="flex items-center gap-2">
           <span className="text-[#d6c4ac] text-[10px] uppercase tracking-wider font-display font-bold">Live Price</span>
           <span className="text-[#06b6d4] font-bold">{entry?.symbol ?? "Feed"}</span>
-          <span className="text-[#e5e2e1] text-sm font-bold">{formatPrice(livePrice)}</span>
+          <span className="text-[#F4F5FA] text-sm font-bold">{formatPrice(livePrice)}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-[#d6c4ac]">
@@ -115,7 +115,7 @@ export function LivePriceBar({
           </span>
         </div>
       </div>
-      <div className="w-full h-2 bg-[#0d0d0d] rounded overflow-hidden border border-[#9e8e78]/20 relative">
+      <div className="w-full h-2 bg-[#0A0B12] rounded overflow-hidden border border-white/10 relative">
         <div
           className="h-full rounded transition-[width] duration-500 ease-out"
           style={{

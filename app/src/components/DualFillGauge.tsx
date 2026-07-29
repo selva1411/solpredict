@@ -24,7 +24,7 @@ export default function DualFillGauge({
 
   return (
     <div className="flex flex-col items-center gap-3 select-none">
-      <div className="text-xs font-mono text-[#9e8e78] tracking-widest uppercase">
+      <div className="text-xs font-mono text-[#A5A8B8] tracking-widest uppercase">
         Market Probability
       </div>
 
@@ -58,9 +58,9 @@ export default function DualFillGauge({
               ref={yesRef}
               className="absolute bottom-0 left-0 right-0"
               style={{
-                height: '0%',
+                height: `${yesPct}%`,
                 background: 'linear-gradient(180deg, #a1d494 0%, #5a9e50 100%)',
-                transition: animated ? 'height 1.2s cubic-bezier(0.4,0,0.2,1)' : 'none',
+                transition: animated ? 'height 0.8s cubic-bezier(0.4,0,0.2,1)' : 'none',
                 boxShadow: '0 -2px 8px rgba(161,212,148,0.4)',
               }}
             >
@@ -87,7 +87,7 @@ export default function DualFillGauge({
 
         {/* Center divider with VS */}
         <div className="flex flex-col items-center gap-1 pb-10">
-          <div className="text-xs font-mono text-[#9e8e78] opacity-60">vs</div>
+          <div className="text-xs font-mono text-[#A5A8B8] opacity-60">vs</div>
           <div className="w-px h-20 bg-[#353534]" />
         </div>
 
@@ -120,9 +120,9 @@ export default function DualFillGauge({
               ref={noRef}
               className="absolute bottom-0 left-0 right-0"
               style={{
-                height: '0%',
+                height: `${noPct}%`,
                 background: 'linear-gradient(180deg, #ffb4ab 0%, #c94f42 100%)',
-                transition: animated ? 'height 1.2s cubic-bezier(0.4,0,0.2,1)' : 'none',
+                transition: animated ? 'height 0.8s cubic-bezier(0.4,0,0.2,1)' : 'none',
                 boxShadow: '0 -2px 8px rgba(255,180,171,0.4)',
               }}
             >

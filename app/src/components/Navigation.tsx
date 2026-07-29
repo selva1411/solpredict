@@ -8,7 +8,10 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { useProgram } from "@/hooks/useProgram";
 import { getWatchlist } from "@/lib/watchlist";
+import dynamic from "next/dynamic";
 import { TrendingUp, Trophy, Settings, Star, Activity, Wallet, Zap, Bell } from "lucide-react";
+
+const Logo3D = dynamic(() => import("@/components/Logo3D").then(m => ({ default: m.Logo3D })), { ssr: false });
 import { MobileNav } from "@/components/MobileNav";
 
 const NAV_ITEMS = [
@@ -109,8 +112,8 @@ export function Navigation() {
         <div className="max-w-7xl mx-auto bg-[#0A0B12]/70 backdrop-blur-[60px] border border-white/5 rounded-2xl px-5 h-14 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B3FE4] to-[#FF3D9A] flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg">
-                <Zap className="w-4 h-4 text-white" />
+              <div className="w-7 h-7 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Logo3D />
               </div>
               <span className="text-base font-bold text-[#F4F5FA] group-hover:text-[#00E5FF] transition-colors">
                 PREDICT-X

@@ -108,7 +108,15 @@ export function useRealtime(channel?: string, handler?: MessageHandler) {
       reconnectTimerRef.current = undefined;
     }
     reconnectAttemptRef.current = 0;
-    wsRef.current?.close();
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      } else {
+        wsRef.current.onopen = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onclose = null;
+      }
+    }
     wsRef.current = null;
     setState(s => ({ ...s, connected: false, reconnectAttempt: 0 }));
   }, [stopHeartbeat]);

@@ -22,7 +22,7 @@ export const CATEGORY_ICONS: Record<CategoryName, string> = {
 
 /**
  * The UI shape that PREDICT-X components (MarketCard, TradePanel, etc.)
- * expect. Keep this in sync with src/lib/markets.ts.
+ * expect.
  */
 export interface UiMarket {
   id: string;
@@ -101,10 +101,6 @@ export function onChainToUiMarket(
   const totalLamports = yesLamports + noLamports;
   const yesPrice = totalLamports > 0 ? yesLamports / totalLamports : 0.5;
 
-  const isOpen = m.account.status === 0;
-  const isHot = enrichment?.hot ?? (isOpen && (yesPrice > 0.6 || yesPrice < 0.4));
-  const isTrending = enrichment?.trending ?? (isOpen && totalLamports > 1e9);
-
   return {
     id: m.publicKey.toBase58(),
     question: m.account.question,
@@ -115,14 +111,14 @@ export function onChainToUiMarket(
     noPool: lamportsToSol(noLamports),
     yesPrice,
     noPrice: 1 - yesPrice,
-    volume24h: enrichment?.volume24h ?? Math.round(lamportsToSol(totalLamports) * 0.35 * 100) / 100,
+    volume24h: enrichment?.volume24h ?? 0,
     liquidity: lamportsToSol(totalLamports),
-    traders: enrichment?.traders ?? Math.max(1, Math.round(lamportsToSol(totalLamports) / 3)),
+    traders: enrichment?.traders ?? 0,
     icon: categoryIcon(m.account.category),
-    sparkline: enrichment?.sparkline ?? [yesPrice],
+    sparkline: enrichment?.sparkline ?? [],
     oracleFeedId: Array.isArray(m.account.oracleFeedId) ? "0x" + Buffer.from(m.account.oracleFeedId).toString("hex") : "",
-    trending: isTrending,
-    hot: isHot,
+    trending: enrichment?.trending ?? false,
+    hot: enrichment?.hot ?? false,
   };
 }
 

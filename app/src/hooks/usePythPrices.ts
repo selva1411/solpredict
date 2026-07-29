@@ -17,6 +17,7 @@ function hexToId(hex: string): string {
 }
 
 function isValidPythHex(id: string): boolean {
+  if (!id || /^0+$/.test(id)) return false;
   return /^[0-9a-f]{64}$/i.test(id);
 }
 
@@ -90,13 +91,11 @@ export function usePythPrices(feedIds: string[]): Record<string, PythPriceData> 
   }, [JSON.stringify(validHermesFeeds)]);
 
   const result: Record<string, PythPriceData> = {};
-  const now = Math.floor(Date.now() / 1000);
   for (const id of rawDeduped) {
     if (data[id]) {
       result[id] = data[id];
     } else {
-      // Mock fallback for test markets
-      result[id] = { price: 205.00, confidence: 0.15, publishTime: now, error: null };
+      result[id] = { price: null, confidence: null, publishTime: null, error: "Feed not loaded yet" };
     }
   }
   return result;

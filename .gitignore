@@ -4,6 +4,8 @@ target
 **/*.rs.bk
 node_modules
 test-ledger
+.test-ledger/
+.test-ledger
 .yarn
 repomix-output.xml
 scratch_lint.txt

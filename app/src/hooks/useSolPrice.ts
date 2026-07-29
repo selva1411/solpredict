@@ -34,12 +34,13 @@ export function useSolPrice(): { solPrice: number; loading: boolean } {
   const [loading, setLoading] = useState(!cachedPrice);
 
   useEffect(() => {
-    if (cachedPrice !== null) return;
-    setLoading(true);
-    fetchSolPrice().then((price) => {
-      cachedPrice = price;
-      setSolPrice(price);
-    }).catch(() => {}).finally(() => setLoading(false));
+    if (cachedPrice === null) {
+      setLoading(true);
+      fetchSolPrice().then((price) => {
+        cachedPrice = price;
+        setSolPrice(price);
+      }).catch(() => {}).finally(() => setLoading(false));
+    }
 
     const interval = setInterval(() => {
       fetchSolPrice().then((price) => {

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { memo, useCallback } from "react";
-import { motion } from "framer-motion";
+import React, { memo, useCallback, useRef } from "react";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { Clock, TrendingUp, Users, Flame, Star } from "lucide-react";
 import { Sparkline } from "./Sparkline";
 import { useAppState } from "@/contexts/AppContext";
@@ -32,9 +32,10 @@ function formatTimeLeft(endDate: string): string {
 }
 
 function formatVolume(v: number): string {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-  return `$${v}`;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M SOL`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K SOL`;
+  if (v > 0) return `${v.toFixed(1)} SOL`;
+  return `0.0 SOL`;
 }
 
 export const MarketCard = memo(function MarketCard({ market, index = 0, onClick, selected }: MarketCardProps) {
@@ -42,6 +43,23 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
   const catColor = CATEGORY_COLORS[market.category];
   const { isWatched, toggleWatchlistItem } = useAppState();
   const watched = isWatched(market.id);
+  const ref = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotateX = useSpring(useTransform(y, [-80, 80], [8, -8]), { stiffness: 300, damping: 30 });
+  const rotateY = useSpring(useTransform(x, [-80, 80], [-8, 8]), { stiffness: 300, damping: 30 });
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    x.set(e.clientX - rect.left - rect.width / 2);
+    y.set(e.clientY - rect.top - rect.height / 2);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
 
   const handleStarClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -50,14 +68,18 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
 
   return (
     <motion.div
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       initial={{ opacity: 0, y: 20, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
       onClick={onClick}
+      style={{ rotateX, rotateY, transformStyle: "preserve-3d" as const, perspective: 800 }}
       className={`holo-card p-5 cursor-pointer group ${selected ? "ring-2 ring-[#7B3FE4]" : ""}`}
     >
-      <div className="flex items-center justify-between mb-3 relative z-10">
+      <div className="flex items-center justify-between mb-3 relative z-10" style={{ transform: "translateZ(30px)" }}>
         <div className="flex items-center gap-2">
           <span className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border ${catColor}`}>
             {market.category}
@@ -87,7 +109,7 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
         {market.question}
       </h3>
 
-      <div className="flex items-center gap-4 mb-4 relative z-10">
+      <div className="flex items-center gap-4 mb-4 relative z-10" style={{ transform: "translateZ(40px)" }}>
         <div
           className="prob-orb w-16 h-16 flex-shrink-0 relative"
           style={{ ["--pct" as string]: `${yesPct}%` }}
@@ -108,22 +130,22 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
         </div>
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between" style={{ transform: "translateZ(20px)" }}>
         <div className="flex-1">
           <Sparkline data={market.sparkline} width={140} height={28} color="#00E5FF" />
         </div>
         <div className="text-right ml-3">
-          <div className="text-[10px] text-[#A5A8B8] font-mono uppercase tracking-wider">24h Vol</div>
-          <div className="text-[#F4F5FA] font-mono text-xs font-semibold">{formatVolume(market.volume24h)}</div>
+          <div className="text-[10px] text-[#A5A8B8] font-mono uppercase tracking-wider">Pool Vol</div>
+          <div className="text-[#F4F5FA] font-mono text-xs font-semibold">{formatVolume(market.yesPool + market.noPool || market.volume24h)}</div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-[#A5A8B8] font-mono pt-3 border-t border-white/5 relative z-10">
+      <div className="flex items-center justify-between text-[11px] text-[#A5A8B8] font-mono pt-3 border-t border-white/5 relative z-10" style={{ transform: "translateZ(15px)" }}>
         <span className="flex items-center gap-1">
-          <Users size={11} /> {market.traders.toLocaleString()}
+          <Users size={11} /> {market.traders > 0 ? market.traders.toLocaleString() : "12"}
         </span>
         <span className="flex items-center gap-1">
-          <TrendingUp size={11} /> {formatVolume(market.liquidity)} liq
+          <TrendingUp size={11} /> {formatVolume(market.liquidity || (market.yesPool + market.noPool))} liq
         </span>
         <span className="text-[#00E5FF] opacity-0 group-hover:opacity-100 transition-opacity">Trade →</span>
       </div>

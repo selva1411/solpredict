@@ -13,17 +13,17 @@ const corsHeaders = {
 
 const cspHeader = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.dicebear.com https://*.solana.com https://*.helius-rpc.com",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://api.dicebear.com https://*.arweave.net",
-  "font-src 'self' data:",
-  "connect-src 'self' ws: wss: https://*.solana.com https://*.helius-rpc.com https://api.dicebear.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
+  "style-src 'self' 'unsafe-inline' https: http:",
+  "style-src-elem 'self' 'unsafe-inline' https: http:",
+  "img-src 'self' data: blob: https: http:",
+  "font-src 'self' data: https: http:",
+  "connect-src 'self' https: wss: ws: http://127.0.0.1:* http://localhost:*",
   "frame-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
 ].join("; ");
 
 export function proxy(request: NextRequest) {

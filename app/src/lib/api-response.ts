@@ -17,6 +17,10 @@ export function unauthorized(message = "Unauthorized") {
   return NextResponse.json({ error: message }, { status: 401 });
 }
 
+export function forbidden(message = "Forbidden") {
+  return NextResponse.json({ error: message }, { status: 403 });
+}
+
 export function serverError(err: unknown) {
   const message = getErrorMessage(err);
   console.error("[API Error]", message);

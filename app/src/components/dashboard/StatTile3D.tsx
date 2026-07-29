@@ -35,7 +35,7 @@ export function StatTile3D({
   const accentColors = {
     amber: "from-[#ffd89c]/15 via-transparent to-transparent border-[#ffd89c]/35",
     green: "from-[#a1d494]/15 via-transparent to-transparent border-[#a1d494]/30",
-    neutral: "from-white/5 via-transparent to-transparent border-[#9e8e78]/40",
+    neutral: "from-white/5 via-transparent to-transparent border-white/10",
   };
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -68,7 +68,7 @@ export function StatTile3D({
         transformStyle: "preserve-3d",
         perspective: 900,
       }}
-      className={`board-panel p-5 flex flex-col justify-between h-32 bg-[#131313] board-panel-3d relative overflow-hidden group ${accentColors[accent]}`}
+      className={`holo-card p-5 flex flex-col justify-between h-32 bg-[#0A0B12] holo-card-3d relative overflow-hidden group ${accentColors[accent]}`}
     >
       <motion.div
         style={{ opacity: glowOpacity }}

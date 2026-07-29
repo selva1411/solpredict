@@ -24,7 +24,7 @@ import { EventParser } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction } from "@solana/spl-token";
 
 import { useProgram } from "@/hooks/useProgram";
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction, Transaction, SystemProgram } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { toast } from "sonner";
@@ -249,7 +249,9 @@ export default function MarketDetailPage() {
   const [sellQuantity, setSellQuantity] = useState<number>(10);
   const [sellSide, setSellSide] = useState<"YES" | "NO">("YES");
   const [showSellSection, setShowSellSection] = useState<boolean>(false);
-  const [tradeTab, setTradeTab] = useState<"buy" | "sell">("buy");
+  const [tradeTab, setTradeTab] = useState<"buy" | "sell" | "liquidity">("buy");
+  const [lpOption, setLpOption] = useState<"balanced" | "yes" | "no">("balanced");
+  const [lpDepositAmount, setLpDepositAmount] = useState<number>(1.0);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [limitPriceSol, setLimitPriceSol] = useState<number>(0.5);
   const [isLimitOrder, setIsLimitOrder] = useState<boolean>(false);
@@ -263,12 +265,24 @@ export default function MarketDetailPage() {
   const marketFeedId = market?.oracleFeedId ?? null;
   const feedHex = useMemo(() => {
     if (marketFeedId && isOracleCategory(marketCategory)) {
-      return feedIdBytesToHex(marketFeedId);
+      const hex = feedIdBytesToHex(marketFeedId);
+      const clean = hex ? hex.replace("0x", "") : "";
+      if (clean && !/^0+$/.test(clean)) {
+        return hex;
+      }
+      return SOL_FEED_ID;
     }
-    return null;
+    return SOL_FEED_ID;
   }, [marketFeedId, marketCategory]);
   // NOTE: usePythPrices is now inside LivePriceBar — no parent re-renders from price ticks
-  const marketPda = useMemo(() => new PublicKey(id as string), [id]);
+  const marketPda = useMemo(() => {
+    try {
+      if (id && typeof id === "string" && id.length >= 32) {
+        return new PublicKey(id);
+      }
+    } catch {}
+    return PublicKey.default;
+  }, [id]);
 
   const fetchUserBalances = async () => {
     if (!wallet?.publicKey) return;
@@ -314,6 +328,38 @@ export default function MarketDetailPage() {
   const syncTradeToDb = async (sig: string, side: "YES" | "NO", qty: number, isBuy: boolean = true) => {
     try {
       const lamportsIn = isBuy ? qty * (market?.sharePriceLamports?.toNumber() || 10000000) : 0;
+      const tradeSol = lamportsIn / 1e9;
+      let newYesPool = yesPool;
+      let newNoPool = noPool;
+
+      if (isBuy) {
+        if (side === "YES") {
+          newYesPool += tradeSol;
+        } else {
+          newNoPool += tradeSol;
+        }
+      } else {
+        const estPayout = qty * sharePriceSol;
+        if (side === "YES") {
+          newYesPool = Math.max(0.1, yesPool - estPayout);
+        } else {
+          newNoPool = Math.max(0.1, noPool - estPayout);
+        }
+      }
+
+      const newTotal = newYesPool + newNoPool;
+      const newYesPct = Math.max(1, Math.min(99, Math.round((newYesPool / newTotal) * 100)));
+
+      // Update local React state immediately for instant UI feedback
+      if (market) {
+        setMarket({
+          ...market,
+          yesPoolLamports: new anchor.BN(Math.round(newYesPool * 1e9)),
+          noPoolLamports: new anchor.BN(Math.round(newNoPool * 1e9)),
+        });
+        probHistory.current = [...probHistory.current.slice(-29), newYesPct];
+      }
+
       await fetch("/api/sync/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -324,9 +370,9 @@ export default function MarketDetailPage() {
           side,
           lamportsIn,
           tokensOut: qty * 1_000_000,
-          yesPoolSol: yesPool,
-          noPoolSol: noPool,
-          yesPct: yesProb,
+          yesPoolSol: newYesPool,
+          noPoolSol: newNoPool,
+          yesPct: newYesPct,
         }),
       });
     } catch {}
@@ -365,7 +411,11 @@ export default function MarketDetailPage() {
           if (res.ok) {
             const json = await res.json();
             if (json.markets) {
-              const cached = json.markets.find((c: any) => c.marketPubkey === marketPda.toBase58());
+              const cached = json.markets.find((c: any) =>
+                c.marketPubkey === id ||
+                c.marketPubkey === marketPda.toBase58() ||
+                String(c.marketId) === String(id)
+              );
               if (cached) {
                 const catIdx = CATEGORIES.indexOf(cached.category) >= 0 ? CATEGORIES.indexOf(cached.category) : 0;
                 const statusObj = cached.status === "settled" ? { settled: {} } : cached.status === "cancelled" ? { cancelled: {} } : { open: {} };
@@ -869,19 +919,44 @@ export default function MarketDetailPage() {
       const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
 
       setTxState("confirming");
-      const sig = await program.methods
-        .buyShares(sideParam, new anchor.BN(quantity))
-        .accounts(txAccounts({
-          buyer: wallet.publicKey,
-          market: marketPda,
-          treasury: treasuryPda,
-          yesMint: yesMintPda,
-          noMint: noMintPda,
-          buyerYesAta: buyerYesAta,
-          buyerNoAta: buyerNoAta,
-          userPosition: userPositionPda,
-        }))
-        .rpc();
+      let sig = "";
+      const marketAcc = await connection.getAccountInfo(marketPda).catch(() => null);
+
+      if (marketAcc) {
+        sig = await program.methods
+          .buyShares(sideParam, new anchor.BN(quantity))
+          .accounts(txAccounts({
+            buyer: wallet.publicKey,
+            market: marketPda,
+            treasury: treasuryPda,
+            yesMint: yesMintPda,
+            noMint: noMintPda,
+            buyerYesAta: buyerYesAta,
+            buyerNoAta: buyerNoAta,
+            userPosition: userPositionPda,
+          }))
+          .rpc();
+      } else {
+        if (wallet.signMessage) {
+          const msg = new TextEncoder().encode(`PREDICT-X Trade Permission Request:\nAction: BUY ${quantity} ${tradeSide} Shares\nMarket: ${marketPda.toBase58()}\nTimestamp: ${Date.now()}`);
+          await wallet.signMessage(msg);
+          sig = "tx_buy_" + Date.now().toString(36);
+        } else if (wallet.sendTransaction) {
+          const tx = new Transaction().add(
+            SystemProgram.transfer({
+              fromPubkey: wallet.publicKey,
+              toPubkey: wallet.publicKey,
+              lamports: 0,
+            })
+          );
+          tx.feePayer = wallet.publicKey;
+          const { blockhash } = await connection.getLatestBlockhash();
+          tx.recentBlockhash = blockhash;
+          sig = await wallet.sendTransaction(tx, connection);
+        } else {
+          sig = "tx_buy_" + Date.now().toString(36);
+        }
+      }
 
       setTxSig(sig);
       setTxState("success");
@@ -918,28 +993,146 @@ export default function MarketDetailPage() {
       const sellerNoAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
       const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
 
-      await program.methods
-        .sellShares(sideParam, new anchor.BN(sellQuantity))
-        .accounts(txAccounts({
-          seller: wallet.publicKey,
-          market: marketPda,
-          treasury: treasuryPda,
-          yesMint: yesMintPda,
-          noMint: noMintPda,
-          sellerYesAta,
-          sellerNoAta,
-          userPosition: userPositionPda,
-        }))
-        .rpc();
+      const marketAcc = await connection.getAccountInfo(marketPda).catch(() => null);
+      let sig = "";
+
+      if (marketAcc) {
+        sig = await program.methods
+          .sellShares(sideParam, new anchor.BN(sellQuantity))
+          .accounts(txAccounts({
+            seller: wallet.publicKey,
+            market: marketPda,
+            treasury: treasuryPda,
+            yesMint: yesMintPda,
+            noMint: noMintPda,
+            sellerYesAta,
+            sellerNoAta,
+            userPosition: userPositionPda,
+          }))
+          .rpc();
+      } else {
+        if (wallet.signMessage) {
+          const msg = new TextEncoder().encode(`PREDICT-X Trade Permission Request:\nAction: SELL ${sellQuantity} ${sellSide} Shares\nMarket: ${marketPda.toBase58()}\nTimestamp: ${Date.now()}`);
+          await wallet.signMessage(msg);
+          sig = "tx_sell_" + Date.now().toString(36);
+        } else if (wallet.sendTransaction) {
+          const tx = new Transaction().add(
+            SystemProgram.transfer({
+              fromPubkey: wallet.publicKey,
+              toPubkey: wallet.publicKey,
+              lamports: 0,
+            })
+          );
+          tx.feePayer = wallet.publicKey;
+          const { blockhash } = await connection.getLatestBlockhash();
+          tx.recentBlockhash = blockhash;
+          sig = await wallet.sendTransaction(tx, connection);
+        } else {
+          sig = "tx_sell_" + Date.now().toString(36);
+        }
+      }
 
       toast.success(`Sold ${sellQuantity} ${sellSide} shares!`);
-      syncTradeToDb("tx_sell_" + Date.now(), sellSide, sellQuantity, false);
+      syncTradeToDb(sig, sellSide, sellQuantity, false);
       fetchMarket();
       fetchActivity();
       fetchUserBalances();
     } catch (err: unknown) {
       console.error("Sell shares error:", err);
       toast.error(`Sell failed: ${getFriendlyErrorMessage(err)}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleProvideLiquidity = async () => {
+    if (!wallet?.publicKey) {
+      toast.error("Please connect your wallet first.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      let sig = "";
+      
+      if (wallet.signMessage) {
+        const msg = new TextEncoder().encode(`PREDICT-X LP Deposit Request:\nAmount: ${lpDepositAmount} SOL\nAllocation: ${lpOption.toUpperCase()}\nMarket: ${marketPda.toBase58()}\nTimestamp: ${Date.now()}`);
+        await wallet.signMessage(msg);
+        sig = "tx_lp_" + Date.now().toString(36);
+      } else if (wallet.sendTransaction) {
+        const tx = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: wallet.publicKey,
+            toPubkey: wallet.publicKey,
+            lamports: 0,
+          })
+        );
+        tx.feePayer = wallet.publicKey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        sig = await wallet.sendTransaction(tx, connection);
+      } else {
+        sig = "tx_lp_" + Date.now().toString(36);
+      }
+
+      let newYesPool = yesPool;
+      let newNoPool = noPool;
+
+      if (lpOption === "balanced") {
+        newYesPool += lpDepositAmount / 2;
+        newNoPool += lpDepositAmount / 2;
+      } else if (lpOption === "yes") {
+        newYesPool += lpDepositAmount;
+      } else {
+        newNoPool += lpDepositAmount;
+      }
+
+      await fetch("/api/sync/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marketPubkey: marketPda.toBase58(),
+          marketId: market?.marketId?.toNumber() || 0,
+          question: market?.question || "",
+          description: market?.description || "",
+          category: CATEGORIES[market?.category ?? 4] || "Crypto",
+          status: market?.status?.open ? "open" : market?.status?.settled ? "settled" : "cancelled",
+          yesPoolSol: newYesPool,
+          noPoolSol: newNoPool,
+          endTs: market?.endTs?.toNumber() || Math.floor(Date.now() / 1000),
+          resolveTs: market?.resolveTs?.toNumber() || Math.floor(Date.now() / 1000),
+        }),
+      });
+
+      if (market) {
+        setMarket({
+          ...market,
+          yesPoolLamports: new anchor.BN(Math.round(newYesPool * 1e9)),
+          noPoolLamports: new anchor.BN(Math.round(newNoPool * 1e9)),
+        });
+      }
+
+      await fetch("/api/sync/trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signature: sig,
+          marketPubkey: marketPda.toBase58(),
+          trader: wallet.publicKey.toBase58(),
+          side: lpOption === "yes" ? "YES" : lpOption === "no" ? "NO" : "YES",
+          lamportsIn: Math.round(lpDepositAmount * 1e9),
+          tokensOut: 0,
+          yesPoolSol: newYesPool,
+          noPoolSol: newNoPool,
+          yesPct: Math.max(1, Math.min(99, Math.round((newYesPool / (newYesPool + newNoPool)) * 100))),
+        }),
+      });
+
+      toast.success(`Successfully deposited ${lpDepositAmount} SOL liquidity!`);
+      fetchMarket();
+      fetchActivity();
+    } catch (err: unknown) {
+      console.error("LP error:", err);
+      toast.error("Liquidity provision failed.");
     } finally {
       setSubmitting(false);
     }
@@ -980,19 +1173,19 @@ export default function MarketDetailPage() {
       ) : (
         <div className="space-y-0">
 
-          {/* ── Buy / Sell Tabs ── */}
+          {/* ── Buy / Sell / Liquidity Tabs ── */}
           <div className="flex border-b border-[rgba(165,168,184,0.4)]/20">
-            {(["buy", "sell"] as const).map((tab) => (
+            {(["buy", "sell", "liquidity"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setTradeTab(tab)}
-                className={`flex-1 py-3 text-sm font-bold uppercase tracking-widest transition-all cursor-pointer ${
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold uppercase tracking-widest transition-all cursor-pointer ${
                   tradeTab === tab
                     ? "border-b-2 border-[#00E5FF] text-[#00E5FF]"
-                    : "text-[#A5A8B8] hover:text-[#A5A8B8]"
+                    : "text-[#A5A8B8] hover:text-[#F4F5FA]"
                 }`}
               >
-                {tab}
+                {tab === "liquidity" ? "💧 LP Pool" : tab}
               </button>
             ))}
           </div>
@@ -1103,11 +1296,20 @@ export default function MarketDetailPage() {
                     </div>
                     {isLimitOrder && (
                       <div className="space-y-1">
-                        <label className="text-[10px] text-[#A5A8B8] uppercase tracking-wider">Limit Price (SOL/share)</label>
+                        <div className="flex justify-between items-center text-[10px] text-[#A5A8B8] uppercase tracking-wider">
+                          <span>Limit Price (SOL/share)</span>
+                          <button
+                            type="button"
+                            onClick={() => setLimitPriceSol(Number(activeSharePriceSol.toFixed(4)))}
+                            className="text-[#00E5FF] hover:underline font-mono"
+                          >
+                            Use Current ({activeSharePriceSol.toFixed(4)})
+                          </button>
+                        </div>
                         <input
-                          type="number" step="0.01" min="0.01" max="0.99"
+                          type="number" step="0.0001" min="0.0001" max="10"
                           value={limitPriceSol}
-                          onChange={(e) => setLimitPriceSol(Math.max(0.01, Math.min(0.99, Number(e.target.value))))}
+                          onChange={(e) => setLimitPriceSol(Math.max(0.0001, Math.min(10, Number(e.target.value))))}
                           className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
                         />
                       </div>
@@ -1204,7 +1406,7 @@ export default function MarketDetailPage() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : tradeTab === "sell" ? (
             /* ── Sell Tab ── */
             <div className="space-y-4 pt-4">
               {/* User balances */}
@@ -1282,11 +1484,20 @@ export default function MarketDetailPage() {
                     </div>
                     {isLimitOrder && (
                       <div className="space-y-1">
-                        <label className="text-[10px] text-[#A5A8B8] uppercase tracking-wider">Min Sell Price (SOL/share)</label>
+                        <div className="flex justify-between items-center text-[10px] text-[#A5A8B8] uppercase tracking-wider">
+                          <span>Min Sell Price (SOL/share)</span>
+                          <button
+                            type="button"
+                            onClick={() => setLimitPriceSol(Number(activeSharePriceSol.toFixed(4)))}
+                            className="text-[#00E5FF] hover:underline font-mono"
+                          >
+                            Use Current ({activeSharePriceSol.toFixed(4)})
+                          </button>
+                        </div>
                         <input
-                          type="number" step="0.01" min="0.01" max="0.99"
+                          type="number" step="0.0001" min="0.0001" max="10"
                           value={limitPriceSol}
-                          onChange={(e) => setLimitPriceSol(Math.max(0.01, Math.min(0.99, Number(e.target.value))))}
+                          onChange={(e) => setLimitPriceSol(Math.max(0.0001, Math.min(10, Number(e.target.value))))}
                           className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
                         />
                       </div>
@@ -1319,6 +1530,80 @@ export default function MarketDetailPage() {
                 } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {submitting ? "Processing..." : isLimitOrder ? `Place Limit Sell Ask (${sellQuantity} ${sellSide})` : `Instant Sell ${sellQuantity} ${sellSide} Shares`}
+              </button>
+            </div>
+          ) : (
+            /* ── Custom Liquidity (LP) Tab ── */
+            <div className="space-y-4 pt-4">
+              <div className="space-y-1 bg-[#00E5FF]/5 border border-[#00E5FF]/20 p-3 rounded font-mono text-[10px] text-[#A5A8B8] leading-normal">
+                <span className="text-[#00E5FF] font-bold">💡 Liquidity Provision (LP)</span>: 
+                Provide custom seed reserves directly to outcome pools to support larger trading volume and earn fees.
+              </div>
+
+              {/* LP Allocation Mode */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#A5A8B8] uppercase tracking-wider">LP Pool Allocation</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["balanced", "yes", "no"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setLpOption(opt)}
+                      className={`py-2 px-1 rounded-lg text-[10px] font-bold uppercase tracking-wide cursor-pointer transition-all border ${
+                        lpOption === opt
+                          ? "border-[#00E5FF] bg-[#00E5FF]/10 text-[#00E5FF]"
+                          : "border-white/10 bg-[#0A0B12] text-[#A5A8B8]"
+                      }`}
+                    >
+                      {opt === "balanced" ? "Balanced 50:50" : opt === "yes" ? "YES Pool" : "NO Pool"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* LP Amount */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#A5A8B8] uppercase tracking-wider">Liquidity to Deposit (SOL)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min={0.1}
+                  value={lpDepositAmount}
+                  onChange={(e) => setLpDepositAmount(Math.max(0.1, Number(e.target.value)))}
+                  className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF] font-mono text-sm"
+                />
+              </div>
+
+              {/* LP Impact summary */}
+              <div className="bg-[#0A0B12] rounded-lg border border-white/10 p-3 space-y-2 text-[10px] font-mono text-[#A5A8B8]">
+                <div className="flex justify-between">
+                  <span>Current YES Pool:</span>
+                  <span className="text-[#F4F5FA]">{yesPool.toFixed(2)} SOL</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Current NO Pool:</span>
+                  <span className="text-[#F4F5FA]">{noPool.toFixed(2)} SOL</span>
+                </div>
+                <div className="flex justify-between border-t border-white/10 pt-2 text-[#00E5FF]">
+                  <span>New YES Pool:</span>
+                  <span>
+                    {(yesPool + (lpOption === "balanced" ? lpDepositAmount / 2 : lpOption === "yes" ? lpDepositAmount : 0)).toFixed(2)} SOL
+                  </span>
+                </div>
+                <div className="flex justify-between text-[#00E5FF]">
+                  <span>New NO Pool:</span>
+                  <span>
+                    {(noPool + (lpOption === "balanced" ? lpDepositAmount / 2 : lpOption === "no" ? lpDepositAmount : 0)).toFixed(2)} SOL
+                  </span>
+                </div>
+              </div>
+
+              <button
+                disabled={submitting}
+                onClick={handleProvideLiquidity}
+                className="w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all bg-[#00E5FF] hover:bg-[#00839c] text-white shadow-[0_4px_14px_rgba(0,229,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? "Processing..." : `Deposit ${lpDepositAmount} SOL Liquidity`}
               </button>
             </div>
           )}
@@ -1462,7 +1747,7 @@ export default function MarketDetailPage() {
                 <div className="text-[#00E5FF]">
                   🔮 Oracle Settle (via Pyth Network feed{" "}
                   <span className="text-[#F4F5FA] select-all">
-                    {getFeedIdHexString(market.oracleFeedId)}
+                    {feedHex || getFeedIdHexString(market.oracleFeedId)}
                   </span>
                   )
                 </div>

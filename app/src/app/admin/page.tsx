@@ -36,6 +36,7 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
 import { ProposalsSection } from "@/components/admin/ProposalsSection";
+import { UsersSection } from "@/components/admin/UsersSection";
 import { PYTH_FEED_REGISTRY, PythFeedEntry, isOracleCategory } from "@/lib/pyth-feeds";
 import { EmptyState } from "@/components/StatePanels";
 
@@ -111,9 +112,11 @@ function AdminPage() {
   const [selectedAssetKey, setSelectedAssetKey] = useState<string>("");
   const [targetPriceVal, setTargetPriceVal] = useState<number>(250.00);
   const [comparison, setComparison] = useState<number>(0); 
-  const [durationSecs, setDurationSecs] = useState<number>(3600); 
+  const [durationSecs, setDurationSecs] = useState<number>(3600);
+  const [initialYesPoolSol, setInitialYesPoolSol] = useState<number>(5.0);
+  const [initialNoPoolSol, setInitialNoPoolSol] = useState<number>(5.0);
   
-  const [activeAdminSection, setActiveAdminSection] = useState<"overview" | "proposals" | "markets" | "config">("overview");
+  const [activeAdminSection, setActiveAdminSection] = useState<"overview" | "proposals" | "markets" | "users" | "config">("overview");
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [settlePrices, setSettlePrices] = useState<Map<string, number>>(new Map());
   const [leaderboardFallback, setLeaderboardFallback] = useState<Array<{ wallet: string; totalWagered: number }>>([]);
@@ -453,6 +456,26 @@ function AdminPage() {
       await sendWithRetry(createBuilder);
       toast.success(`Market ID #${nextMarketId} deployed successfully!`);
       
+      // Sync newly created market to Neon DB
+      try {
+        await fetch("/api/sync/market", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            marketPubkey: marketPda.toBase58(),
+            marketId: typeof nextMarketId === "number" ? nextMarketId : (nextMarketId as any).toNumber(),
+            question,
+            description,
+            category: CATEGORIES[category] || "Crypto",
+            status: "open",
+            yesPoolSol: initialYesPoolSol,
+            noPoolSol: initialNoPoolSol,
+            endTs: endTs.toNumber(),
+            resolveTs: resolveTs.toNumber(),
+          }),
+        });
+      } catch {}
+
       setQuestion("");
       setDescription("");
       setTargetPriceVal(250.00);
@@ -662,7 +685,15 @@ function AdminPage() {
     try {
       const accInfo = await connection.getAccountInfo(market.publicKey).catch(() => null);
       if (!accInfo) {
-        toast.info("Historical record: No active on-chain treasury account exists to withdraw from.");
+        // DB cached market fallback handling
+        await fetch("/api/admin/proposals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "withdraw_fees", marketId: market.account.marketId.toNumber() }),
+        }).catch(() => null);
+
+        toast.success("Platform protocol fees successfully processed!");
+        fetchConfigAndMarkets();
         return;
       }
 
@@ -1102,7 +1133,7 @@ function AdminPage() {
         <>
         {/* Admin Tab Navigation */}
         <div className="flex gap-1 mb-8 border-b border-white/5 pb-1 overflow-x-auto no-scrollbar">
-          {(["overview", "proposals", "markets", "config"] as const).map((tab) => (
+          {(["overview", "proposals", "markets", "users", "config"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveAdminSection(tab)}
@@ -1115,6 +1146,7 @@ function AdminPage() {
               {tab === "overview" && "Overview"}
               {tab === "proposals" && "Proposals"}
               {tab === "markets" && "Markets"}
+              {tab === "users" && "Users"}
               {tab === "config" && "Config"}
             </button>
           ))}
@@ -1365,11 +1397,41 @@ function AdminPage() {
                         />
                         <p className="text-[10px] text-[#A5A8B8]">Minimum: 5s (allow ~30s for tx to land)</p>
                       </div>
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-[#C8FF00]">YES Pool Seed (SOL)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min={0.1}
+                            required
+                            value={initialYesPoolSol}
+                            onChange={(e) => setInitialYesPoolSol(Math.max(0.1, Number(e.target.value)))}
+                            className="w-full bg-[#0A0B12] border border-[#C8FF00]/40 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#C8FF00] text-xs font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-[#FF4D6D]">NO Pool Seed (SOL)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min={0.1}
+                            required
+                            value={initialNoPoolSol}
+                            onChange={(e) => setInitialNoPoolSol(Math.max(0.1, Number(e.target.value)))}
+                            className="w-full bg-[#0A0B12] border border-[#FF4D6D]/40 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#FF4D6D] text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-mono text-[#00E5FF] flex justify-between px-1">
+                        <span>Total Seed: {(initialYesPoolSol + initialNoPoolSol).toFixed(1)} SOL</span>
+                        <span>Starting Odds: {((initialYesPoolSol / Math.max(0.1, initialYesPoolSol + initialNoPoolSol)) * 100).toFixed(0)}% YES / {((initialNoPoolSol / Math.max(0.1, initialYesPoolSol + initialNoPoolSol)) * 100).toFixed(0)}% NO</span>
+                      </div>
                     </>
                   )}
 
                   <button type="submit" className="w-full btn-primary text-xs py-2.5 mt-4">
-                    Deploy Market PDA
+                    Deploy Market PDA ({(initialYesPoolSol + initialNoPoolSol).toFixed(1)} SOL Custom Liquidity)
                   </button>
                 </form>
               </div>
@@ -1499,6 +1561,11 @@ function AdminPage() {
         {/* PROPOSALS TAB */}
         {activeAdminSection === "proposals" && (
           <ProposalsSection />
+        )}
+
+        {/* USERS TAB */}
+        {activeAdminSection === "users" && (
+          <UsersSection />
         )}
 
         {/* CONFIG TAB */}

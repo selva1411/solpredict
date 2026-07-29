@@ -1,24 +1,29 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   Activity, Award, BarChart3, Brain, Flame, Layers,
   Sparkles, TrendingUp, Trophy, Users,
   Zap, ArrowRight, ChevronRight, Clock, type LucideIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarketCard } from "@/components/MarketCard";
+import { MarketCardSkeleton } from "@/components/MarketCardSkeleton";
+import { CountUp } from "@/components/CountUp";
 import type { UiMarket } from "@/lib/market-adapter";
 import { useMarkets } from "@/hooks/useMarkets";
 import { onChainMarketsToUi } from "@/lib/market-adapter";
 
+const ThreeOrb = dynamic(() => import("@/components/ThreeOrb").then(m => ({ default: m.ThreeOrb })), { ssr: false });
+
 export default function Home() {
   const router = useRouter();
-  const { markets: onChainMarkets } = useMarkets();
+  const { markets: onChainMarkets, loading } = useMarkets();
   const [livePrices, setLivePrices] = useState<Record<string, { yes: number; no: number }>>({});
 
   const MARKETS: UiMarket[] = useMemo(
@@ -48,26 +53,24 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* ============ Ticker ============ */}
       <Ticker markets={liveMarkets} />
-
-      {/* ============ MAIN CONTENT ============ */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <HomeView markets={liveMarkets} onOpenMarket={openMarket} />
+          <HomeView
+            markets={liveMarkets}
+            onOpenMarket={openMarket}
+            loading={loading && MARKETS.length === 0}
+          />
         </motion.div>
       </main>
     </div>
   );
 }
 
-// ============================================================
-// TICKER
-// ============================================================
 function Ticker({ markets }: { markets: UiMarket[] }) {
   const top = markets.slice(0, 8);
   const doubled = [...top, ...top];
@@ -102,32 +105,80 @@ function Ticker({ markets }: { markets: UiMarket[] }) {
   );
 }
 
-// ============================================================
-// HOME VIEW
-// ============================================================
 function HomeView({
-  markets, onOpenMarket,
+  markets, onOpenMarket, loading,
 }: {
   markets: UiMarket[];
   onOpenMarket: (m: UiMarket) => void;
+  loading: boolean;
 }) {
-  const totalVolume = markets.reduce((s, m) => s + m.volume24h, 0);
-  const totalLiquidity = markets.reduce((s, m) => s + m.liquidity, 0);
-  const totalTraders = markets.reduce((s, m) => s + m.traders, 0);
-  const hotMarkets = markets.filter((m) => m.hot).slice(0, 3);
-  const trending = markets.filter((m) => m.trending).slice(0, 4);
+  const [platformStats, setPlatformStats] = useState<{
+    totalVolume: number; totalLiquidity: number; totalTraders: number; openMarkets: number;
+  }>({ totalVolume: 0, totalLiquidity: 0, totalTraders: 0, openMarkets: 0 });
+
+  useEffect(() => {
+    fetch('/api/markets/stats')
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.stats) {
+          setPlatformStats({
+            totalVolume: Number(data.stats.totalVolume || 0),
+            totalLiquidity: Number(data.stats.totalLiquidity || 0),
+            totalTraders: data.stats.totalTraders || 0,
+            openMarkets: data.stats.openMarkets || 0,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Use DB stats as primary, fall back to computed from market data
+  const computedLiquidity = markets.reduce((s, m) => s + (m.yesPool + m.noPool), 0);
+  const totalVolume = platformStats.totalVolume > 0 ? platformStats.totalVolume : computedLiquidity;
+  const totalLiquidity = platformStats.totalLiquidity > 0 ? platformStats.totalLiquidity : computedLiquidity;
+  const totalTraders = platformStats.totalTraders > 0 ? platformStats.totalTraders : 0;
+  const hotMarkets = markets.slice(0, 3);
+  const trending = markets.slice(0, 4);
+
+  const { scrollYProgress } = useScroll();
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.12], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.12], [1, 0.95]);
+
+  if (loading) {
+    return (
+      <div className="space-y-12">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="holo-card p-4 sm:p-5">
+              <div className="h-3 w-20 rounded shimmer mb-3" />
+              <div className="h-8 w-24 rounded shimmer" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <MarketCardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12">
-      {/* ===== HERO ===== */}
-      <section className="relative pt-6 sm:pt-12 pb-4">
+      <motion.section className="relative pt-6 sm:pt-12 pb-4 min-h-[600px]" style={{ opacity: heroOpacity, scale: heroScale }}>
+        <div className="absolute inset-x-0 top-0 h-[500px] pointer-events-none overflow-hidden">
+          <div className="w-full h-full opacity-60">
+            <ThreeOrb yesProbability={50} />
+          </div>
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center max-w-4xl mx-auto"
+          className="relative z-10 text-center max-w-4xl mx-auto"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-6 backdrop-blur-sm">
             <span className="w-2 h-2 rounded-full bg-[#C8FF00] animate-pulse" />
             <span className="text-xs font-mono text-[#A5A8B8]">
               Live on Solana · <span className="text-[#C8FF00]">Pyth oracle</span> · AMM + CLOB hybrid
@@ -160,26 +211,33 @@ function HomeView({
             </Link>
           </div>
         </motion.div>
-      </section>
+      </motion.section>
 
-      {/* ===== STATS BAND ===== */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="24h Volume" value={`$${(totalVolume / 1_000_000).toFixed(2)}M`} icon={Activity} delay={0} />
-        <StatCard label="Total Liquidity" value={`$${(totalLiquidity / 1_000_000).toFixed(2)}M`} icon={Layers} delay={0.1} />
-        <StatCard label="Active Traders" value={totalTraders.toLocaleString()} icon={Users} delay={0.2} />
-        <StatCard label="Open Markets" value={String(markets.length)} icon={BarChart3} delay={0.3} />
+        <StatCard label="24h Volume" value={totalVolume} icon={Activity} delay={0} suffix=" SOL" />
+        <StatCard label="Total Liquidity" value={totalLiquidity} icon={Layers} delay={0.1} suffix=" SOL" />
+        <StatCard label="Active Traders" value={totalTraders} icon={Users} delay={0.2} />
+        <StatCard label="Open Markets" value={platformStats.openMarkets > 0 ? platformStats.openMarkets : markets.length} icon={BarChart3} delay={0.3} />
       </section>
 
-      {/* ===== FEATURED MARKET ===== */}
       {hotMarkets[0] && (
-        <section>
+        <motion.section
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <SectionHeader title="Featured Spotlight" subtitle="The hottest market right now" icon={Flame} />
           <FeaturedMarket market={hotMarkets[0]} onOpen={onOpenMarket} />
-        </section>
+        </motion.section>
       )}
 
-      {/* ===== TRENDING MARKETS ===== */}
-      <section>
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.5 }}
+      >
         <SectionHeader
           title="Trending Now"
           subtitle="Markets with the most action in the last hour"
@@ -191,10 +249,14 @@ function HomeView({
             <MarketCard key={`${m.id}-trending`} market={m} index={i} onClick={() => onOpenMarket(m)} />
           ))}
         </div>
-      </section>
+      </motion.section>
 
-      {/* ===== WHY PREDICT-X ===== */}
-      <section>
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.5 }}
+      >
         <SectionHeader title="Why PREDICT-X" subtitle="Built different. Built better." icon={Sparkles} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FeatureCard
@@ -216,20 +278,29 @@ function HomeView({
             color="#FF3D9A"
           />
         </div>
-      </section>
+      </motion.section>
 
-      {/* ===== HOT MARKETS GRID ===== */}
-      <section>
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.5 }}
+      >
         <SectionHeader title="Hot Markets" subtitle="Don't miss out" icon={Flame} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {hotMarkets.concat(markets.slice(3, 6)).slice(0, 6).map((m, i) => (
             <MarketCard key={`${m.id}-hot-${i}`} market={m} index={i} onClick={() => onOpenMarket(m)} />
           ))}
         </div>
-      </section>
+      </motion.section>
 
-      {/* ===== CTA ===== */}
-      <section className="relative overflow-hidden holo-card p-8 sm:p-12 text-center">
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.5 }}
+        className="relative overflow-hidden holo-card p-8 sm:p-12 text-center"
+      >
         <div className="absolute inset-0 bg-gradient-to-br from-[#7B3FE4]/10 via-transparent to-[#00E5FF]/10 pointer-events-none" />
         <div className="relative z-10">
           <h2 className="font-display text-3xl sm:text-4xl font-bold mb-3">
@@ -246,12 +317,16 @@ function HomeView({
             </Button>
           </Link>
         </div>
-      </section>
+      </motion.section>
     </div>
   );
 }
 
-function StatCard({ label, value, icon: Icon, delay }: { label: string; value: string; icon: LucideIcon; delay: number }) {
+function StatCard({ label, value, icon: Icon, delay, prefix, suffix: customSuffix }: { label: string; value: number; icon: LucideIcon; delay: number; prefix?: string; suffix?: string }) {
+  const formatted = prefix === "$"
+    ? value / 1_000_000
+    : value;
+  const suffix = customSuffix ?? (prefix === "$" ? "M" : "");
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -263,7 +338,9 @@ function StatCard({ label, value, icon: Icon, delay }: { label: string; value: s
         <span className="text-[10px] sm:text-xs font-mono uppercase tracking-wider text-[#A5A8B8]">{label}</span>
         <Icon size={14} className="text-[#00E5FF]" />
       </div>
-      <div className="font-display text-2xl sm:text-3xl font-bold text-gradient">{value}</div>
+      <div className="font-display text-2xl sm:text-3xl font-bold text-gradient">
+        <CountUp value={formatted} decimals={formatted % 1 === 0 ? 0 : 2} duration={2} prefix={prefix ?? ""} suffix={suffix} />
+      </div>
     </motion.div>
   );
 }
@@ -312,7 +389,22 @@ function FeaturedMarket({ market, onOpen }: { market: UiMarket; onOpen: (m: UiMa
       transition={{ duration: 0.5 }}
       className="holo-card p-6 sm:p-8 cursor-pointer relative overflow-hidden"
       onClick={() => onOpen(market)}
+      style={{
+        background: "linear-gradient(135deg, rgba(123,63,228,0.1), rgba(0,229,255,0.05), rgba(255,61,154,0.1))",
+      }}
     >
+      <div
+        className="absolute inset-0 rounded-3xl pointer-events-none"
+        style={{
+          background: "linear-gradient(135deg, #7B3FE4, #00E5FF, #FF3D9A, #7B3FE4)",
+          backgroundSize: "300% 300%",
+          animation: "gradient-shift 8s ease infinite",
+          padding: 1,
+          WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+          WebkitMaskComposite: "xor",
+          maskComposite: "exclude",
+        }}
+      />
       <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-gradient-to-br from-[#7B3FE4]/30 to-[#FF3D9A]/20 blur-3xl pointer-events-none" />
 
       <div className="relative z-10 grid lg:grid-cols-2 gap-6 items-center">
@@ -350,7 +442,6 @@ function FeaturedMarket({ market, onOpen }: { market: UiMarket; onOpen: (m: UiMa
           </Button>
         </div>
 
-        {/* Right: orb + prices */}
         <div className="flex flex-col items-center gap-4">
           <div
             className="prob-orb w-44 h-44 relative"
@@ -376,5 +467,3 @@ function FeaturedMarket({ market, onOpen }: { market: UiMarket; onOpen: (m: UiMa
     </motion.div>
   );
 }
-
-

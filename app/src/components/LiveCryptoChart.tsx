@@ -88,11 +88,11 @@ export function LiveCryptoChart({
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ffd89c] opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ffd89c]" />
         </span>
-        <span className="text-xs font-mono text-[#9e8e78]">
+        <span className="text-xs font-mono text-[#A5A8B8]">
           LIVE{feedHex ? ` · ${symbol || 'SOL/USD'}` : ''} · updates every 3s
         </span>
         <span className="ml-auto flex items-baseline gap-2">
-          <span className="text-sm font-mono text-[#e5e2e1] font-bold">
+          <span className="text-sm font-mono text-[#F4F5FA] font-bold">
             ${lastPrice.toFixed(4)}
           </span>
           <span className={`text-[11px] font-mono font-semibold ${lineColor}`}>
@@ -114,16 +114,16 @@ export function LiveCryptoChart({
             <XAxis
               dataKey="time"
               tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              stroke="#9e8e78"
-              tick={{ fill: '#9e8e78', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+              stroke="#A5A8B8"
+              tick={{ fill: "#A5A8B8", fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
             />
             <YAxis
               domain={['auto', 'auto']}
-              stroke="#9e8e78"
-              tick={{ fill: '#9e8e78', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+              stroke="#A5A8B8"
+              tick={{ fill: "#A5A8B8", fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `$${v.toFixed(1)}`}
@@ -132,11 +132,11 @@ export function LiveCryptoChart({
             <Tooltip
               contentStyle={{
                 background: '#1a1a1a',
-                border: '1px solid #9e8e78',
+                border: "1px solid #A5A8B8",
                 borderRadius: 4,
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: 12,
-                color: '#e5e2e1',
+                color: '#F4F5FA',
               }}
               labelFormatter={(t: unknown) => new Date(Number(t)).toLocaleTimeString()}
               formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, symbol || 'SOL/USD']}

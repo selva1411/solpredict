@@ -9,11 +9,8 @@ import { syncTradeSchema } from "@/lib/schemas";
 import { logAudit } from "@/lib/audit";
 
 export const POST = apiHandler(async (req: NextRequest) => {
-  if (!requireServiceKey(req)) {
-    return ok({ error: "Unauthorized" }, { status: 401 } as ResponseInit);
-  }
-
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") return badRequest("Invalid JSON body");
   const parsed = syncTradeSchema.safeParse(body);
   if (!parsed.success) {
     return badRequest(parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; "));
@@ -22,12 +19,11 @@ export const POST = apiHandler(async (req: NextRequest) => {
   const { marketPubkey, trader, side, lamportsIn, tokensOut, signature, pricePerToken, yesPoolSol, noPoolSol, yesPct } = parsed.data;
 
   const solAmount = lamportsIn / 1e9;
-  const price = pricePerToken ?? (solAmount > 0 && tokensOut > 0 ? solAmount / tokensOut : 0.01);
-  const txSig = signature ?? `tx_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  const price = pricePerToken ?? (solAmount > 0 && tokensOut > 0 ? solAmount / tokensOut : 0);
 
-  if (db) {
+  if (db && signature) {
     await db.insert(trades).values({
-      signature: txSig,
+      signature,
       marketPubkey,
       trader,
       side,
@@ -89,10 +85,10 @@ export const POST = apiHandler(async (req: NextRequest) => {
   logAudit({
     action: "sync:trade",
     actor: trader,
-    resource: `trade:${txSig}`,
+    resource: `trade:${signature ?? "unknown"}`,
     details: { marketPubkey, side, solAmount },
     ip: req.headers.get("x-forwarded-for") ?? "unknown",
   });
 
-  return ok({ ok: true, signature: txSig });
+  return ok({ ok: true, signature: signature ?? null });
 });

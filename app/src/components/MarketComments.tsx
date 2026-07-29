@@ -73,12 +73,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
 
   return (
     <div className="glass-panel p-6 space-y-6">
-      <div className="flex items-center justify-between border-b border-[#9e8e78]/20 pb-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#e5e2e1] flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#F4F5FA] flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-[#ffd89c]" />
           <span>Community Discussion ({comments.length})</span>
         </h3>
-        <span className="text-[10px] font-mono text-[#9e8e78]">Decentralized Discussion Layer</span>
+        <span className="text-[10px] font-mono text-[#A5A8B8]">Decentralized Discussion Layer</span>
       </div>
 
       {/* Post comment input */}
@@ -90,7 +90,7 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
             value={newCommentText}
             disabled={!wallet?.publicKey || submitting}
             onChange={(e) => setNewCommentText(e.target.value)}
-            className="flex-1 bg-[#0d0d0d] border border-[#9e8e78]/30 rounded-lg px-4 py-2.5 text-xs text-[#e5e2e1] placeholder-[#9e8e78]/50 focus:outline-none focus:border-[#ffd89c]/60 font-mono disabled:opacity-50"
+            className="flex-1 bg-[#0A0B12] border border-white/10 rounded-lg px-4 py-2.5 text-xs text-[#F4F5FA] placeholder-[#A5A8B8]/50 focus:outline-none focus:border-[#7B3FE4]/60 font-mono disabled:opacity-50"
           />
           <button
             type="submit"
@@ -106,12 +106,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
       {/* Comments List */}
       <div className="space-y-3 font-mono text-xs max-h-80 overflow-y-auto pr-1">
         {comments.length === 0 ? (
-          <p className="text-center text-[11px] text-[#9e8e78] py-4">No comments yet. Be the first trader to post analysis!</p>
+          <p className="text-center text-[11px] text-[#A5A8B8] py-4">No comments yet. Be the first trader to post analysis!</p>
         ) : (
           comments.map((comment, index) => {
             const timeAgo = comment.createdAt ? new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'just now';
             return (
-              <div key={index} className="p-3 rounded-lg bg-[#0d0d0d] border border-[#9e8e78]/15 space-y-1.5">
+              <div key={index} className="p-3 rounded-lg bg-[#0A0B12] border border-white/10 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <img
@@ -122,14 +122,14 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
                     <span className="font-bold text-[#ffd89c] text-[11px]">
                       {comment.authorUsername || `${comment.authorWallet.slice(0, 4)}...`}
                     </span>
-                    <span className="text-[9px] text-[#9e8e78]">{timeAgo}</span>
+                    <span className="text-[9px] text-[#A5A8B8]">{timeAgo}</span>
                   </div>
-                  <button className="flex items-center gap-1 text-[10px] text-[#9e8e78] hover:text-[#22c55e] transition-colors cursor-pointer">
+                  <button className="flex items-center gap-1 text-[10px] text-[#A5A8B8] hover:text-[#22c55e] transition-colors cursor-pointer">
                     <ThumbsUp className="w-3 h-3" />
                     <span>{comment.upvotes || 0}</span>
                   </button>
                 </div>
-                <p className="text-[#e5e2e1] text-[11px] font-sans leading-relaxed">{comment.content}</p>
+                <p className="text-[#F4F5FA] text-[11px] font-sans leading-relaxed">{comment.content}</p>
               </div>
             );
           })

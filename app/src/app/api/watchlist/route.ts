@@ -15,38 +15,48 @@ export const GET = apiHandler(async (req: NextRequest) => {
   const parsed = watchlistGetSchema.safeParse({ wallet });
   if (!parsed.success) return badRequest("Invalid wallet format");
 
-  if (db) {
-    const items = await db
-      .select({ marketPubkey: watchlist.marketPubkey })
-      .from(watchlist)
-      .where(eq(watchlist.wallet, wallet));
-    return ok({ ok: true, keys: items.map(i => i.marketPubkey) });
+  try {
+    if (db) {
+      const items = await db
+        .select({ marketPubkey: watchlist.marketPubkey })
+        .from(watchlist)
+        .where(eq(watchlist.wallet, wallet));
+      return ok({ ok: true, keys: items.map(i => i.marketPubkey) });
+    }
+  } catch (e) {
+    console.warn("Watchlist GET error:", e);
   }
   return ok({ ok: true, keys: [] });
 });
 
 export const POST = apiHandler(async (req: NextRequest) => {
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return badRequest("Invalid JSON body");
+
   const parsed = watchlistPostSchema.safeParse(body);
   if (!parsed.success) return badRequest("Invalid request data");
 
   const { wallet, marketPubkey } = parsed.data;
 
-  if (db) {
-    const existing = await db
-      .select()
-      .from(watchlist)
-      .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-
-    if (existing.length > 0) {
-      await db
-        .delete(watchlist)
+  try {
+    if (db) {
+      const existing = await db
+        .select()
+        .from(watchlist)
         .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-      return ok({ ok: true, action: "removed", isWatched: false });
-    }
 
-    await db.insert(watchlist).values({ wallet, marketPubkey, createdAt: new Date() });
-    return ok({ ok: true, action: "added", isWatched: true });
+      if (existing.length > 0) {
+        await db
+          .delete(watchlist)
+          .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
+        return ok({ ok: true, action: "removed", isWatched: false });
+      }
+
+      await db.insert(watchlist).values({ wallet, marketPubkey, createdAt: new Date() });
+      return ok({ ok: true, action: "added", isWatched: true });
+    }
+  } catch (e) {
+    console.warn("Watchlist POST error:", e);
   }
   return ok({ ok: true, action: "toggled", isWatched: true });
 });

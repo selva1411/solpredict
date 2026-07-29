@@ -10,6 +10,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
   if (!requireServiceKey(req)) {
     return ok({ error: "Unauthorized" }, { status: 401 } as ResponseInit);
   }
+  if (!db) return serverError("Database not configured");
   await recordLeaderboardSnapshot();
   return ok({ ok: true, message: "Leaderboard snapshot generated & saved to NeonDB" });
 });

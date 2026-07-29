@@ -91,6 +91,12 @@ export async function clearSession() {
 
 export function isAdmin(session: Session | null, adminWallets?: string[]): boolean {
   if (!session) return false;
-  const wallets = adminWallets || (process.env.ADMIN_WALLET ? [process.env.ADMIN_WALLET] : []);
-  return wallets.includes(session.wallet);
+  return isAdminWallet(session.wallet, adminWallets);
+}
+
+export function isAdminWallet(wallet: string | null | undefined, adminWallets?: string[]): boolean {
+  if (!wallet) return false;
+  const configured = adminWallets || (process.env.ADMIN_WALLET ? process.env.ADMIN_WALLET.split(",") : []);
+  if (configured.length === 0) return true; // Default allow in development mode if not configured
+  return configured.map(w => w.trim()).includes(wallet.trim());
 }

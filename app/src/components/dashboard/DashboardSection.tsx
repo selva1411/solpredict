@@ -31,7 +31,7 @@ export function DashboardSection({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.45, delay }}
-      className={`space-y-4 ${isAlert ? "board-panel p-6 border-[#ffd89c]/40 bg-[#131313]" : ""}`}
+      className={`space-y-4 ${isAlert ? "holo-card p-6 border-[#ffd89c]/40 bg-[#0A0B12]" : ""}`}
     >
       <div className="flex items-center space-x-2">
         <motion.div
@@ -69,11 +69,11 @@ export function DashboardHero({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="border-b border-[#9e8e78]/30 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 relative"
+      className="border-b border-white/10 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 relative"
     >
       <div className="absolute -top-4 -left-4 w-24 h-24 bg-[#ffd89c]/5 rounded-full blur-3xl pointer-events-none" />
       <div className="space-y-1 relative">
-        <h1 className="text-3xl font-bold font-display text-[#e5e2e1] uppercase tracking-wide">{title}</h1>
+        <h1 className="text-3xl font-bold font-display text-[#F4F5FA] uppercase tracking-wide">{title}</h1>
         <p className="text-[#d6c4ac] text-sm">{subtitle}</p>
       </div>
       {badge && (
@@ -81,7 +81,7 @@ export function DashboardHero({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15 }}
-          className="flex items-center space-x-2 bg-[#0d0d0d] border border-[#9e8e78]/30 px-3 py-1.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+          className="flex items-center space-x-2 bg-[#0A0B12] border border-white/10 px-3 py-1.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
         >
           {badgeLabel && (
             <span className="text-xs font-mono text-[#d6c4ac] font-bold">{badgeLabel}</span>

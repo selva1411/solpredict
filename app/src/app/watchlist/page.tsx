@@ -1,6 +1,7 @@
 "use client";
 import { useMarkets } from "@/hooks/useMarkets";
-import { getWatchlist } from "@/lib/watchlist";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { fetchWatchlistFromDb, getWatchlist } from "@/lib/watchlist";
 import { formatSol, calcYesPct, calcNoPct, timeUntil, categoryName, outcomeLabel } from "@/lib/format";
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -8,14 +9,20 @@ import { Star } from "lucide-react";
 
 export default function WatchlistPage() {
   const { markets, loading } = useMarkets();
+  const { publicKey } = useWallet();
   const [watchlistKeys, setWatchlistKeys] = useState<string[]>([]);
 
   useEffect(() => {
-    setWatchlistKeys(getWatchlist());
-  }, []);
+    if (publicKey) {
+      fetchWatchlistFromDb(publicKey.toBase58()).then(keys => setWatchlistKeys(keys));
+    } else {
+      setWatchlistKeys(getWatchlist());
+    }
+  }, [publicKey]);
 
   const watchedMarkets = markets.filter((m) =>
-    watchlistKeys.includes(m.publicKey.toBase58())
+    watchlistKeys.includes(m.publicKey.toBase58()) ||
+    watchlistKeys.includes(String(m.account.marketId))
   );
 
   return (
@@ -44,7 +51,7 @@ export default function WatchlistPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {watchedMarkets.map((m) => (
-            <Link key={m.publicKey.toBase58()} href={`/market/${m.account.marketId}`} className="block group">
+            <Link key={m.publicKey.toBase58()} href={`/market/${m.publicKey.toBase58()}`} className="block group">
               <div className="holo-card p-5 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/5 text-[#A5A8B8]">

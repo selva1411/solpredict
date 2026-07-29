@@ -5,9 +5,9 @@ import { eq } from "drizzle-orm";
 import { ok, notFound } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 
-export const GET = apiHandler(async (req: NextRequest, context: any) => {
-  const params = await Promise.resolve(context?.params);
-  const wallet = params?.wallet as string | undefined;
+export const GET = apiHandler(async (req: NextRequest, context: { params?: Promise<Record<string, string>> } = {}) => {
+  const params = await context.params;
+  const wallet = params?.wallet;
   if (!wallet || wallet.length < 32) {
     return notFound("Invalid wallet");
   }

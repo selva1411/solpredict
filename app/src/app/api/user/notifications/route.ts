@@ -10,12 +10,17 @@ export const GET = apiHandler(async (req: NextRequest) => {
   if (!wallet) return badRequest("Wallet required");
   if (!db) return ok({ ok: true, notifications: [] });
 
-  const rows = await db
-    .select()
-    .from(notifications)
-    .where(eq(notifications.wallet, wallet))
-    .orderBy(desc(notifications.createdAt))
-    .limit(50);
+  try {
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.wallet, wallet))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50);
 
-  return ok({ ok: true, notifications: rows });
+    return ok({ ok: true, notifications: rows });
+  } catch (e) {
+    console.warn("Could not query notifications from DB:", e);
+    return ok({ ok: true, notifications: [] });
+  }
 });

@@ -65,15 +65,21 @@ function LeaderboardPage() {
   const fetchLeaderboard = async () => {
     try {
       setLoading(true);
-      const [allPositions, allMarkets, apiRes] = await Promise.all([
-        program.account.userPosition.all().catch(() => []),
-        program.account.market.all().catch(() => []),
-        fetch('/api/leaderboard').then(r => r.json()).catch(() => ({ ok: false, leaderboard: [] })),
-      ]);
-      setPositions(allPositions);
-      setMarkets(allMarkets);
+      // DB is the primary source of truth
+      const apiRes = await fetch('/api/leaderboard').then(r => r.json()).catch(() => ({ ok: false, leaderboard: [] }));
       if (apiRes.ok && apiRes.leaderboard?.length > 0) {
         setLeaderboardFallback(apiRes.leaderboard);
+      }
+      // Try on-chain as enrichment only (may fail if validator is off)
+      try {
+        const [allPositions, allMarkets] = await Promise.all([
+          program.account.userPosition.all(),
+          program.account.market.all(),
+        ]);
+        setPositions(allPositions);
+        setMarkets(allMarkets);
+      } catch {
+        // On-chain unavailable — DB data will be used
       }
     } catch (err: unknown) {
       console.error("Error fetching leaderboard:", err);
@@ -115,8 +121,8 @@ function LeaderboardPage() {
     if (onChainTraders.length === 0 && leaderboardFallback.length > 0) {
       const dbTraders: TraderStats[] = leaderboardFallback.map((dbUser: any) => ({
         owner: dbUser.wallet, totalVolumeSol: dbUser.totalWagered || 0,
-        positionsCount: dbUser.marketsTraded || 1, settledCount: Math.round((dbUser.marketsTraded || 1) * 0.8),
-        winsCount: Math.round((dbUser.marketsTraded || 1) * ((dbUser.winRate || 50) / 100)), claimedCount: 0,
+        positionsCount: dbUser.marketsTraded || 0, settledCount: 0,
+        winsCount: 0, claimedCount: 0,
       }));
       const sorted = dbTraders.sort((a, b) => {
         if (sortBy === "volume") return b.totalVolumeSol - a.totalVolumeSol;

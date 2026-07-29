@@ -4,11 +4,11 @@ const base58Pattern = /^[1-9A-HJ-NP-Za-km-z]+$/;
 
 export const walletSchema = z.string().regex(base58Pattern).min(32).max(44);
 export const publicKeySchema = z.string().regex(base58Pattern).min(32).max(44);
-export const signatureSchema = z.string().regex(base58Pattern).min(87).max(88);
+export const signatureSchema = z.string().min(1).max(128);
 
 export const watchlistPostSchema = z.object({
   wallet: walletSchema,
-  marketPubkey: publicKeySchema,
+  marketPubkey: z.string().min(1).max(64),
 });
 
 export const watchlistGetSchema = z.object({

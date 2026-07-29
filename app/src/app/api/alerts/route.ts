@@ -42,6 +42,8 @@ export const DELETE = apiHandler(async (req: NextRequest) => {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return badRequest("id required");
 
-  await db.update(priceAlerts).set({ active: false }).where(eq(priceAlerts.id, parseInt(id)));
+  const idNum = parseInt(id, 10);
+  if (Number.isNaN(idNum)) return badRequest("Invalid alert id");
+  await db.update(priceAlerts).set({ active: false }).where(eq(priceAlerts.id, idNum));
   return ok({ ok: true });
 });
