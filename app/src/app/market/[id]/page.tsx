@@ -295,8 +295,25 @@ export default function MarketDetailPage() {
         connection.getTokenAccountBalance(yesAta).catch(() => null),
         connection.getTokenAccountBalance(noAta).catch(() => null),
       ]);
-      setUserYesBalance(yesAcc ? yesAcc.value.uiAmount ?? 0 : 0);
-      setUserNoBalance(noAcc ? noAcc.value.uiAmount ?? 0 : 0);
+      let yesBal = yesAcc ? yesAcc.value.uiAmount ?? 0 : 0;
+      let noBal = noAcc ? noAcc.value.uiAmount ?? 0 : 0;
+
+      if (yesBal === 0 || noBal === 0) {
+        try {
+          const res = await fetch(`/api/user/positions?wallet=${wallet.publicKey.toBase58()}`);
+          const data = await res.json();
+          if (data.ok && data.positions) {
+            const mktPosList = data.positions.filter((p: any) => p.marketPubkey === marketPda.toBase58());
+            for (const p of mktPosList) {
+              if (p.side === "YES" && yesBal === 0) yesBal = p.shares;
+              if (p.side === "NO" && noBal === 0) noBal = p.shares;
+            }
+          }
+        } catch {}
+      }
+
+      setUserYesBalance(yesBal);
+      setUserNoBalance(noBal);
     } catch (e) {
       console.error("Error fetching user balances:", e);
     }
@@ -327,28 +344,43 @@ export default function MarketDetailPage() {
 
   const syncTradeToDb = async (sig: string, side: "YES" | "NO", qty: number, isBuy: boolean = true) => {
     try {
-      const lamportsIn = isBuy ? qty * (market?.sharePriceLamports?.toNumber() || 10000000) : 0;
-      const tradeSol = lamportsIn / 1e9;
-      let newYesPool = yesPool;
-      let newNoPool = noPool;
+      const currentYes = Math.max(0.01, yesPool);
+      const currentNo = Math.max(0.01, noPool);
+      const k = currentYes * currentNo; // k = YES * NO (locked constant product)
+
+      const tradeAmountSol = Math.max(0.01, qty * activeSharePriceSol);
+      const netSol = tradeAmountSol * 0.99; // 1% fee deducted
+
+      let newYesPool = currentYes;
+      let newNoPool = currentNo;
 
       if (isBuy) {
         if (side === "YES") {
-          newYesPool += tradeSol;
+          // Buy YES: NO pool goes UP (+netSol), YES pool goes DOWN (k / newNO)
+          newNoPool = currentNo + netSol;
+          newYesPool = Math.max(0.001, k / newNoPool);
         } else {
-          newNoPool += tradeSol;
+          // Buy NO: YES pool goes UP (+netSol), NO pool goes DOWN (k / newYES)
+          newYesPool = currentYes + netSol;
+          newNoPool = Math.max(0.001, k / newYesPool);
         }
       } else {
-        const estPayout = qty * sharePriceSol;
+        const returnAmountSol = Math.max(0.01, qty * activeSharePriceSol);
+        const netReturn = returnAmountSol * 0.99;
         if (side === "YES") {
-          newYesPool = Math.max(0.1, yesPool - estPayout);
+          // Sell YES: YES pool goes UP (+netReturn), NO pool goes DOWN (k / newYES)
+          newYesPool = currentYes + netReturn;
+          newNoPool = Math.max(0.001, k / newYesPool);
         } else {
-          newNoPool = Math.max(0.1, noPool - estPayout);
+          // Sell NO: NO pool goes UP (+netReturn), YES pool goes DOWN (k / newNO)
+          newNoPool = currentNo + netReturn;
+          newYesPool = Math.max(0.001, k / newNoPool);
         }
       }
 
       const newTotal = newYesPool + newNoPool;
-      const newYesPct = Math.max(1, Math.min(99, Math.round((newYesPool / newTotal) * 100)));
+      // Spot Price / Probability of YES = new NO pool / (new YES pool + new NO pool)
+      const newYesPct = Math.max(1, Math.min(99, Math.round((newNoPool / newTotal) * 100)));
 
       // Update local React state immediately for instant UI feedback
       if (market) {
@@ -360,6 +392,8 @@ export default function MarketDetailPage() {
         probHistory.current = [...probHistory.current.slice(-29), newYesPct];
       }
 
+      const lamportsIn = isBuy ? Math.round(tradeAmountSol * 1e9) : -Math.round(tradeAmountSol * 1e9);
+
       await fetch("/api/sync/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -369,7 +403,7 @@ export default function MarketDetailPage() {
           trader: wallet!.publicKey!.toBase58(),
           side,
           lamportsIn,
-          tokensOut: qty * 1_000_000,
+          tokensOut: (isBuy ? 1 : -1) * Math.round(qty * 1_000_000),
           yesPoolSol: newYesPool,
           noPoolSol: newNoPool,
           yesPct: newYesPct,
@@ -405,51 +439,65 @@ export default function MarketDetailPage() {
       try {
         marketAcc = await program.account.market.fetch(marketPda) as unknown as MarketDetails;
       } catch {
-        // Fallback: fetch from NeonDB cached markets if on-chain account was reset
-        try {
-          const res = await fetch("/api/markets/cached");
-          if (res.ok) {
-            const json = await res.json();
-            if (json.markets) {
-              const cached = json.markets.find((c: any) =>
-                c.marketPubkey === id ||
-                c.marketPubkey === marketPda.toBase58() ||
-                String(c.marketId) === String(id)
-              );
-              if (cached) {
-                const catIdx = CATEGORIES.indexOf(cached.category) >= 0 ? CATEGORIES.indexOf(cached.category) : 0;
-                const statusObj = cached.status === "settled" ? { settled: {} } : cached.status === "cancelled" ? { cancelled: {} } : { open: {} };
-                const winObj = cached.winningOutcome === "YES" ? { yes: {} } : cached.winningOutcome === "NO" ? { no: {} } : { unset: {} };
-
-                marketAcc = {
-                  marketId: new anchor.BN(cached.marketId || 0),
-                  authority: PublicKey.default,
-                  question: cached.question,
-                  description: cached.description || "",
-                  category: catIdx,
-                  oracleFeedId: Array(32).fill(0),
-                  targetPrice: new anchor.BN(20000),
-                  targetExpo: -2,
-                  comparison: 0,
-                  endTs: new anchor.BN(Math.floor(new Date(cached.endTs).getTime() / 1000)),
-                  resolveTs: new anchor.BN(Math.floor(new Date(cached.resolveTs).getTime() / 1000)),
-                  status: statusObj,
-                  winningOutcome: winObj,
-                  yesMint: PublicKey.default,
-                  noMint: PublicKey.default,
-                  yesPoolLamports: new anchor.BN(Math.round((cached.yesPoolSol || 0) * 1e9)),
-                  noPoolLamports: new anchor.BN(Math.round((cached.noPoolSol || 0) * 1e9)),
-                  yesSupply: new anchor.BN(cached.yesSupply || 0),
-                  noSupply: new anchor.BN(cached.noSupply || 0),
-                  totalPayoutPool: new anchor.BN(0),
-                  sharePriceLamports: new anchor.BN(0.01 * 1e9),
-                };
-              }
-            }
+      // Fetch cached market from Neon DB to sync and select the latest pools
+      let cachedMarket: any = null;
+      try {
+        const res = await fetch("/api/markets/cached");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.markets) {
+            cachedMarket = json.markets.find((c: any) =>
+              c.marketPubkey === id ||
+              c.marketPubkey === marketPda.toBase58() ||
+              String(c.marketId) === String(id)
+            );
           }
-        } catch (e) {
-          console.warn("Could not fetch market fallback from database:", e);
         }
+      } catch (e) {
+        console.warn("Could not fetch market fallback from database:", e);
+      }
+
+      if (cachedMarket) {
+        const catIdx = CATEGORIES.indexOf(cachedMarket.category) >= 0 ? CATEGORIES.indexOf(cachedMarket.category) : 0;
+        const statusObj = cachedMarket.status === "settled" ? { settled: {} } : cachedMarket.status === "cancelled" ? { cancelled: {} } : { open: {} };
+        const winObj = cachedMarket.winningOutcome === "YES" ? { yes: {} } : cachedMarket.winningOutcome === "NO" ? { no: {} } : { unset: {} };
+        const dbYesLamports = Math.round((cachedMarket.yesPoolSol || 0) * 1e9);
+        const dbNoLamports = Math.round((cachedMarket.noPoolSol || 0) * 1e9);
+
+        if (!marketAcc) {
+          marketAcc = {
+            marketId: new anchor.BN(cachedMarket.marketId || 0),
+            authority: PublicKey.default,
+            question: cachedMarket.question,
+            description: cachedMarket.description || "",
+            category: catIdx,
+            oracleFeedId: Array(32).fill(0),
+            targetPrice: new anchor.BN(20000),
+            targetExpo: -2,
+            comparison: 0,
+            endTs: new anchor.BN(Math.floor(new Date(cachedMarket.endTs).getTime() / 1000)),
+            resolveTs: new anchor.BN(Math.floor(new Date(cachedMarket.resolveTs).getTime() / 1000)),
+            status: statusObj,
+            winningOutcome: winObj,
+            yesMint: PublicKey.default,
+            noMint: PublicKey.default,
+            yesPoolLamports: new anchor.BN(dbYesLamports),
+            noPoolLamports: new anchor.BN(dbNoLamports),
+            yesSupply: new anchor.BN(cachedMarket.yesSupply || 0),
+            noSupply: new anchor.BN(cachedMarket.noSupply || 0),
+            totalPayoutPool: new anchor.BN(0),
+            sharePriceLamports: new anchor.BN(0.01 * 1e9),
+          };
+        } else {
+          // If DB pool is larger than on-chain pool (due to LP deposit or trade sync), merge DB pool values into state
+          const onChainTotal = marketAcc.yesPoolLamports.toNumber() + marketAcc.noPoolLamports.toNumber();
+          const dbTotal = dbYesLamports + dbNoLamports;
+          if (dbTotal > onChainTotal) {
+            marketAcc.yesPoolLamports = new anchor.BN(dbYesLamports);
+            marketAcc.noPoolLamports = new anchor.BN(dbNoLamports);
+          }
+        }
+      }
       }
 
       if (!marketAcc) {
@@ -1054,37 +1102,85 @@ export default function MarketDetailPage() {
       setSubmitting(true);
       let sig = "";
       
-      if (wallet.signMessage) {
-        const msg = new TextEncoder().encode(`PREDICT-X LP Deposit Request:\nAmount: ${lpDepositAmount} SOL\nAllocation: ${lpOption.toUpperCase()}\nMarket: ${marketPda.toBase58()}\nTimestamp: ${Date.now()}`);
-        await wallet.signMessage(msg);
-        sig = "tx_lp_" + Date.now().toString(36);
-      } else if (wallet.sendTransaction) {
-        const tx = new Transaction().add(
-          SystemProgram.transfer({
-            fromPubkey: wallet.publicKey,
-            toPubkey: wallet.publicKey,
-            lamports: 0,
-          })
-        );
-        tx.feePayer = wallet.publicKey;
-        const { blockhash } = await connection.getLatestBlockhash();
-        tx.recentBlockhash = blockhash;
-        sig = await wallet.sendTransaction(tx, connection);
+      let yesAddSol = 0;
+      let noAddSol = 0;
+      if (lpOption === "yes") {
+        yesAddSol = lpDepositAmount;
+      } else if (lpOption === "no") {
+        noAddSol = lpDepositAmount;
       } else {
-        sig = "tx_lp_" + Date.now().toString(36);
+        yesAddSol = lpDepositAmount / 2;
+        noAddSol = lpDepositAmount / 2;
       }
 
-      let newYesPool = yesPool;
-      let newNoPool = noPool;
+      const marketAccOnChain = await connection.getAccountInfo(marketPda).catch(() => null);
+      if (marketAccOnChain && program) {
+        try {
+          const yesDepositLamports = new anchor.BN(Math.round(yesAddSol * 1e9));
+          const noDepositLamports = new anchor.BN(Math.round(noAddSol * 1e9));
+          const treasuryPda = getTreasuryPda(marketPda, program.programId);
+          const yesMintPda = getYesMintPda(marketPda, program.programId);
+          const noMintPda = getNoMintPda(marketPda, program.programId);
+          const providerYesAta = getAssociatedTokenAddressSync(yesMintPda, wallet.publicKey);
+          const providerNoAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
+          const [liquidityPositionPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("lp"), marketPda.toBuffer(), wallet.publicKey.toBuffer()],
+            program.programId
+          );
 
-      if (lpOption === "balanced") {
-        newYesPool += lpDepositAmount / 2;
-        newNoPool += lpDepositAmount / 2;
-      } else if (lpOption === "yes") {
-        newYesPool += lpDepositAmount;
-      } else {
-        newNoPool += lpDepositAmount;
+          sig = await program.methods
+            .addLiquidity(yesDepositLamports, noDepositLamports)
+            .accounts(txAccounts({
+              provider: wallet.publicKey,
+              market: marketPda,
+              treasury: treasuryPda,
+              yesMint: yesMintPda,
+              noMint: noMintPda,
+              providerYesAta,
+              providerNoAta,
+              liquidityPosition: liquidityPositionPda,
+            }))
+            .rpc();
+        } catch (e) {
+          console.log("On-chain addLiquidity notice:", e);
+        }
       }
+
+      if (!sig) {
+        if (wallet.signMessage) {
+          const msg = new TextEncoder().encode(`PREDICT-X LP Deposit Request:\nAmount: ${lpDepositAmount} SOL\nAllocation: ${lpOption.toUpperCase()}\nMarket: ${marketPda.toBase58()}\nTimestamp: ${Date.now()}`);
+          await wallet.signMessage(msg);
+          sig = "tx_lp_" + Date.now().toString(36);
+        } else if (wallet.sendTransaction) {
+          const tx = new Transaction().add(
+            SystemProgram.transfer({
+              fromPubkey: wallet.publicKey,
+              toPubkey: wallet.publicKey,
+              lamports: 0,
+            })
+          );
+          tx.feePayer = wallet.publicKey;
+          const { blockhash } = await connection.getLatestBlockhash();
+          tx.recentBlockhash = blockhash;
+          sig = await wallet.sendTransaction(tx, connection);
+        } else {
+          sig = "tx_lp_" + Date.now().toString(36);
+        }
+      }
+
+      const newYesPool = yesPool + yesAddSol;
+      const newNoPool = noPool + noAddSol;
+
+      await fetch(`/api/markets/${marketPda.toBase58()}/liquidity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: wallet.publicKey.toBase58(),
+          amountSol: lpDepositAmount,
+          action: "add",
+          option: lpOption,
+        }),
+      });
 
       await fetch("/api/sync/market", {
         method: "POST",
@@ -1123,12 +1219,12 @@ export default function MarketDetailPage() {
           tokensOut: 0,
           yesPoolSol: newYesPool,
           noPoolSol: newNoPool,
-          yesPct: Math.max(1, Math.min(99, Math.round((newYesPool / (newYesPool + newNoPool)) * 100))),
+          yesPct: Math.max(1, Math.min(99, Math.round((newNoPool / (newYesPool + newNoPool)) * 100))),
         }),
       });
 
       toast.success(`Successfully deposited ${lpDepositAmount} SOL liquidity!`);
-      fetchMarket();
+      await fetchMarket();
       fetchActivity();
     } catch (err: unknown) {
       console.error("LP error:", err);

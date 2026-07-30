@@ -47,8 +47,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
   const yesSol = yesPoolLamports / 1e9;
   const noSol = noPoolLamports / 1e9;
   const totalSol = yesSol + noSol;
-  const yesPct = totalSol > 0 ? (yesSol / totalSol) * 100 : 50;
-  const noPct = 100 - yesPct;
+  const yesWeight = totalSol > 0 ? (yesSol / totalSol) * 100 : 50;
+  const noWeight = 100 - yesWeight;
+  const yesOdds = noWeight; // In CPMM inventory: scarcer YES reserve = higher YES odds!
 
   useEffect(() => {
     if (!program || !marketPda) return;
@@ -56,7 +57,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
 
     const fetchOrders = async () => {
       try {
-        const allOrders = await program.account.order.all();
+        if (!marketPda || marketPda === "11111111111111111111111111111111") return;
+        const allOrders = await program.account.order.all().catch(() => []);
+        if (cancelled) return;
         const mktKey = new PublicKey(marketPda);
         const marketOrders = allOrders.filter((o) => {
           try { return o.account.market.equals(mktKey); } catch { return false; }
@@ -293,31 +296,40 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
 
         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
           <div className="bg-white/5 p-2.5 rounded border border-[#22c55e]/30 space-y-1">
-            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">YES Pool Reserve</div>
+            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">YES Pool Inventory</div>
             <div className="text-[#22c55e] font-bold text-sm">{yesSol.toFixed(3)} SOL</div>
-            <div className="text-[9px] text-[#A5A8B8]">Weight: {yesPct.toFixed(1)}%</div>
+            <div className="text-[9px] text-[#A5A8B8]">Weight: {yesWeight.toFixed(1)}%</div>
           </div>
           <div className="bg-white/5 p-2.5 rounded border border-[#ef4444]/30 space-y-1">
-            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">NO Pool Reserve</div>
+            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">NO Pool Inventory</div>
             <div className="text-[#ef4444] font-bold text-sm">{noSol.toFixed(3)} SOL</div>
-            <div className="text-[9px] text-[#A5A8B8]">Weight: {noPct.toFixed(1)}%</div>
+            <div className="text-[9px] text-[#A5A8B8]">Weight: {noWeight.toFixed(1)}%</div>
           </div>
+        </div>
+
+        <div className="flex justify-between items-center text-[10px] font-mono">
+          <span className="text-[#A5A8B8]">Implied YES Probability:</span>
+          <span className="text-[#C8FF00] font-bold">{yesOdds.toFixed(1)}%</span>
         </div>
 
         <div className="w-full h-2.5 bg-[#ef4444]/20 rounded-full overflow-hidden flex border border-[#0d0d0d]">
           <div
-            style={{ width: `${yesPct}%` }}
+            style={{ width: `${yesOdds}%` }}
             className="h-full bg-[#22c55e] transition-all duration-700 ease-out"
           />
         </div>
 
-        <div className="bg-[#0A0B12] p-2.5 rounded border border-white/10 text-[9px] font-mono space-y-1 text-[#A5A8B8]">
+        <div className="bg-[#0A0B12] p-2.5 rounded border border-white/10 text-[9px] font-mono space-y-1.5 text-[#A5A8B8]">
           <div className="flex justify-between text-[#F4F5FA] font-bold">
-            <span>CPMM Constant (k = x · y):</span>
+            <span>CPMM Constant (k = YES · NO):</span>
             <span className="text-[#00E5FF]">{(yesSol * noSol).toFixed(4)} SOL²</span>
           </div>
+          <div className="flex justify-between text-[#F4F5FA] font-bold">
+            <span>Spot Price of YES (NO ÷ YES):</span>
+            <span className="text-[#C8FF00]">{(yesSol > 0 ? noSol / yesSol : 1.0).toFixed(4)} SOL</span>
+          </div>
           <div>
-            Liquidity is provided by the Market Creator at deployment and grows dynamically as traders buy/sell outcome shares via constant-product AMM reserves.
+            k is preserved across all trades. Buying YES increases NO pool, decreases YES pool, and raises the YES price.
           </div>
         </div>
       </div>

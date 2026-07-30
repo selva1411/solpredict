@@ -134,3 +134,32 @@ export const leaderboardSnapshots = pgTable('leaderboard_snapshots', {
   marketsCount: integer('markets_count'),
   snapshotDate: date('snapshot_date'),
 });
+
+export const liquidityPositions = pgTable('liquidity_positions', {
+  id: serial('id').primaryKey(),
+  wallet: varchar('wallet', { length: 44 }).notNull(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).notNull(),
+  amountSol: decimal('amount_sol', { precision: 18, scale: 9 }).default('0'),
+  yesPoolSol: decimal('yes_pool_sol', { precision: 18, scale: 9 }).default('0'),
+  noPoolSol: decimal('no_pool_sol', { precision: 18, scale: 9 }).default('0'),
+  lpTokens: bigint('lp_tokens', { mode: 'number' }).default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => ({ unq: unique().on(t.wallet, t.marketPubkey) }));
+
+export const lpPoolStats = pgTable('lp_pool_stats', {
+  id: serial('id').primaryKey(),
+  marketPubkey: varchar('market_pubkey', { length: 44 }).unique().notNull(),
+  totalLiquiditySol: decimal('total_liquidity_sol', { precision: 18, scale: 9 }).default('0'),
+  totalLpTokens: bigint('total_lp_tokens', { mode: 'number' }).default(0),
+  feeEarnedSol: decimal('fee_earned_sol', { precision: 18, scale: 9 }).default('0'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const adminSettings = pgTable('admin_settings', {
+  key: varchar('key', { length: 50 }).primaryKey(),
+  value: text('value').notNull(),
+  updatedBy: varchar('updated_by', { length: 44 }),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+

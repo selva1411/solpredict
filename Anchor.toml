@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-solpredict = "6AqWtHGmdmXF5mkgvpq6Eqns3yFQxUkQu3JFCD5KDvNw"
+solpredict = "4j2AxdSZXyYVfA6ixZMQGENgUNmRn4bgo5ZDf2LPJi6n"
 
 [programs.localnet]
 solpredict = "HVshSwptqBYKWM9MpZrA1bdP7zQ6RzJXVbr5PUR7wvtr"

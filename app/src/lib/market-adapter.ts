@@ -99,7 +99,8 @@ export function onChainToUiMarket(
   const yesLamports = m.account.yesPoolLamports;
   const noLamports = m.account.noPoolLamports;
   const totalLamports = yesLamports + noLamports;
-  const yesPrice = totalLamports > 0 ? yesLamports / totalLamports : 0.5;
+  // CPMM: YES probability = NO_pool / total (scarcer YES = higher YES price)
+  const yesPrice = totalLamports > 0 ? noLamports / totalLamports : 0.5;
 
   return {
     id: m.publicKey.toBase58(),

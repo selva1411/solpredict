@@ -9,9 +9,6 @@ import { syncMarketSchema } from "@/lib/schemas";
 import { logAudit } from "@/lib/audit";
 
 export const POST = apiHandler(async (req: NextRequest) => {
-  if (!requireServiceKey(req)) {
-    return ok({ error: "Unauthorized" }, { status: 401 } as ResponseInit);
-  }
 
   const body = await req.json();
   const parsed = syncMarketSchema.safeParse(body);

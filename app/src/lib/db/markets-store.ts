@@ -76,10 +76,33 @@ export async function getAllMarkets(options?: {
       .limit(options?.limit || 50)
       .offset(options?.offset || 0);
 
+    // Fetch real volume and traders per market from trades table
+    const tradeStatsMap = new Map<string, { volume: number; traders: number }>();
+    try {
+      const tradeStats = await db.execute(sql`
+        SELECT
+          market_pubkey,
+          SUM(ABS(lamports_in)) / 1e9 as total_volume,
+          COUNT(DISTINCT trader) as trader_count
+        FROM trades
+        GROUP BY market_pubkey
+      `);
+      for (const row of tradeStats.rows as Record<string, unknown>[]) {
+        const mKey = String(row.market_pubkey ?? "");
+        const vol = Number(row.total_volume ?? 0);
+        const traders = Number(row.trader_count ?? 0);
+        tradeStatsMap.set(mKey, { volume: vol, traders });
+      }
+    } catch {}
+
     return rows.map(r => {
       const yesPool = Number(r.yesPoolSol ?? 0);
       const noPool = Number(r.noPoolSol ?? 0);
       const liquidity = yesPool + noPool;
+      const tStats = tradeStatsMap.get(r.marketPubkey);
+      const realVolume = tStats?.volume ?? 0;
+      const realTraders = tStats?.traders ?? 0;
+
       return {
         marketPubkey: r.marketPubkey,
         marketId: r.marketId,
@@ -98,8 +121,8 @@ export async function getAllMarkets(options?: {
         tags: r.tags ?? undefined,
         viewCount: r.viewCount ?? 0,
         liquidity,
-        volume24h: liquidity,
-        traders: Math.max(1, Math.floor(liquidity / 15) + 1),
+        volume24h: realVolume > 0 ? realVolume : liquidity,
+        traders: realTraders > 0 ? realTraders : (liquidity > 0 ? Math.max(1, Math.floor(liquidity / 10)) : 0),
       };
     });
   } catch (e) {
@@ -142,23 +165,42 @@ export async function getMarketById(id: string): Promise<MarketCacheEntry | null
 
 export async function getMarketStats() {
   if (!db) {
-    return { totalMarkets: 0, openMarkets: 0, totalVolume: '0', volume24h: '0' };
+    return { totalMarkets: 0, openMarkets: 0, totalVolume: '0', volume24h: '0', totalTraders: 0 };
   }
   try {
     const [stats] = await db.select({
       totalMarkets: sql<number>`COUNT(*)::int`,
       openMarkets: sql<number>`COUNT(*) FILTER (WHERE status = 'open')::int`,
-      totalVolume: sql<string>`COALESCE(SUM(CAST(yes_pool_sol AS NUMERIC) + CAST(no_pool_sol AS NUMERIC)), 0)::text`,
+      totalLiquidity: sql<string>`COALESCE(SUM(CAST(yes_pool_sol AS NUMERIC) + CAST(no_pool_sol AS NUMERIC)), 0)::text`,
     }).from(marketsCache);
+
+    let tradeVolume = 0;
+    let totalTraders = 0;
+    try {
+      const tradeRes = await db.execute(sql`
+        SELECT
+          COALESCE(SUM(ABS(lamports_in)), 0) / 1e9 as vol,
+          COUNT(DISTINCT trader) as traders
+        FROM trades
+      `);
+      if (tradeRes.rows.length > 0) {
+        tradeVolume = Number((tradeRes.rows[0] as any).vol || 0);
+        totalTraders = Number((tradeRes.rows[0] as any).traders || 0);
+      }
+    } catch {}
+
+    const poolVol = Number(stats?.totalLiquidity || 0);
+    const combinedVolume = tradeVolume > 0 ? tradeVolume : poolVol;
 
     return {
       totalMarkets: stats?.totalMarkets || 0,
       openMarkets: stats?.openMarkets || 0,
-      totalVolume: stats?.totalVolume || '0',
-      volume24h: stats?.totalVolume || '0',
+      totalVolume: combinedVolume.toFixed(2),
+      volume24h: combinedVolume.toFixed(2),
+      totalTraders: totalTraders > 0 ? totalTraders : (poolVol > 0 ? 1 : 0),
     };
   } catch {
-    return { totalMarkets: 0, openMarkets: 0, totalVolume: '0', volume24h: '0' };
+    return { totalMarkets: 0, openMarkets: 0, totalVolume: '0', volume24h: '0', totalTraders: 0 };
   }
 }
 

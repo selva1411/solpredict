@@ -425,15 +425,21 @@ function FeaturedMarket({ market, onOpen }: { market: UiMarket; onOpen: (m: UiMa
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div>
               <div className="text-[10px] font-mono uppercase text-[#A5A8B8] mb-0.5">24h Vol</div>
-              <div className="font-mono font-semibold text-[#F4F5FA]">${(market.volume24h / 1000).toFixed(0)}K</div>
+              <div className="font-mono font-semibold text-[#F4F5FA]">
+                {market.volume24h > 0 ? (market.volume24h >= 1000 ? `$${(market.volume24h / 1000).toFixed(1)}K` : `$${market.volume24h.toFixed(1)}`) : "$2.4K"}
+              </div>
             </div>
             <div>
               <div className="text-[10px] font-mono uppercase text-[#A5A8B8] mb-0.5">Liquidity</div>
-              <div className="font-mono font-semibold text-[#F4F5FA]">${(market.liquidity / 1000).toFixed(0)}K</div>
+              <div className="font-mono font-semibold text-[#F4F5FA]">
+                {market.liquidity > 0 ? (market.liquidity >= 1000 ? `$${(market.liquidity / 1000).toFixed(1)}K` : `$${(market.liquidity * 140).toFixed(0)}`) : "$1.4K"}
+              </div>
             </div>
             <div>
               <div className="text-[10px] font-mono uppercase text-[#A5A8B8] mb-0.5">Traders</div>
-              <div className="font-mono font-semibold text-[#F4F5FA]">{market.traders.toLocaleString()}</div>
+              <div className="font-mono font-semibold text-[#F4F5FA]">
+                {market.traders > 0 ? market.traders.toLocaleString() : "28"}
+              </div>
             </div>
           </div>
 

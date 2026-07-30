@@ -23,10 +23,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
 
   const fetchComments = async () => {
     try {
-      const res = await fetch(`/api/markets/${marketPubkey}/comments`);
-      const data = await res.json();
-      if (data.ok) {
-        setComments(data.comments);
+      if (!marketPubkey || marketPubkey === "11111111111111111111111111111111") return;
+      const res = await fetch(`/api/markets/${marketPubkey}/comments`).catch(() => null);
+      if (!res || !res.ok) return;
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        setComments(data.comments || []);
       }
     } catch (e) {
       console.error("Fetch comments error:", e);

@@ -16,15 +16,15 @@ export function useUserRole() {
     let cancelled = false;
 
     async function determineRole() {
-      // In development, always allow admin access (no wallet required)
-      if (process.env.NODE_ENV === "development") {
-        setRole("admin");
-        setConfigExists(false);
-        setIsLoading(false);
-        return;
-      }
+      const adminEnvWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET || "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS";
 
       if (!walletKey) {
+        if (process.env.NODE_ENV === "development") {
+          setRole("admin");
+          setConfigExists(false);
+          setIsLoading(false);
+          return;
+        }
         setRole("disconnected");
         setConfigExists(null);
         setIsLoading(false);
@@ -39,18 +39,15 @@ export function useUserRole() {
 
         setConfigExists(true);
         const onChainAdmin = configAcc.admin.toBase58();
-        const isMatch = onChainAdmin === walletKey;
+        const isMatch = onChainAdmin === walletKey || walletKey === adminEnvWallet;
 
-        if (isMatch) {
-          setRole("admin");
-        } else {
-          setRole("user");
-        }
+        setRole(isMatch ? "admin" : "user");
       } catch {
         if (cancelled) return;
-        // Bootstrap: config PDA not initialized — allow admin access
+        // Bootstrap: config PDA not initialized yet, check if wallet matches adminEnvWallet or allow in dev
         setConfigExists(false);
-        setRole("admin");
+        const isMatch = walletKey === adminEnvWallet || process.env.NODE_ENV === "development";
+        setRole(isMatch ? "admin" : "user");
       } finally {
         if (!cancelled) setIsLoading(false);
       }

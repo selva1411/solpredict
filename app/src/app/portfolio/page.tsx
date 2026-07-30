@@ -18,6 +18,18 @@ interface Position {
   pnlPercent: number;
 }
 
+interface LpPosition {
+  id: number;
+  marketPubkey: string;
+  question: string;
+  category: string;
+  status: string;
+  amountSol: number;
+  lpTokens: number;
+  estFeeEarnedSol: number;
+  apy: string;
+}
+
 interface PortfolioStats {
   netWorthSol: number;
   pnl24hSol: number;
@@ -29,6 +41,7 @@ export default function PortfolioPage() {
   const { publicKey } = useWallet();
   const { solPrice } = useSolPrice();
   const [positions, setPositions] = useState<Position[]>([]);
+  const [lpPositions, setLpPositions] = useState<LpPosition[]>([]);
   const [stats, setStats] = useState<PortfolioStats>({
     netWorthSol: 0, pnl24hSol: 0, pnl24hPct: 0, winRate: 0,
   });
@@ -42,8 +55,9 @@ export default function PortfolioPage() {
     fetch(`/api/user/positions?wallet=${publicKey.toBase58()}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok && data.positions) {
-          setPositions(data.positions);
+        if (data.ok) {
+          if (data.positions) setPositions(data.positions);
+          if (data.lpPositions) setLpPositions(data.lpPositions);
           if (data.stats) setStats(data.stats);
         }
       })
@@ -166,6 +180,61 @@ export default function PortfolioPage() {
                       <span className="block text-[10px] opacity-70">
                         ({p.pnlPercent >= 0 ? "+" : ""}{p.pnlPercent.toFixed(1)}%)
                       </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* LP Tokens & Liquidity Positions Section */}
+      <div className="holo-card p-6 mt-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <BarChart3 className="w-5 h-5 text-[#00E5FF]" />
+            <h3 className="font-display text-lg font-bold text-[#F4F5FA]">
+              Liquidity Positions & LP Tokens ({lpPositions.length})
+            </h3>
+          </div>
+          <span className="text-xs bg-[#00E5FF]/10 text-[#00E5FF] px-2.5 py-1 rounded border border-[#00E5FF]/30 font-mono font-normal">
+            Earning 2% Trade Fees
+          </span>
+        </div>
+
+        {lpPositions.length === 0 ? (
+          <p className="text-center text-[#A5A8B8] py-8">
+            No liquidity provided yet. Visit any market&apos;s LP tab to deposit seed liquidity and earn trading fee yield.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-xs text-[#A5A8B8] uppercase tracking-wider border-b border-white/5">
+                  <th className="pb-3 pr-4">Market</th>
+                  <th className="pb-3 pr-4 text-right">Deposited SOL</th>
+                  <th className="pb-3 pr-4 text-right">LP Tokens</th>
+                  <th className="pb-3 pr-4 text-right">Est. Fee Yield</th>
+                  <th className="pb-3 pr-4 text-right">APY</th>
+                  <th className="pb-3 pr-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lpPositions.map((lp, i) => (
+                  <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
+                    <td className="py-4 pr-4 font-medium text-[#F4F5FA] max-w-xs truncate">{lp.question}</td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#F4F5FA] font-bold">{lp.amountSol.toFixed(2)} SOL</td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#00E5FF] font-bold">{lp.lpTokens.toLocaleString()} LP</td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#C8FF00] font-bold">+{lp.estFeeEarnedSol.toFixed(3)} SOL</td>
+                    <td className="py-4 pr-4 text-right font-mono text-[#00E5FF]">{lp.apy}</td>
+                    <td className="py-4 pr-4 text-right">
+                      <a
+                        href={`/market/${lp.marketPubkey}`}
+                        className="inline-block px-3 py-1 bg-[#00E5FF]/10 text-[#00E5FF] hover:bg-[#00E5FF]/20 text-xs font-bold rounded border border-[#00E5FF]/40 transition-colors"
+                      >
+                        Manage LP
+                      </a>
                     </td>
                   </tr>
                 ))}
