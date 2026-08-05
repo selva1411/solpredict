@@ -22,12 +22,9 @@ export const GET = apiHandler(async () => {
     .orderBy(desc(trades.blockTime))
     .limit(50);
 
-  const allMarkets = await db.select({ marketPubkey: marketsCache.marketPubkey, question: marketsCache.question }).from(marketsCache);
-  const questionMap = new Map(allMarkets.map(m => [m.marketPubkey, m.question]));
-
   const activities = rows.map(r => ({
     ...r,
-    question: r.question || questionMap.get(r.marketPubkey) || (allMarkets.length > 0 ? allMarkets[0].question : `Market Trade (${r.marketPubkey.slice(0, 4)}...)`),
+    question: r.question || `Market Trade (${r.marketPubkey.slice(0, 8)}...)`,
   }));
 
   return ok({ ok: true, activities });

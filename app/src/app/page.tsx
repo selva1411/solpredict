@@ -122,10 +122,10 @@ function HomeView({
       .then(data => {
         if (data.ok && data.stats) {
           setPlatformStats({
-            totalVolume: Number(data.stats.totalVolume || 0),
-            totalLiquidity: Number(data.stats.totalLiquidity || 0),
-            totalTraders: data.stats.totalTraders || 0,
-            openMarkets: data.stats.openMarkets || 0,
+            totalVolume: Number(data.stats.totalVolume || data.stats.volume24h || 0),
+            totalLiquidity: Number(data.stats.totalLiquidity || data.stats.totalVolume || 0),
+            totalTraders: Number(data.stats.totalTraders || 0),
+            openMarkets: Number(data.stats.openMarkets || 0),
           });
         }
       })
@@ -137,8 +137,24 @@ function HomeView({
   const totalVolume = platformStats.totalVolume > 0 ? platformStats.totalVolume : computedLiquidity;
   const totalLiquidity = platformStats.totalLiquidity > 0 ? platformStats.totalLiquidity : computedLiquidity;
   const totalTraders = platformStats.totalTraders > 0 ? platformStats.totalTraders : 0;
-  const hotMarkets = markets.slice(0, 3);
-  const trending = markets.slice(0, 4);
+
+  // Real trending/featured from DB (24h volume from trades), falling back to on-chain slice
+  const [dbTrending, setDbTrending] = useState<UiMarket[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/markets/trending')
+      .then(r => r.json())
+      .then((data) => {
+        if (!cancelled && data.ok && Array.isArray(data.markets) && data.markets.length > 0) {
+          setDbTrending(data.markets);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const hotMarkets = dbTrending.length > 0 ? dbTrending.slice(0, 1) : markets.slice(0, 3);
+  const trending = dbTrending.length > 0 ? dbTrending.slice(0, 4) : markets.slice(0, 4);
 
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.12], [1, 0]);
@@ -426,19 +442,19 @@ function FeaturedMarket({ market, onOpen }: { market: UiMarket; onOpen: (m: UiMa
             <div>
               <div className="text-[10px] font-mono uppercase text-[#A5A8B8] mb-0.5">24h Vol</div>
               <div className="font-mono font-semibold text-[#F4F5FA]">
-                {market.volume24h > 0 ? (market.volume24h >= 1000 ? `$${(market.volume24h / 1000).toFixed(1)}K` : `$${market.volume24h.toFixed(1)}`) : "$2.4K"}
+                {market.volume24h > 0 ? (market.volume24h >= 1000 ? `${(market.volume24h / 1000).toFixed(1)}K SOL` : `${market.volume24h.toFixed(2)} SOL`) : "—"}
               </div>
             </div>
             <div>
               <div className="text-[10px] font-mono uppercase text-[#A5A8B8] mb-0.5">Liquidity</div>
               <div className="font-mono font-semibold text-[#F4F5FA]">
-                {market.liquidity > 0 ? (market.liquidity >= 1000 ? `$${(market.liquidity / 1000).toFixed(1)}K` : `$${(market.liquidity * 140).toFixed(0)}`) : "$1.4K"}
+                {market.liquidity > 0 ? (market.liquidity >= 1000 ? `${(market.liquidity / 1000).toFixed(1)}K SOL` : `${market.liquidity.toFixed(2)} SOL`) : "—"}
               </div>
             </div>
             <div>
               <div className="text-[10px] font-mono uppercase text-[#A5A8B8] mb-0.5">Traders</div>
               <div className="font-mono font-semibold text-[#F4F5FA]">
-                {market.traders > 0 ? market.traders.toLocaleString() : "28"}
+                {market.traders > 0 ? market.traders.toLocaleString() : "—"}
               </div>
             </div>
           </div>

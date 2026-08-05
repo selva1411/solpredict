@@ -11,6 +11,7 @@ interface AiMarketWhispererProps {
   yesPool: number;
   noPool: number;
   category: string;
+  marketPubkey?: string;
 }
 
 export function AiMarketWhisperer({
@@ -21,6 +22,7 @@ export function AiMarketWhisperer({
   yesPool,
   noPool,
   category,
+  marketPubkey,
 }: AiMarketWhispererProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ export function AiMarketWhisperer({
       const res = await fetch("/api/ai/analyze-market", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, description, yesProb, noProb, yesPool, noPool, category }),
+        body: JSON.stringify({ question, description, yesProb, noProb, yesPool, noPool, category, marketPubkey }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -101,6 +103,20 @@ export function AiMarketWhisperer({
                 </div>
                 <p className="text-xs text-[#F4F5FA] leading-relaxed font-sans">{summary.verdict}</p>
               </div>
+
+              {summary.tradingActivity && (
+                <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#22c55e]/25 space-y-1">
+                  <div className="text-[9px] uppercase tracking-wider font-bold text-[#A5A8B8] flex items-center justify-between">
+                    <span>On-Chain Trading Activity</span>
+                    <span className="text-[#22c55e]">{summary.tradingActivity.direction}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#d6c4ac]">
+                    <span>{summary.tradingActivity.trades24h} trades</span>
+                    <span className="text-[#C8FF00]">{summary.tradingActivity.yesVolume24h.toFixed(2)} SOL YES</span>
+                    <span className="text-[#FF4D6D]">{summary.tradingActivity.noVolume24h.toFixed(2)} SOL NO</span>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="p-2.5 rounded-lg bg-[#0A0B12] border border-white/10/20 space-y-1">

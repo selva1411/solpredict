@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
-import { trades } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { trades, marketsCache, marketProposals, leaderboardSnapshots } from "@/lib/db/schema";
+import { eq, sql, and } from "drizzle-orm";
 import { ok, badRequest } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 
@@ -55,7 +55,11 @@ export const GET = apiHandler(async (req: NextRequest) => {
 
   if (db) {
     const tradeRows = await db
-      .select({ lamportsIn: trades.lamportsIn, marketPubkey: trades.marketPubkey })
+      .select({
+        lamportsIn: trades.lamportsIn,
+        marketPubkey: trades.marketPubkey,
+        side: trades.side,
+      })
       .from(trades)
       .where(eq(trades.trader, wallet));
 
@@ -63,7 +67,94 @@ export const GET = apiHandler(async (req: NextRequest) => {
     const lamportsValues = tradeRows.map((t) => Number(t.lamportsIn ?? 0));
     stats.marketsTraded = uniqueMarkets.size;
     stats.largestTradeLamports = Math.max(0, ...lamportsValues);
-    stats.totalVolumeLamports = lamportsValues.reduce((s, v) => s + v, 0);
+    stats.totalVolumeLamports = lamportsValues.reduce((s, v) => s + Math.abs(v), 0);
+
+    // Winning markets + category wins: count settled markets the user holds
+    // tokens for and where the winning outcome matches their side.
+    if (uniqueMarkets.size > 0) {
+      const pubkeys = [...uniqueMarkets];
+      const mktRows = await db
+        .select({
+          marketPubkey: marketsCache.marketPubkey,
+          category: marketsCache.category,
+          status: marketsCache.status,
+          winningOutcome: marketsCache.winningOutcome,
+        })
+        .from(marketsCache)
+        .where(
+          and(
+            sql`${marketsCache.marketPubkey} IN (${sql.raw(pubkeys.map((_, i) => `$${i + 1}`).join(","))})`,
+            eq(marketsCache.status, "settled"),
+          )
+        );
+      const holdings = new Map<string, string[]>();
+      for (const t of tradeRows) {
+        const sides = holdings.get(t.marketPubkey) ?? [];
+        sides.push(t.side);
+        holdings.set(t.marketPubkey, sides);
+      }
+      for (const m of mktRows) {
+        const outcome = (m.winningOutcome ?? "").toLowerCase();
+        const sides = holdings.get(m.marketPubkey) ?? [];
+        const won = sides.includes(outcome.toUpperCase()) || sides.includes(outcome);
+        if (won) {
+          stats.winningMarkets++;
+          const cat = m.category ?? "Other";
+          stats.categoryWins[cat] = (stats.categoryWins[cat] ?? 0) + 1;
+        }
+      }
+    }
+
+    // Proposed markets (approved)
+    try {
+      const [proposalRes] = await db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(marketProposals)
+        .where(and(eq(marketProposals.proposer, wallet), eq(marketProposals.status, "approved")));
+      stats.proposedMarkets = proposalRes?.count || 0;
+    } catch {}
+
+    // Weekly rank: rank by 7-day volume from the leaderboard snapshot table
+    try {
+      const [rankRes] = await db
+        .select({ rank: leaderboardSnapshots.rank })
+        .from(leaderboardSnapshots)
+        .where(and(
+          eq(leaderboardSnapshots.wallet, wallet),
+          eq(leaderboardSnapshots.period, "weekly"),
+        ))
+        .orderBy(sql`${leaderboardSnapshots.snapshotDate} DESC`)
+        .limit(1);
+      stats.weeklyRank = rankRes?.rank ?? null;
+    } catch {}
+
+    // Current win streak: count most recent consecutive settled wins
+    try {
+      const settled = await db
+        .select({
+          marketPubkey: trades.marketPubkey,
+          side: trades.side,
+        })
+        .from(trades)
+        .where(eq(trades.trader, wallet))
+        .orderBy(sql`block_time DESC`);
+      const seen = new Set<string>();
+      let streak = 0;
+      for (const t of settled) {
+        if (seen.has(t.marketPubkey)) continue;
+        seen.add(t.marketPubkey);
+        const [m] = await db
+          .select({ status: marketsCache.status, winningOutcome: marketsCache.winningOutcome })
+          .from(marketsCache)
+          .where(eq(marketsCache.marketPubkey, t.marketPubkey))
+          .limit(1);
+        if (!m || m.status !== "settled") break;
+        const outcome = (m.winningOutcome ?? "").toLowerCase();
+        if (t.side.toLowerCase() === outcome) streak++;
+        else break;
+      }
+      stats.currentStreak = streak;
+    } catch {}
   }
 
   const achievements = ACHIEVEMENT_DEFS.map((a) => ({

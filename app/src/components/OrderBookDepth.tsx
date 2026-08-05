@@ -49,7 +49,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
   const totalSol = yesSol + noSol;
   const yesWeight = totalSol > 0 ? (yesSol / totalSol) * 100 : 50;
   const noWeight = 100 - yesWeight;
-  const yesOdds = noWeight; // In CPMM inventory: scarcer YES reserve = higher YES odds!
+  const yesOdds = yesWeight;
 
   useEffect(() => {
     if (!program || !marketPda) return;
@@ -325,11 +325,11 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
             <span className="text-[#00E5FF]">{(yesSol * noSol).toFixed(4)} SOL²</span>
           </div>
           <div className="flex justify-between text-[#F4F5FA] font-bold">
-            <span>Spot Price of YES (NO ÷ YES):</span>
-            <span className="text-[#C8FF00]">{(yesSol > 0 ? noSol / yesSol : 1.0).toFixed(4)} SOL</span>
+            <span>Spot Price of YES (YES ÷ Total):</span>
+            <span className="text-[#C8FF00]">{(totalSol > 0 ? yesSol / totalSol : 0.5).toFixed(4)} SOL</span>
           </div>
           <div>
-            k is preserved across all trades. Buying YES increases NO pool, decreases YES pool, and raises the YES price.
+            k = YES · NO tracks pool balance across trades. Buying YES adds to the YES pool and raises the YES price.
           </div>
         </div>
       </div>

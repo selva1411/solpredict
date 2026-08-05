@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, Variants } from "framer-motion";
 import { Check, X, Loader2 } from "lucide-react";
+import { adminFetch } from "@/lib/admin-client";
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -29,7 +30,7 @@ export function ProposalsSection() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/proposals");
+      const res = await adminFetch("/api/admin/proposals");
       if (!res.ok) {
         if (res.status === 401) {
           setError("Unauthorized – admin access required.");
@@ -38,7 +39,7 @@ export function ProposalsSection() {
         throw new Error(`HTTP ${res.status}`);
       }
       const data = await res.json();
-      setProposals(Array.isArray(data) ? data : []);
+      setProposals(Array.isArray(data) ? data : (data.proposals ?? []));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load proposals");
     } finally {
@@ -53,7 +54,7 @@ export function ProposalsSection() {
   async function handleAction(id: string, action: "approve" | "reject") {
     setActionLoading(id);
     try {
-      const res = await fetch(`/api/admin/proposals`, {
+      const res = await adminFetch(`/api/admin/proposals`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, action }),

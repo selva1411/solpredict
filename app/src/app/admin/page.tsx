@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useProgram } from "@/hooks/useProgram";
 import { useUserRole } from "@/hooks/useUserRole";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { txAccounts, sendWithRetry } from "@/lib/anchor-utils";
@@ -30,7 +31,9 @@ import { formatEventTime, findMarketQuestion, getMarketStatusString, AnchorMarke
 import type { MarketCacheEntry } from "@/lib/db/store";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConnectWalletGate } from "@/components/dashboard/ConnectWalletGate";
+import { signAdminProof, adminFetch } from "@/lib/admin-client";
 const StatTile3D = dynamic(() => import("@/components/dashboard/StatTile3D").then(m => m.StatTile3D), { ssr: false });
+const AdminCharts = dynamic(() => import("@/components/dashboard/AdminCharts").then(m => m.AdminCharts), { ssr: false });
 import { DashboardSection, DashboardHero } from "@/components/dashboard/DashboardSection";
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
@@ -191,6 +194,13 @@ function AdminPage() {
       router.push("/dashboard");
     }
   }, [role, roleLoading, router]);
+
+  // Sign a proof-of-ownership message so admin API routes can authorize in production.
+  useEffect(() => {
+    const { publicKey } = wallet || {};
+    if (!publicKey) return;
+    signAdminProof(wallet, wallet.signMessage).catch(() => {});
+  }, [wallet, wallet?.publicKey?.toBase58()]);
 
   const getSettlePrice = (marketKey: string): number => {
     return settlePrices.get(marketKey) ?? 260.00;
@@ -377,6 +387,12 @@ function AdminPage() {
   const handleInitializeConfig = async () => {
     if (!wallet?.publicKey) return;
     try {
+      const balance = await connection.getBalance(wallet.publicKey).catch(() => 0);
+      if (balance < 10_000_000) {
+        toast.error(`Insufficient SOL: ${lamportsToSol(balance).toFixed(4)} SOL. Need at least 0.01 SOL.`);
+        return;
+      }
+
       const configPda = getConfigPda(program.programId);
       await sendWithRetry(
         program.methods
@@ -384,6 +400,7 @@ function AdminPage() {
           .accounts(txAccounts({
             admin: wallet.publicKey,
             config: configPda,
+            systemProgram: SystemProgram.programId,
           }))
       );
 
@@ -451,6 +468,9 @@ function AdminPage() {
           yesMint: yesMintPda,
           noMint: noMintPda,
           treasury: treasuryPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
         }));
 
       await sendWithRetry(createBuilder);
@@ -686,7 +706,7 @@ function AdminPage() {
       const accInfo = await connection.getAccountInfo(market.publicKey).catch(() => null);
       if (!accInfo) {
         // DB cached market fallback handling
-        await fetch("/api/admin/proposals", {
+        await adminFetch("/api/admin/proposals", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "withdraw_fees", marketId: market.account.marketId.toNumber() }),
@@ -1154,6 +1174,9 @@ function AdminPage() {
 
         {activeAdminSection === "overview" && (
           <>
+        <div className="mb-6">
+          <AdminCharts />
+        </div>
         {/* 3. Needs Action Panel (Expired Markets Settle List) */}
         {needsActionMarkets.length > 0 && (
           <DashboardSection
@@ -1589,20 +1612,16 @@ function AdminPage() {
               </div>
               <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
                 <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Fee Rate (bps)</div>
-                <div className="text-sm font-mono text-[#F4F5FA]">{config?.feeRateBps || 0} bps</div>
+                <div className="text-sm font-mono text-[#F4F5FA]">{config?.feeBps || 0} bps ({(config?.feeBps || 0) / 100}%)</div>
               </div>
               <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Min Market Duration</div>
-                <div className="text-sm font-mono text-[#F4F5FA]">{(config?.minDuration || 0) / 3600}h</div>
-              </div>
-              <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Max Market Duration</div>
-                <div className="text-sm font-mono text-[#F4F5FA]">{(config?.maxDuration || 0) / 86400}d</div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Markets Created</div>
+                <div className="text-sm font-mono text-[#F4F5FA]">{config?.marketCount ?? 0}</div>
               </div>
             </div>
             <div className="bg-[#0A0B12] rounded-lg p-4 space-y-2">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Treasury Vault</div>
-              <div className="text-sm font-mono text-[#F4F5FA] break-all">{config?.treasuryVault?.toBase58() || "—"}</div>
+              <div className="text-[10px] font-mono uppercase tracking-widest text-[#A5A8B8]">Config PDA</div>
+              <div className="text-sm font-mono text-[#F4F5FA] break-all">{config?.publicKey?.toBase58() || "—"}</div>
             </div>
             <div className="pt-4 border-t border-white/5">
               <button

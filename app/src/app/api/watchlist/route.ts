@@ -58,5 +58,5 @@ export const POST = apiHandler(async (req: NextRequest) => {
   } catch (e) {
     console.warn("Watchlist POST error:", e);
   }
-  return ok({ ok: true, action: "toggled", isWatched: true });
+  return ok({ ok: true, action: "error", isWatched: false, error: "Database unavailable" });
 });

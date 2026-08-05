@@ -1,157 +1,297 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-import { marketsCache } from "../src/lib/db/schema";
-import { sql } from "drizzle-orm";
+/**
+ * Database seeder — run with:
+ *   npx tsx scripts/seed-cache.ts
+ *
+ * Populates the database with realistic sample markets, admin settings,
+ * and demo user profiles for local development and staging.
+ */
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import * as schema from '../src/lib/db/schema';
+import { sql } from 'drizzle-orm';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
-  console.error("DATABASE_URL not set");
+  console.error('❌  DATABASE_URL not set. Add it to your .env.local file.');
   process.exit(1);
 }
 
-const sqlClient = neon(DATABASE_URL);
-const db = drizzle(sqlClient);
+const db = drizzle(neon(DATABASE_URL), { schema });
 
-const SEED_MARKETS = [
+// ── Sample markets ──────────────────────────────────────────────────────────
+
+const now = Date.now();
+const DAY = 86_400_000;
+
+function futureDate(days: number) {
+  return new Date(now + days * DAY);
+}
+
+function randomPubkey() {
+  const ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let s = '';
+  while (s.length < 44) s += ALPHA[Math.floor(Math.random() * ALPHA.length)];
+  return s;
+}
+
+const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
   {
-    marketPubkey: "EFziv45w9kY3KLABzQxgLBNDfNm7KsqMWYs5B43nUyo6",
+    marketPubkey: randomPubkey(),
     marketId: 1,
-    question: "Will SOL exceed $250 by end of week?",
-    description: "Resolves YES if SOL/USD > $250 at 17:00 UTC Friday via Pyth.",
-    category: "Crypto",
-    status: "open",
-    yesPoolSol: "184.32",
-    noPoolSol: "98.24",
-    endTs: new Date(Date.now() + 5 * 86400000),
-    resolveTs: new Date(Date.now() + 5 * 86400000 + 7200),
+    question: 'Will Bitcoin exceed $120,000 before December 31, 2025?',
+    description: 'Resolves YES if BTC/USD closes above $120,000 on any day before the end of 2025 according to Pyth Network price feed.',
+    category: 'Crypto',
+    status: 'open',
+    yesPoolSol: '48.50',
+    noPoolSol: '31.20',
+    yesSupply: 48500,
+    noSupply: 31200,
+    endTs: futureDate(60),
+    resolveTs: futureDate(61),
+    thumbnailUrl: null,
+    tags: ['bitcoin', 'btc', 'price', 'crypto'],
+    viewCount: 2840,
   },
   {
-    marketPubkey: "8m1uNPLbo25kZGnaFUa3aKDJQBRxGQjGpuVFXMYirMWt",
+    marketPubkey: randomPubkey(),
     marketId: 2,
-    question: "Will BTC hold above $60K this month?",
-    description: "Resolves YES if BTC/USD stays above $60,000 for the remainder of the month.",
-    category: "Crypto",
-    status: "open",
-    yesPoolSol: "320.50",
-    noPoolSol: "180.75",
-    endTs: new Date(Date.now() + 14 * 86400000),
-    resolveTs: new Date(Date.now() + 14 * 86400000 + 7200),
+    question: 'Will Solana reach $400 before January 1, 2026?',
+    description: 'Resolves YES if SOL/USD on Pyth Network closes at or above $400 at any point before January 1, 2026.',
+    category: 'Crypto',
+    status: 'open',
+    yesPoolSol: '22.10',
+    noPoolSol: '37.90',
+    yesSupply: 22100,
+    noSupply: 37900,
+    endTs: futureDate(90),
+    resolveTs: futureDate(91),
+    thumbnailUrl: null,
+    tags: ['solana', 'sol', 'price'],
+    viewCount: 1920,
   },
   {
-    marketPubkey: "HxPLdMZh1jMGNpQY6NCGHd7mQQLP8FQ7NPQKFSBSJMnC",
+    marketPubkey: randomPubkey(),
     marketId: 3,
-    question: "Will India win the Cricket World Cup 2027?",
-    description: "Resolves YES if India wins the ICC Cricket World Cup 2027.",
-    category: "Sports",
-    status: "open",
-    yesPoolSol: "56.80",
-    noPoolSol: "120.40",
-    endTs: new Date(Date.now() + 30 * 86400000),
-    resolveTs: new Date(Date.now() + 30 * 86400000 + 7200),
+    question: 'Will the US Federal Reserve cut interest rates in Q3 2025?',
+    description: 'Resolves YES if the Federal Reserve cuts the target federal funds rate by at least 25 basis points at their July or September 2025 meeting.',
+    category: 'Finance',
+    status: 'open',
+    yesPoolSol: '15.00',
+    noPoolSol: '10.00',
+    yesSupply: 15000,
+    noSupply: 10000,
+    endTs: futureDate(120),
+    resolveTs: futureDate(121),
+    thumbnailUrl: null,
+    tags: ['fed', 'rates', 'macro'],
+    viewCount: 1340,
   },
   {
-    marketPubkey: "5X7kRmXt2qK4mMqrK4E4TLyGMtPUxPzCwXfYBrnrQGBd",
+    marketPubkey: randomPubkey(),
     marketId: 4,
-    question: "Will Fed cut rates by 50bps this quarter?",
-    description: "Resolves YES if the Federal Reserve cuts the federal funds rate by at least 50 basis points before end of quarter.",
-    category: "Politics",
-    status: "open",
-    yesPoolSol: "92.15",
-    noPoolSol: "155.30",
-    endTs: new Date(Date.now() + 60 * 86400000),
-    resolveTs: new Date(Date.now() + 60 * 86400000 + 7200),
+    question: 'Will SpaceX successfully land on Mars before 2030?',
+    description: 'Resolves YES if SpaceX achieves a successful crewed or uncrewed Mars landing mission before December 31, 2029.',
+    category: 'Tech',
+    status: 'open',
+    yesPoolSol: '8.20',
+    noPoolSol: '41.80',
+    yesSupply: 8200,
+    noSupply: 41800,
+    endTs: futureDate(1800),
+    resolveTs: futureDate(1801),
+    thumbnailUrl: null,
+    tags: ['spacex', 'mars', 'space'],
+    viewCount: 980,
   },
   {
-    marketPubkey: "GQWNP2jMHBCsQDPzH3b6bAhWBdV4Jr4RsNn8JXFeGLvc",
+    marketPubkey: randomPubkey(),
     marketId: 5,
-    question: "Will Apple release a foldable iPhone this year?",
-    description: "Resolves YES if Apple announces/releases a foldable iPhone or iPad hybrid device by Dec 31.",
-    category: "Tech",
-    status: "open",
-    yesPoolSol: "45.20",
-    noPoolSol: "210.60",
-    endTs: new Date(Date.now() + 90 * 86400000),
-    resolveTs: new Date(Date.now() + 90 * 86400000 + 7200),
+    question: 'Will Ethereum ETF see $1B inflows in first week of trading?',
+    description: 'Resolves YES if total net inflows across all spot Ethereum ETFs exceed $1,000,000,000 in their first calendar week of trading.',
+    category: 'Crypto',
+    status: 'open',
+    yesPoolSol: '33.60',
+    noPoolSol: '16.40',
+    yesSupply: 33600,
+    noSupply: 16400,
+    endTs: futureDate(30),
+    resolveTs: futureDate(31),
+    thumbnailUrl: null,
+    tags: ['ethereum', 'etf', 'institutional'],
+    viewCount: 3200,
   },
   {
-    marketPubkey: "D7Xckrbdg52MVV2kKzH2XJ8hFqvYCFs6TEoZjcN3gJ1N",
+    marketPubkey: randomPubkey(),
     marketId: 6,
-    question: "Will SOL ETF be approved by SEC this year?",
-    description: "Resolves YES if the SEC approves a spot Solana ETF.",
-    category: "Crypto",
-    status: "open",
-    yesPoolSol: "78.90",
-    noPoolSol: "65.40",
-    endTs: new Date(Date.now() + 120 * 86400000),
-    resolveTs: new Date(Date.now() + 120 * 86400000 + 7200),
+    question: 'Will the next US President be a Republican?',
+    description: 'Resolves YES if the Republican Party candidate wins the 2028 US Presidential Election.',
+    category: 'Politics',
+    status: 'open',
+    yesPoolSol: '29.00',
+    noPoolSol: '21.00',
+    yesSupply: 29000,
+    noSupply: 21000,
+    endTs: futureDate(1095),
+    resolveTs: futureDate(1096),
+    thumbnailUrl: null,
+    tags: ['politics', 'election', 'usa'],
+    viewCount: 5100,
   },
   {
-    marketPubkey: "2ViXGQVF94LmL3SGBgNQ5NL3B8Gh6U6jBCA14zYKHGMk",
+    marketPubkey: randomPubkey(),
     marketId: 7,
-    question: "Will ETH 2.0 staking rate exceed 4%?",
-    description: "Resolves YES if the ETH staking rate exceeds 4% APY on average for a week.",
-    category: "Crypto",
-    status: "open",
-    yesPoolSol: "34.60",
-    noPoolSol: "89.20",
-    endTs: new Date(Date.now() + 45 * 86400000),
-    resolveTs: new Date(Date.now() + 45 * 86400000 + 7200),
+    question: 'Will the FIFA World Cup 2026 be won by Brazil?',
+    description: 'Resolves YES if Brazil wins the FIFA World Cup 2026 tournament final.',
+    category: 'Sports',
+    status: 'open',
+    yesPoolSol: '11.00',
+    noPoolSol: '39.00',
+    yesSupply: 11000,
+    noSupply: 39000,
+    endTs: futureDate(360),
+    resolveTs: futureDate(361),
+    thumbnailUrl: null,
+    tags: ['soccer', 'worldcup', 'brazil'],
+    viewCount: 2700,
   },
   {
-    marketPubkey: "FKvfPpt7mCgEowLVdBjYr2Au4QduLFfPEKgmmvjQfDfH",
+    marketPubkey: randomPubkey(),
     marketId: 8,
-    question: "Will the Lakers win the NBA championship?",
-    description: "Resolves YES if LA Lakers win the NBA Finals.",
-    category: "Sports",
-    status: "open",
-    yesPoolSol: "210.00",
-    noPoolSol: "45.80",
-    endTs: new Date(Date.now() + 180 * 86400000),
-    resolveTs: new Date(Date.now() + 180 * 86400000 + 7200),
-  },
-  {
-    marketPubkey: "Ci9csLSfX5kv4QbCQSRjM9Z5Fh5QdAHHm3WWxG62qVND",
-    marketId: 9,
-    question: "Will AI-generated content exceed 50% of web traffic?",
-    description: "Resolves YES if AI-generated content accounts for >50% of total web traffic.",
-    category: "Tech",
-    status: "open",
-    yesPoolSol: "67.30",
-    noPoolSol: "112.50",
-    endTs: new Date(Date.now() + 60 * 86400000),
-    resolveTs: new Date(Date.now() + 60 * 86400000 + 7200),
+    question: 'Will GPT-5 pass the Turing Test under standardized evaluation?',
+    description: 'Resolves YES if OpenAI GPT-5 (or equivalent) passes a recognized standardized Turing Test evaluation published in a peer-reviewed venue by the end of 2025.',
+    category: 'Tech',
+    status: 'open',
+    yesPoolSol: '18.50',
+    noPoolSol: '31.50',
+    yesSupply: 18500,
+    noSupply: 31500,
+    endTs: futureDate(180),
+    resolveTs: futureDate(181),
+    thumbnailUrl: null,
+    tags: ['ai', 'gpt', 'openai', 'turing'],
+    viewCount: 4450,
   },
 ];
 
-async function seed() {
-  console.log("Clearing old markets_cache...");
-  await db.delete(marketsCache);
+// ── Admin settings ──────────────────────────────────────────────────────────
 
-  console.log(`Inserting ${SEED_MARKETS.length} seed markets...`);
-  for (const m of SEED_MARKETS) {
-    await db.insert(marketsCache).values({
-      marketPubkey: m.marketPubkey,
-      marketId: m.marketId,
-      question: m.question,
-      description: m.description,
-      category: m.category,
-      status: m.status,
-      yesPoolSol: m.yesPoolSol,
-      noPoolSol: m.noPoolSol,
-      endTs: m.endTs,
-      resolveTs: m.resolveTs,
-      yesSupply: 0,
-      noSupply: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    console.log(`  #${m.marketId}: ${m.question.slice(0, 50)}`);
+const ADMIN_SETTINGS: Array<typeof schema.adminSettings.$inferInsert> = [
+  { key: 'feeBps',             value: '200' },
+  { key: 'platformName',       value: 'PREDICT-X' },
+  { key: 'maintenanceMode',    value: 'false' },
+  { key: 'maxMarketDuration',  value: '2592000' },
+  { key: 'minLiquiditySol',    value: '1.0' },
+  { key: 'resolutionDelaySec', value: '3600' },
+  { key: 'disputePeriodSec',   value: '86400' },
+  { key: 'twitterShareEnabled','value': 'true' },
+];
+
+// ── Demo users ──────────────────────────────────────────────────────────────
+
+const DEMO_USERS: Array<typeof schema.users.$inferInsert> = [
+  {
+    wallet: '7gWnJRMNMXrWFGLJStJMX7xVJgRXxW6RNGiX6JLbVSrF',
+    username: 'WhaleProphet',
+    totalWagered: '450.00',
+    totalWon: '510.00',
+    totalProfit: '60.00',
+    marketsTraded: 42,
+    winRate: '68.00',
+    pasScore: 82,
+  },
+  {
+    wallet: 'CrBvmLCX9MLmPFhT2JxQZmhPQiamTK8wVBqbg3nMEdKs',
+    username: 'AlphaTrader',
+    totalWagered: '280.00',
+    totalWon: '310.00',
+    totalProfit: '30.00',
+    marketsTraded: 28,
+    winRate: '61.00',
+    pasScore: 74,
+  },
+  {
+    wallet: 'DXmkLZBq7qRJ9VNF4UXjNyHcPqsqmBfevMJWrH7SkFHG',
+    username: 'OracleSeeker',
+    totalWagered: '175.50',
+    totalWon: '160.00',
+    totalProfit: '-15.50',
+    marketsTraded: 19,
+    winRate: '47.00',
+    pasScore: 58,
+  },
+];
+
+// ── Seed runner ─────────────────────────────────────────────────────────────
+
+async function main() {
+  console.log('🌱  Starting database seed...\n');
+
+  // Markets
+  console.log(`📊  Seeding ${SAMPLE_MARKETS.length} markets...`);
+  for (const market of SAMPLE_MARKETS) {
+    try {
+      await db.insert(schema.marketsCache)
+        .values(market)
+        .onConflictDoUpdate({
+          target: schema.marketsCache.marketPubkey,
+          set: {
+            question: market.question,
+            yesPoolSol: market.yesPoolSol,
+            noPoolSol: market.noPoolSol,
+            viewCount: market.viewCount ?? 0,
+            updatedAt: new Date(),
+          },
+        });
+      console.log(`  ✅  ${market.question.slice(0, 60)}...`);
+    } catch (e) {
+      console.error(`  ❌  Failed: ${market.question.slice(0, 40)}`, e);
+    }
   }
 
-  console.log("\nSeed complete! 9 markets inserted.");
+  // Admin settings
+  console.log(`\n⚙️   Seeding ${ADMIN_SETTINGS.length} admin settings...`);
+  for (const setting of ADMIN_SETTINGS) {
+    try {
+      await db.insert(schema.adminSettings)
+        .values(setting)
+        .onConflictDoUpdate({
+          target: schema.adminSettings.key,
+          set: { value: setting.value, updatedAt: new Date() },
+        });
+      console.log(`  ✅  ${setting.key} = ${setting.value}`);
+    } catch (e) {
+      console.error(`  ❌  Failed: ${setting.key}`, e);
+    }
+  }
+
+  // Demo users
+  console.log(`\n👥  Seeding ${DEMO_USERS.length} demo users...`);
+  for (const user of DEMO_USERS) {
+    try {
+      await db.insert(schema.users)
+        .values(user)
+        .onConflictDoUpdate({
+          target: schema.users.wallet,
+          set: {
+            username: user.username,
+            totalWagered: user.totalWagered,
+            totalWon: user.totalWon,
+            totalProfit: user.totalProfit,
+            marketsTraded: user.marketsTraded,
+            winRate: user.winRate,
+          },
+        });
+      console.log(`  ✅  ${user.username} (${user.wallet.slice(0, 8)}...)`);
+    } catch (e) {
+      console.error(`  ❌  Failed: ${user.username}`, e);
+    }
+  }
+
+  console.log('\n✨  Seed complete!');
+  process.exit(0);
 }
 
-seed().catch((e) => {
-  console.error("Seed failed:", e);
+main().catch(e => {
+  console.error('❌  Seed failed:', e);
   process.exit(1);
 });

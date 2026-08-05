@@ -12,7 +12,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("4j2AxdSZXyYVfA6ixZMQGENgUNmRn4bgo5ZDf2LPJi6n");
+declare_id!("F6PbahxzxHZu4sjryABBJDK2D68kgG9c2a8g9Cb1cnDT");
 
 #[program]
 pub mod solpredict {

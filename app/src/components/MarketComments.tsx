@@ -2,23 +2,32 @@
 
 import React, { useState, useEffect } from "react";
 import { useProgram } from "@/hooks/useProgram";
-import { MessageSquare, Send, ThumbsUp, User } from "lucide-react";
+import { MessageSquare, Send, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface Comment {
   id?: number;
+  marketPubkey?: string;
   authorWallet: string;
   authorUsername?: string;
   authorAvatar?: string;
   content: string;
+  parentId?: number;
   upvotes?: number;
   createdAt?: string | Date;
+}
+
+interface CommentNode {
+  comment: Comment;
+  replies: CommentNode[];
 }
 
 export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
   const { wallet } = useProgram();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentText, setNewCommentText] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [replyTo, setReplyTo] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchComments = async () => {
@@ -39,13 +48,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
     fetchComments();
   }, [marketPubkey]);
 
-  const handlePostComment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const postComment = async (content: string, parentId?: number) => {
     if (!wallet?.publicKey) {
       toast.error("Please connect your wallet to post a comment.");
       return;
     }
-    if (!newCommentText.trim()) return;
+    if (!content.trim()) return;
 
     try {
       setSubmitting(true);
@@ -55,22 +63,153 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
         body: JSON.stringify({
           authorWallet: wallet.publicKey.toBase58(),
           authorUsername: `${wallet.publicKey.toBase58().slice(0, 4)}...${wallet.publicKey.toBase58().slice(-4)}`,
-          content: newCommentText.trim(),
+          content: content.trim(),
+          parentId: parentId ?? null,
         }),
       });
       const data = await res.json();
       if (data.ok) {
-        toast.success("Comment posted!");
-        setNewCommentText("");
+        toast.success(parentId ? "Reply posted!" : "Comment posted!");
         fetchComments();
+        return true;
       } else {
         toast.error(`Post failed: ${data.error}`);
+        return false;
       }
     } catch (err: unknown) {
       toast.error(`Failed to post comment: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePostComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (await postComment(newCommentText)) setNewCommentText("");
+  };
+
+  const handlePostReply = async (parentId: number) => {
+    if (await postComment(replyText, parentId)) {
+      setReplyText("");
+      setReplyTo(null);
+    }
+  };
+
+  const handleUpvote = async (comment: Comment) => {
+    if (!comment.id) return;
+    const prev = comment.upvotes || 0;
+    setComments(prevComments =>
+      prevComments.map(c => c.id === comment.id ? { ...c, upvotes: prev + 1 } : c)
+    );
+    try {
+      const res = await fetch(`/api/markets/${marketPubkey}/comments/${comment.id}/upvote`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!data?.ok) {
+        setComments(prevComments =>
+          prevComments.map(c => c.id === comment.id ? { ...c, upvotes: prev } : c)
+        );
+      }
+    } catch {
+      setComments(prevComments =>
+        prevComments.map(c => c.id === comment.id ? { ...c, upvotes: prev } : c)
+      );
+    }
+  };
+
+  const buildTree = (flat: Comment[]): CommentNode[] => {
+    const nodes = new Map<number, CommentNode>();
+    const roots: CommentNode[] = [];
+    flat.forEach(c => nodes.set(c.id as number, { comment: c, replies: [] }));
+    flat.forEach(c => {
+      const node = nodes.get(c.id as number)!;
+      if (c.parentId && nodes.has(c.parentId)) {
+        nodes.get(c.parentId)!.replies.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+    return roots;
+  };
+
+  const tree = buildTree(comments);
+
+  const CommentItem = ({ node, depth }: { node: CommentNode; depth: number }) => {
+    const { comment } = node;
+    const timeAgo = comment.createdAt
+      ? new Date(comment.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "just now";
+    const isReplying = replyTo === comment.id;
+
+    return (
+      <div className={depth > 0 ? "ml-5 border-l border-white/10 pl-3" : ""}>
+        <div className="p-3 rounded-lg bg-[#0A0B12] border border-white/10 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <img
+                src={comment.authorAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${comment.authorWallet}`}
+                alt="avatar"
+                className="w-5 h-5 rounded-full bg-white/10"
+              />
+              <span className="font-bold text-[#ffd89c] text-[11px]">
+                {comment.authorUsername || `${comment.authorWallet.slice(0, 4)}...`}
+              </span>
+              <span className="text-[9px] text-[#A5A8B8]">{timeAgo}</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => handleUpvote(comment)}
+                className="flex items-center gap-1 text-[10px] text-[#A5A8B8] hover:text-[#22c55e] transition-colors cursor-pointer"
+              >
+                <ThumbsUp className="w-3 h-3" />
+                <span>{comment.upvotes || 0}</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (!wallet?.publicKey) return toast.error("Please connect your wallet to reply.");
+                  setReplyTo(isReplying ? null : (comment.id as number));
+                  setReplyText("");
+                }}
+                className="flex items-center gap-1 text-[10px] text-[#A5A8B8] hover:text-[#ffd89c] transition-colors cursor-pointer"
+              >
+                <MessageSquare className="w-3 h-3" />
+                <span>Reply</span>
+              </button>
+            </div>
+          </div>
+          <p className="text-[#F4F5FA] text-[11px] font-sans leading-relaxed">{comment.content}</p>
+
+          {isReplying && (
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                autoFocus
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handlePostReply(comment.id as number);
+                  }
+                }}
+                placeholder="Write a reply..."
+                className="flex-1 bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-xs text-[#F4F5FA] placeholder-[#A5A8B8]/50 focus:outline-none focus:border-[#7B3FE4]/60 font-mono"
+              />
+              <button
+                onClick={() => handlePostReply(comment.id as number)}
+                disabled={!replyText.trim() || submitting}
+                className="px-3 py-2 bg-[#7B3FE4]/20 text-[#ffd89c] font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-[#7B3FE4]/30 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Reply
+              </button>
+            </div>
+          )}
+        </div>
+        {node.replies.map((child, i) => (
+          <CommentItem key={i} node={child} depth={depth + 1} />
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -107,34 +246,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
 
       {/* Comments List */}
       <div className="space-y-3 font-mono text-xs max-h-80 overflow-y-auto pr-1">
-        {comments.length === 0 ? (
+        {tree.length === 0 ? (
           <p className="text-center text-[11px] text-[#A5A8B8] py-4">No comments yet. Be the first trader to post analysis!</p>
         ) : (
-          comments.map((comment, index) => {
-            const timeAgo = comment.createdAt ? new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'just now';
-            return (
-              <div key={index} className="p-3 rounded-lg bg-[#0A0B12] border border-white/10 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <img
-                      src={comment.authorAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${comment.authorWallet}`}
-                      alt="avatar"
-                      className="w-5 h-5 rounded-full bg-white/10"
-                    />
-                    <span className="font-bold text-[#ffd89c] text-[11px]">
-                      {comment.authorUsername || `${comment.authorWallet.slice(0, 4)}...`}
-                    </span>
-                    <span className="text-[9px] text-[#A5A8B8]">{timeAgo}</span>
-                  </div>
-                  <button className="flex items-center gap-1 text-[10px] text-[#A5A8B8] hover:text-[#22c55e] transition-colors cursor-pointer">
-                    <ThumbsUp className="w-3 h-3" />
-                    <span>{comment.upvotes || 0}</span>
-                  </button>
-                </div>
-                <p className="text-[#F4F5FA] text-[11px] font-sans leading-relaxed">{comment.content}</p>
-              </div>
-            );
-          })
+          tree.map((node, index) => (
+            <CommentItem key={index} node={node} depth={0} />
+          ))
         )}
       </div>
     </div>

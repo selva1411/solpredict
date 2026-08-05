@@ -38,7 +38,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
       wallet: trader,
       username: `${trader.slice(0, 4)}...${trader.slice(-4)}`,
       avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${trader}`,
-      totalWagered: solAmount.toString(),
+      totalWagered: Math.abs(solAmount).toString(),
       totalWon: "0",
       totalProfit: "0",
       marketsTraded: 1,
@@ -48,7 +48,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
     }).onConflictDoUpdate({
       target: users.wallet,
       set: {
-        totalWagered: sql`${users.totalWagered} + ${solAmount}`,
+        totalWagered: sql`${users.totalWagered} + ${Math.abs(solAmount)}`,
         marketsTraded: sql`${users.marketsTraded} + 1`,
         lastActive: new Date(),
       },

@@ -4,8 +4,11 @@ import { marketsCache } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { ok, badRequest, notFound } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { requireAdmin } from "@/lib/admin-guard";
 
-export const GET = apiHandler(async () => {
+export const GET = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   if (!db) return ok({ ok: true, markets: [] });
   const rows = await db.select().from(marketsCache).orderBy(marketsCache.marketId);
   return ok({
@@ -34,6 +37,8 @@ export const GET = apiHandler(async () => {
 });
 
 export const PATCH = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   if (!db) return badRequest("Database not available");
 
   const body = await req.json().catch(() => null);
@@ -50,7 +55,7 @@ export const PATCH = apiHandler(async (req: NextRequest) => {
   if (description !== undefined) updateData.description = description;
   if (category !== undefined) updateData.category = category;
   if (status !== undefined) updateData.status = status;
-  if (winningOutcome !== undefined) updateData.winningOutcome = winningOutcome;
+  if (winningOutcome !== undefined) updateData.winningOutcome = String(winningOutcome).toLowerCase();
   if (thumbnailUrl !== undefined) updateData.thumbnailUrl = thumbnailUrl;
   if (tags !== undefined) updateData.tags = tags;
 
@@ -60,6 +65,8 @@ export const PATCH = apiHandler(async (req: NextRequest) => {
 });
 
 export const DELETE = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   if (!db) return badRequest("Database not available");
 
   const url = new URL(req.url);

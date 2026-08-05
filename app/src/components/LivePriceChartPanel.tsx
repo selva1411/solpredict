@@ -57,8 +57,9 @@ async function fetchSOLPrice(): Promise<number> {
     }
   } catch { /* fall through */ }
 
-  // Guaranteed fallback for local/test devnet environments
-  return 214.75 + (Math.random() - 0.5) * 0.8;
+  // No synthetic fallback: return 0 so the UI shows an explicit error state
+  // instead of displaying fabricated LIVE prices.
+  return 0;
 }
 
 export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
@@ -109,12 +110,13 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
       setPrevPrice(realPrice);
       latestPriceRef.current = realPrice;
 
+      // Seed history from previously-published real ticks only (no synthetic
+      // drift). If none exist, start with the single real price point.
       const now = Date.now();
-      const seed = Array.from({ length: 60 }, (_, i) => {
-        const age = (60 - i) * POLL_MS;
-        const drift = (Math.random() - 0.5) * realPrice * 0.003;
-        return { time: now - age, price: realPrice + drift };
-      });
+      const existing = priceHistoryRef.current.slice(-60);
+      const seed = existing.length > 0
+        ? existing
+        : [{ time: now, price: realPrice }];
       priceHistoryRef.current = seed;
       if (mounted) setChartData([...seed]);
 

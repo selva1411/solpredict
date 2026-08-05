@@ -8,6 +8,7 @@
  *   const uiMarkets = onChainMarkets.map(onChainToUiMarket);
  */
 import type { PublicKey } from "@solana/web3.js";
+import type { MarketCacheEntry } from "@/lib/db/markets-store";
 
 export const CATEGORY_NAMES = ["Crypto", "Sports", "Politics", "Tech", "Other"] as const;
 export type CategoryName = (typeof CATEGORY_NAMES)[number];
@@ -42,6 +43,7 @@ export interface UiMarket {
   oracleFeedId: string;
   trending?: boolean;
   hot?: boolean;
+  viewCount?: number;
 }
 
 /**
@@ -65,6 +67,11 @@ export interface OnChainMarket {
     noSupply: number;
     [key: string]: unknown;
   };
+  // DB enrichment fields (passed from useMarkets)
+  _dbVolume24h?: number;
+  _dbTraders?: number;
+  _dbLiquidity?: number;
+  _dbViewCount?: number;
 }
 
 export function categoryFromIndex(idx: number): CategoryName {
@@ -99,8 +106,14 @@ export function onChainToUiMarket(
   const yesLamports = m.account.yesPoolLamports;
   const noLamports = m.account.noPoolLamports;
   const totalLamports = yesLamports + noLamports;
-  // CPMM: YES probability = NO_pool / total (scarcer YES = higher YES price)
-  const yesPrice = totalLamports > 0 ? noLamports / totalLamports : 0.5;
+  // LMSR/CPMM: YES probability = YES_pool / total (larger YES pool = higher YES price)
+  // Mirrors the on-chain LMSR probability_yes_bps and spot price conventions.
+  const yesPrice = totalLamports > 0 ? yesLamports / totalLamports : 0.5;
+  const liquidity = lamportsToSol(totalLamports);
+
+  // Use DB enrichment data if available (from useMarkets _db* fields)
+  const volume24h = enrichment?.volume24h ?? m._dbVolume24h ?? 0;
+  const traders = enrichment?.traders ?? m._dbTraders ?? 0;
 
   return {
     id: m.publicKey.toBase58(),
@@ -112,14 +125,15 @@ export function onChainToUiMarket(
     noPool: lamportsToSol(noLamports),
     yesPrice,
     noPrice: 1 - yesPrice,
-    volume24h: enrichment?.volume24h ?? 0,
-    liquidity: lamportsToSol(totalLamports),
-    traders: enrichment?.traders ?? 0,
+    volume24h,
+    liquidity: m._dbLiquidity ?? liquidity,
+    traders,
     icon: categoryIcon(m.account.category),
     sparkline: enrichment?.sparkline ?? [],
     oracleFeedId: Array.isArray(m.account.oracleFeedId) ? "0x" + Buffer.from(m.account.oracleFeedId).toString("hex") : "",
     trending: enrichment?.trending ?? false,
     hot: enrichment?.hot ?? false,
+    viewCount: m._dbViewCount ?? 0,
   };
 }
 
@@ -139,4 +153,43 @@ export function onChainMarketsToUi(
   return markets.map((m) =>
     onChainToUiMarket(m, enrichmentMap?.[m.publicKey.toBase58()]),
   );
+}
+
+/**
+ * Convert a DB cache entry (Neon markets_cache + trades enrichment) to a UiMarket.
+ * Used by DB-backed endpoints (trending, related, cached) so they render in the
+ * same UiMarket shape as on-chain data.
+ */
+export function cacheToUiMarket(
+  c: MarketCacheEntry,
+  opts?: { trending?: boolean; hot?: boolean },
+): UiMarket {
+  const yesPool = Number(c.yesPoolSol ?? 0);
+  const noPool = Number(c.noPoolSol ?? 0);
+  const totalPool = yesPool + noPool;
+  const yesPrice = totalPool > 0 ? yesPool / totalPool : 0.5;
+  const category = (CATEGORY_NAMES as readonly string[]).includes(c.category)
+    ? (c.category as CategoryName)
+    : "Other";
+
+  return {
+    id: c.marketPubkey,
+    question: c.question,
+    description: c.description ?? "",
+    category,
+    endDate: c.endTs ? new Date(c.endTs).toISOString() : new Date().toISOString(),
+    yesPool,
+    noPool,
+    yesPrice,
+    noPrice: 1 - yesPrice,
+    volume24h: c.volume24h ?? 0,
+    liquidity: c.liquidity ?? yesPool + noPool,
+    traders: c.traders ?? 0,
+    icon: categoryIcon(CATEGORY_NAMES.indexOf(category)),
+    sparkline: [],
+    oracleFeedId: "",
+    trending: opts?.trending ?? false,
+    hot: opts?.hot ?? false,
+    viewCount: c.viewCount ?? 0,
+  };
 }

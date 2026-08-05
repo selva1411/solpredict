@@ -5,8 +5,11 @@ import { trades } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { requireAdmin } from "@/lib/admin-guard";
 
-export const GET = apiHandler(async () => {
+export const GET = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   if (!db) return ok({ ok: true, users: [] });
 
   const rows = await db
@@ -36,6 +39,8 @@ export const GET = apiHandler(async () => {
 });
 
 export const PATCH = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   if (!db) return badRequest("Database not available");
 
   const body = await req.json().catch(() => null);
@@ -57,6 +62,8 @@ export const PATCH = apiHandler(async (req: NextRequest) => {
 });
 
 export const DELETE = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   if (!db) return badRequest("Database not available");
 
   const url = new URL(req.url);

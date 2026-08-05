@@ -12,7 +12,9 @@
     "test:coverage": "vitest run --coverage",
     "ws:start": "npx tsx server/ws-server.ts",
     "alerts:start": "npx tsx server/price-alert-checker.ts",
-    "dev:full": "concurrently -n next,ws,alerts -c cyan,green,yellow \"npm run dev\" \"npm run ws:start\" \"npm run alerts:start\""
+    "dev:full": "concurrently -n next,ws,alerts -c cyan,green,yellow \"npm run dev\" \"npm run ws:start\" \"npm run alerts:start\"",
+    "seed": "npx tsx scripts/seed-cache.ts",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

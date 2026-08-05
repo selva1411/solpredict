@@ -14,6 +14,7 @@ interface Props {
   endTs: number;
   sharePriceLamports: number;
   betAmount?: number;
+  side?: "YES" | "NO";
 }
 
 export default function MarketAnalytics({
@@ -22,6 +23,7 @@ export default function MarketAnalytics({
   endTs,
   sharePriceLamports,
   betAmount = 0,
+  side = "YES",
 }: Props) {
   const totalPool = yesPoolLamports + noPoolLamports;
   const depthWarning = poolDepthWarning(totalPool);
@@ -115,9 +117,13 @@ export default function MarketAnalytics({
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
             <span>New YES%</span>
             <span style={{ color: "var(--color-yes)" }}>
-              {totalPool === 0
-                ? "50%"
-                : `${Math.round(((yesPoolLamports + (betAmount > 0 ? betAmount : 0)) / (totalPool + betAmount)) * 100)}%`}
+              {(() => {
+                if (totalPool === 0) return "50%";
+                const newYes = yesPoolLamports + (side === "YES" ? betAmount : 0);
+                const newNo = noPoolLamports + (side === "NO" ? betAmount : 0);
+                const newTotal = newYes + newNo;
+                return newTotal === 0 ? "50%" : `${Math.round((newYes / newTotal) * 100)}%`;
+              })()}
             </span>
           </div>
         </div>

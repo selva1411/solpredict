@@ -32,6 +32,7 @@ import { OrderBookDepth } from "@/components/OrderBookDepth";
 const LivePriceChartPanel = dynamic(() => import("@/components/LivePriceChartPanel").then(m => m.LivePriceChartPanel), { ssr: false });
 import { AiMarketWhisperer } from "@/components/AiMarketWhisperer";
 import { MarketComments } from "@/components/MarketComments";
+import { RelatedMarkets } from "@/components/RelatedMarkets";
 import { getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { getMarketStatusString } from "@/lib/events";
 import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda } from "@/lib/pda";
@@ -346,41 +347,24 @@ export default function MarketDetailPage() {
     try {
       const currentYes = Math.max(0.01, yesPool);
       const currentNo = Math.max(0.01, noPool);
-      const k = currentYes * currentNo; // k = YES * NO (locked constant product)
 
-      const tradeAmountSol = Math.max(0.01, qty * activeSharePriceSol);
-      const netSol = tradeAmountSol * 0.99; // 1% fee deducted
+      // Mirror on-chain pool accounting: buying YES adds cost to yes_pool_lamports,
+      // selling YES subtracts refund from it (buy_shares.rs / sell_shares.rs). The
+      // opposite side's pool is untouched on-chain.
+      const amountSol = Math.max(0.01, qty * activeSharePriceSol);
 
       let newYesPool = currentYes;
       let newNoPool = currentNo;
 
-      if (isBuy) {
-        if (side === "YES") {
-          // Buy YES: NO pool goes UP (+netSol), YES pool goes DOWN (k / newNO)
-          newNoPool = currentNo + netSol;
-          newYesPool = Math.max(0.001, k / newNoPool);
-        } else {
-          // Buy NO: YES pool goes UP (+netSol), NO pool goes DOWN (k / newYES)
-          newYesPool = currentYes + netSol;
-          newNoPool = Math.max(0.001, k / newYesPool);
-        }
+      if (side === "YES") {
+        newYesPool = Math.max(0.001, isBuy ? currentYes + amountSol : currentYes - amountSol);
       } else {
-        const returnAmountSol = Math.max(0.01, qty * activeSharePriceSol);
-        const netReturn = returnAmountSol * 0.99;
-        if (side === "YES") {
-          // Sell YES: YES pool goes UP (+netReturn), NO pool goes DOWN (k / newYES)
-          newYesPool = currentYes + netReturn;
-          newNoPool = Math.max(0.001, k / newYesPool);
-        } else {
-          // Sell NO: NO pool goes UP (+netReturn), YES pool goes DOWN (k / newNO)
-          newNoPool = currentNo + netReturn;
-          newYesPool = Math.max(0.001, k / newNoPool);
-        }
+        newNoPool = Math.max(0.001, isBuy ? currentNo + amountSol : currentNo - amountSol);
       }
 
       const newTotal = newYesPool + newNoPool;
-      // Spot Price / Probability of YES = new NO pool / (new YES pool + new NO pool)
-      const newYesPct = Math.max(1, Math.min(99, Math.round((newNoPool / newTotal) * 100)));
+      // Probability of YES = YES pool / (YES pool + NO pool)
+      const newYesPct = Math.max(1, Math.min(99, Math.round((newYesPool / newTotal) * 100)));
 
       // Update local React state immediately for instant UI feedback
       if (market) {
@@ -392,7 +376,7 @@ export default function MarketDetailPage() {
         probHistory.current = [...probHistory.current.slice(-29), newYesPct];
       }
 
-      const lamportsIn = isBuy ? Math.round(tradeAmountSol * 1e9) : -Math.round(tradeAmountSol * 1e9);
+      const lamportsIn = isBuy ? Math.round(amountSol * 1e9) : -Math.round(amountSol * 1e9);
 
       await fetch("/api/sync/trade", {
         method: "POST",
@@ -460,7 +444,8 @@ export default function MarketDetailPage() {
       if (cachedMarket) {
         const catIdx = CATEGORIES.indexOf(cachedMarket.category) >= 0 ? CATEGORIES.indexOf(cachedMarket.category) : 0;
         const statusObj = cachedMarket.status === "settled" ? { settled: {} } : cachedMarket.status === "cancelled" ? { cancelled: {} } : { open: {} };
-        const winObj = cachedMarket.winningOutcome === "YES" ? { yes: {} } : cachedMarket.winningOutcome === "NO" ? { no: {} } : { unset: {} };
+        const winNorm = (cachedMarket.winningOutcome || "").toLowerCase();
+        const winObj = winNorm === "yes" ? { yes: {} } : winNorm === "no" ? { no: {} } : { unset: {} };
         const dbYesLamports = Math.round((cachedMarket.yesPoolSol || 0) * 1e9);
         const dbNoLamports = Math.round((cachedMarket.noPoolSol || 0) * 1e9);
 
@@ -508,6 +493,23 @@ export default function MarketDetailPage() {
       setIsWatched(getWatchlist().includes(marketPda.toBase58()));
       recordProbabilitySnapshot(marketAcc);
       syncMarketToDb(marketAcc);
+
+      // Seed the probability sparkline from persisted DB snapshots (price_history table)
+      try {
+        const detailRes = await fetch(`/api/markets/${id}`);
+        if (detailRes.ok) {
+          const detailJson = await detailRes.json();
+          const dbHist = detailJson?.enrichment?.dbPriceHistory;
+          if (Array.isArray(dbHist) && dbHist.length > 1) {
+            const pts = dbHist.map((p: { yesPct: number }) =>
+              Math.max(1, Math.min(99, Math.round(Number(p.yesPct))))
+            );
+            if (pts.length > probHistory.current.length) {
+              probHistory.current = pts.slice(-30);
+            }
+          }
+        }
+      } catch {}
 
       // Fetch config fee bps and treasury balance in parallel from the blockchain
       const configPda = getConfigPda(program.programId);
@@ -874,8 +876,12 @@ export default function MarketDetailPage() {
   };
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const yesLamports = market.yesPoolLamports.toNumber();
+  const noLamports = market.noPoolLamports.toNumber();
+  const totalLamports = yesLamports + noLamports;
+  const shareYesPct = Math.round((totalLamports > 0 ? (yesLamports / totalLamports) : 0.5) * 100);
   const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-    `Predicting "${market.question}" on SOLPredict! Current YES Probability: ${Math.round((market.yesPoolLamports.toNumber() / (market.yesPoolLamports.toNumber() + market.noPoolLamports.toNumber() || 1)) * 100)}%`
+    `Predicting "${market.question}" on SOLPredict! Current YES Probability: ${shareYesPct}%`
   )}&url=${encodeURIComponent(shareUrl)}`;
   const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(
     shareUrl
@@ -927,6 +933,13 @@ export default function MarketDetailPage() {
   const activeSharePriceSol = tradeSide === "YES" ? yesSharePriceSol : noSharePriceSol;
 
   const tradeCost = quantity * activeSharePriceSol;
+
+  // Estimated price impact = trade size relative to the opposite-side pool
+  const impactPool = tradeSide === "YES" ? noPool : yesPool;
+  const priceImpactPct = impactPool > 0 && tradeCost > 0
+    ? (tradeCost / (impactPool + tradeCost)) * 100
+    : 0;
+  const slippageWarning = priceImpactPct >= 5;
 
   const getPotentialPayout = (): number => {
     const costLamports = quantity * market.sharePriceLamports.toNumber();
@@ -1219,7 +1232,7 @@ export default function MarketDetailPage() {
           tokensOut: 0,
           yesPoolSol: newYesPool,
           noPoolSol: newNoPool,
-          yesPct: Math.max(1, Math.min(99, Math.round((newNoPool / (newYesPool + newNoPool)) * 100))),
+          yesPct: Math.max(1, Math.min(99, Math.round((newYesPool / (newYesPool + newNoPool)) * 100))),
         }),
       });
 
@@ -1364,6 +1377,21 @@ export default function MarketDetailPage() {
                       }`}>{v}</button>
                   ))}
                 </div>
+                <div className="flex items-center gap-1">
+                  {[0.1, 0.5, 1, 5].map((sol) => {
+                    const shares = Math.max(1, Math.floor(sol / Math.max(0.0005, activeSharePriceSol)));
+                    return (
+                      <button
+                        key={sol}
+                        onClick={() => setQuantity(shares)}
+                        className="flex-1 py-1 rounded text-[9px] font-mono cursor-pointer transition-all border border-[rgba(165,168,184,0.4)]/20 bg-[#0A0B12] text-[#00E5FF]/80 hover:text-[#00E5FF] hover:border-[#00E5FF]/40"
+                      >
+                        {sol} SOL
+                      </button>
+                    );
+                  })}
+                  <span className="flex-1 py-1 text-center text-[9px] text-[#A5A8B8]/60 font-mono truncate">one-click</span>
+                </div>
               </div>
 
               {/* Advanced: Limit Order toggle */}
@@ -1440,6 +1468,20 @@ export default function MarketDetailPage() {
                     <span className="text-[#C8FF00] font-bold">
                       +{(potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)).toFixed(4)} SOL
                       {" "}(+{(((potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)) / Math.max(0.0001, (isLimitOrder ? quantity * limitPriceSol : tradeCost))) * 100).toFixed(0)}% return)
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-[#A5A8B8]">Est. Price Impact</span>
+                  <span className={priceImpactPct >= 5 ? "text-[#FF4D6D] font-bold" : "text-[#A5A8B8]"}>
+                    {priceImpactPct.toFixed(2)}%
+                  </span>
+                </div>
+                {slippageWarning && (
+                  <div className="flex items-start gap-1.5 p-2 rounded bg-[#FF4D6D]/10 border border-[#FF4D6D]/30 text-[10px] text-[#FF4D6D]">
+                    <span>⚠</span>
+                    <span>
+                      High price impact (≥5%). This large order may move the market price significantly. Consider splitting it into smaller orders.
                     </span>
                   </div>
                 )}
@@ -1903,6 +1945,7 @@ export default function MarketDetailPage() {
             yesPool={yesPool}
             noPool={noPool}
             category={categoryStr}
+            marketPubkey={marketPda.toBase58()}
           />
 
           {/* Community Discussions & Sentiment */}
@@ -2023,6 +2066,9 @@ export default function MarketDetailPage() {
               </p>
             </div>
           </div>
+
+          {/* Related markets from same category (DB cache) */}
+          <RelatedMarkets category={categoryStr} excludePubkey={marketPda.toBase58()} />
         </section>
 
         {/* Right Column: Desktop Trading dashboard */}

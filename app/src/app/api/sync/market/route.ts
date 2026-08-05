@@ -18,6 +18,12 @@ export const POST = apiHandler(async (req: NextRequest) => {
 
   const { marketPubkey, marketId, question, description, category, status, yesPoolSol, noPoolSol, yesSupply, noSupply, endTs, resolveTs, winningOutcome } = parsed.data;
 
+  // Normalize outcome casing to lowercase (yes/no) so every consumer
+  // (positions, achievements, market page) classifies wins consistently.
+  const outcomeNorm = winningOutcome
+    ? String(winningOutcome).toLowerCase()
+    : null;
+
   try {
     if (db) {
       await db.insert(marketsCache).values({
@@ -27,7 +33,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
         description: description ?? "",
         category: category ?? "Crypto",
         status: status ?? "open",
-        winningOutcome: winningOutcome ?? null,
+        winningOutcome: outcomeNorm,
         yesPoolSol: String(yesPoolSol ?? 0),
         noPoolSol: String(noPoolSol ?? 0),
         yesSupply: yesSupply ?? 0,
@@ -42,7 +48,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
           question,
           description: description ?? "",
           status: status ?? "open",
-          winningOutcome: winningOutcome ?? null,
+          winningOutcome: outcomeNorm,
           yesPoolSol: String(yesPoolSol ?? 0),
           noPoolSol: String(noPoolSol ?? 0),
           yesSupply: yesSupply ?? 0,
@@ -62,7 +68,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
             type: status === "settled" ? "settlement" : "expiry",
             marketPubkey,
             message: status === "settled"
-              ? `Market "${question}" settled. ${winningOutcome === "yes" ? "YES" : "NO"} won.`
+              ? `Market "${question}" settled. ${outcomeNorm === "yes" ? "YES" : "NO"} won.`
               : `Market "${question}" was canceled. Refunds available.`,
             read: false,
           }).onConflictDoNothing().catch(() => null);

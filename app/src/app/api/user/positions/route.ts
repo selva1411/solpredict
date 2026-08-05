@@ -1,10 +1,9 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
-import { marketsCache } from "@/lib/db/schema";
+import { marketsCache, liquidityPositions } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { badRequest, serverError, ok } from "@/lib/api-response";
+import { badRequest, ok } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
-import { toError } from "@/lib/errors";
 import { positionsGetSchema } from "@/lib/schemas";
 
 export const GET = apiHandler(async (req: NextRequest) => {
@@ -17,8 +16,9 @@ export const GET = apiHandler(async (req: NextRequest) => {
 
   const wallet = parsed.data.wallet;
 
-  if (!db) return ok({ positions: [], fromDb: false });
+  if (!db) return ok({ ok: true, positions: [], lpPositions: [], stats: { netWorthSol: 0, pnl24hSol: 0, pnl24hPct: 0, winRate: 0 }, fromDb: false });
 
+  // Get trade positions from trades table
   const rows = await db.execute(sql`
     SELECT
       market_pubkey,
@@ -60,43 +60,57 @@ export const GET = apiHandler(async (req: NextRequest) => {
   let totalNetWorthSol = 0;
   let totalPnlSol = 0;
   let totalSpentSol = 0;
+  let winCount = 0;
+  let totalSettled = 0;
 
   for (const [marketPubkey, data] of tradesByMarket.entries()) {
     let question = "Market " + marketPubkey.slice(0, 8);
     let category = "Crypto";
     let status = "open";
-    let yesPoolSol = 100;
-    let noPoolSol = 100;
+    let yesPoolSol = 0;
+    let noPoolSol = 0;
+    let winningOutcome: string | null = null;
 
     try {
-      if (db) {
-        const markets = await db.select({
-          question: marketsCache.question,
-          category: marketsCache.category,
-          status: marketsCache.status,
-          yesPoolSol: marketsCache.yesPoolSol,
-          noPoolSol: marketsCache.noPoolSol,
-        }).from(marketsCache).where(eq(marketsCache.marketPubkey, marketPubkey)).limit(1);
-        if (markets.length > 0) {
-          question = markets[0].question ?? question;
-          category = markets[0].category ?? category;
-          status = markets[0].status ?? "open";
-          yesPoolSol = Number(markets[0].yesPoolSol || 100);
-          noPoolSol = Number(markets[0].noPoolSol || 100);
-        }
+      const mktRows = await db.select({
+        question: marketsCache.question,
+        category: marketsCache.category,
+        status: marketsCache.status,
+        yesPoolSol: marketsCache.yesPoolSol,
+        noPoolSol: marketsCache.noPoolSol,
+        winningOutcome: marketsCache.winningOutcome,
+      }).from(marketsCache).where(eq(marketsCache.marketPubkey, marketPubkey)).limit(1);
+      if (mktRows.length > 0) {
+        question = mktRows[0].question ?? question;
+        category = mktRows[0].category ?? category;
+        status = mktRows[0].status ?? "open";
+        yesPoolSol = Number(mktRows[0].yesPoolSol || 0);
+        noPoolSol = Number(mktRows[0].noPoolSol || 0);
+        winningOutcome = mktRows[0].winningOutcome ?? null;
       }
     } catch {}
 
-    const totalPool = yesPoolSol + noPoolSol || 1;
-    // CPMM: YES price = NO_pool / total (scarcer YES = higher YES price)
-    const currentYesPrice = noPoolSol / totalPool;
-    const currentNoPrice = yesPoolSol / totalPool;
+    const totalPool = yesPoolSol + noPoolSol;
+    // LMSR/CPMM: YES price = YES_pool / total (larger YES pool = higher YES price)
+    const currentYesPrice = totalPool > 0 ? yesPoolSol / totalPool : 0.5;
+    const currentNoPrice = totalPool > 0 ? noPoolSol / totalPool : 0.5;
+
+    // Track win/loss for settled markets (case-insensitive outcome)
+    if (status === 'settled' && winningOutcome) {
+      totalSettled++;
+      const outcome = winningOutcome.toLowerCase();
+      const wonYes = outcome === 'yes' && data.yesTokens > 0;
+      const wonNo = outcome === 'no' && data.noTokens > 0;
+      if (wonYes || wonNo) winCount++;
+    }
 
     if (data.yesTokens > 0) {
       const shares = data.yesTokens / 1e6;
       const spentSol = data.yesLamports / 1e9;
       const avgPriceSol = shares > 0 ? spentSol / shares : currentYesPrice;
-      const currentPriceSol = currentYesPrice;
+      const currentPriceSol = status === 'settled'
+        ? ((winningOutcome ?? "").toLowerCase() === 'yes' ? 1 : 0)
+        : currentYesPrice;
       const valueSol = shares * currentPriceSol;
       const pnlSol = valueSol - spentSol;
       const pnlPercent = spentSol > 0 ? (pnlSol / spentSol) * 100 : 0;
@@ -106,17 +120,9 @@ export const GET = apiHandler(async (req: NextRequest) => {
       totalSpentSol += spentSol;
 
       positionList.push({
-        marketPubkey,
-        question,
-        category,
-        status,
-        side: "YES",
-        shares,
-        avgPriceSol,
-        currentPriceSol,
-        valueSol,
-        pnlSol,
-        pnlPercent,
+        marketPubkey, question, category, status,
+        side: "YES", shares, avgPriceSol, currentPriceSol,
+        valueSol, pnlSol, pnlPercent,
       });
     }
 
@@ -124,7 +130,9 @@ export const GET = apiHandler(async (req: NextRequest) => {
       const shares = data.noTokens / 1e6;
       const spentSol = data.noLamports / 1e9;
       const avgPriceSol = shares > 0 ? spentSol / shares : currentNoPrice;
-      const currentPriceSol = currentNoPrice;
+      const currentPriceSol = status === 'settled'
+        ? ((winningOutcome ?? "").toLowerCase() === 'no' ? 1 : 0)
+        : currentNoPrice;
       const valueSol = shares * currentPriceSol;
       const pnlSol = valueSol - spentSol;
       const pnlPercent = spentSol > 0 ? (pnlSol / spentSol) * 100 : 0;
@@ -134,27 +142,19 @@ export const GET = apiHandler(async (req: NextRequest) => {
       totalSpentSol += spentSol;
 
       positionList.push({
-        marketPubkey,
-        question,
-        category,
-        status,
-        side: "NO",
-        shares,
-        avgPriceSol,
-        currentPriceSol,
-        valueSol,
-        pnlSol,
-        pnlPercent,
+        marketPubkey, question, category, status,
+        side: "NO", shares, avgPriceSol, currentPriceSol,
+        valueSol, pnlSol, pnlPercent,
       });
     }
   }
 
   const pnl24hPct = totalSpentSol > 0 ? (totalPnlSol / totalSpentSol) * 100 : 0;
+  const winRate = totalSettled > 0 ? winCount / totalSettled : 0;
 
   // Fetch LP positions for this wallet
   let lpPositionsList: any[] = [];
   try {
-    const { liquidityPositions } = await import("@/lib/db/schema");
     const lpRows = await db.select({
       id: liquidityPositions.id,
       marketPubkey: liquidityPositions.marketPubkey,
@@ -172,7 +172,10 @@ export const GET = apiHandler(async (req: NextRequest) => {
 
     lpPositionsList = lpRows.map(r => {
       const amount = Number(r.amountSol || 0);
-      const estFeeEarned = amount * 0.02; // 2% LP protocol fee yield
+      const lpTokens = Number(r.lpTokens || 0);
+      // Real fee yield comes from lp_pool_stats (updated by indexers), not a
+      // fabricated 2% estimate. Fall back to 0 rather than inventing data.
+      const estFeeEarned = 0;
       return {
         id: r.id,
         marketPubkey: r.marketPubkey,
@@ -180,9 +183,9 @@ export const GET = apiHandler(async (req: NextRequest) => {
         category: r.category ?? "Crypto",
         status: r.status ?? "open",
         amountSol: amount,
-        lpTokens: r.lpTokens || Math.floor(amount * 1000),
+        lpTokens,
         estFeeEarnedSol: Number(estFeeEarned.toFixed(4)),
-        apy: "18.5%",
+        apy: '0%',
       };
     });
   } catch {}
@@ -195,7 +198,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
       netWorthSol: Number(totalNetWorthSol.toFixed(4)),
       pnl24hSol: Number(totalPnlSol.toFixed(4)),
       pnl24hPct: Number(pnl24hPct.toFixed(2)),
-      winRate: 0.50,
+      winRate: Number(winRate.toFixed(2)),
     },
     fromDb: true,
   });

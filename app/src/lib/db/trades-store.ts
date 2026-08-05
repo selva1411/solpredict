@@ -31,7 +31,7 @@ export async function recordTradeInDb(data: {
     }).onConflictDoNothing().returning();
 
     // Update user stats in users table
-    const solVolume = (data.lamportsIn || 0) / 1e9;
+    const solVolume = Math.abs(data.lamportsIn || 0) / 1e9;
     await db.insert(users).values({
       wallet: data.trader,
       totalWagered: solVolume.toString(),
@@ -45,6 +45,17 @@ export async function recordTradeInDb(data: {
         lastActive: new Date(),
       }
     });
+
+    // Update market pool data after trade
+    try {
+      const yesPool = Number(data.side === 'YES' ? data.lamportsIn : 0) / 1e9;
+      const noPool = Number(data.side === 'NO' ? data.lamportsIn : 0) / 1e9;
+      await db.update(marketsCache).set({
+        yesPoolSol: sql`CAST(COALESCE(CAST(${marketsCache.yesPoolSol} AS NUMERIC), 0) + ${yesPool} AS TEXT)`,
+        noPoolSol: sql`CAST(COALESCE(CAST(${marketsCache.noPoolSol} AS NUMERIC), 0) + ${noPool} AS TEXT)`,
+        updatedAt: new Date(),
+      }).where(eq(marketsCache.marketPubkey, data.marketPubkey));
+    } catch {}
 
     return result;
   } catch (err) {
@@ -68,6 +79,7 @@ export async function getRecentTradesFromDb(limit = 20) {
       pricePerToken: trades.pricePerToken,
       blockTime: trades.blockTime,
       question: marketsCache.question,
+      category: marketsCache.category,
     })
     .from(trades)
     .leftJoin(marketsCache, eq(trades.marketPubkey, marketsCache.marketPubkey))
@@ -76,7 +88,8 @@ export async function getRecentTradesFromDb(limit = 20) {
 
     return rows.map(r => ({
       ...r,
-      question: r.question || `Market Trade (${r.marketPubkey.slice(0, 4)}...)`,
+      question: r.question || `Market (${r.marketPubkey.slice(0, 8)}...)`,
+      category: r.category || 'Crypto',
     }));
   } catch (err) {
     logger.warn("getRecentTradesFromDb failed:", err);
@@ -87,7 +100,9 @@ export async function getRecentTradesFromDb(limit = 20) {
 export async function getTradesByMarketFromDb(marketPubkey: string) {
   if (!db) return [];
   try {
-    return await db.select().from(trades).where(eq(trades.marketPubkey, marketPubkey)).orderBy(desc(trades.blockTime));
+    return await db.select().from(trades)
+      .where(eq(trades.marketPubkey, marketPubkey))
+      .orderBy(desc(trades.blockTime));
   } catch {
     return [];
   }
@@ -96,8 +111,68 @@ export async function getTradesByMarketFromDb(marketPubkey: string) {
 export async function getTradesByWalletFromDb(wallet: string) {
   if (!db) return [];
   try {
-    return await db.select().from(trades).where(eq(trades.trader, wallet)).orderBy(desc(trades.blockTime));
+    const rows = await db.select({
+      id: trades.id,
+      signature: trades.signature,
+      marketPubkey: trades.marketPubkey,
+      trader: trades.trader,
+      side: trades.side,
+      lamportsIn: trades.lamportsIn,
+      tokensOut: trades.tokensOut,
+      pricePerToken: trades.pricePerToken,
+      blockTime: trades.blockTime,
+      question: marketsCache.question,
+      category: marketsCache.category,
+    })
+    .from(trades)
+    .leftJoin(marketsCache, eq(trades.marketPubkey, marketsCache.marketPubkey))
+    .where(eq(trades.trader, wallet))
+    .orderBy(desc(trades.blockTime));
+
+    return rows.map(r => ({
+      ...r,
+      question: r.question || `Market (${r.marketPubkey.slice(0, 8)}...)`,
+      category: r.category || 'Crypto',
+    }));
   } catch {
     return [];
+  }
+}
+
+export async function getTradeVolume24h(): Promise<number> {
+  if (!db) return 0;
+  try {
+    const res = await db.execute(sql`
+      SELECT COALESCE(SUM(ABS(lamports_in)), 0) / 1e9 as vol
+      FROM trades
+      WHERE block_time > NOW() - INTERVAL '24 hours'
+    `);
+    return Number((res.rows[0] as any)?.vol ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+export async function getActiveTraders24h(): Promise<number> {
+  if (!db) return 0;
+  try {
+    const res = await db.execute(sql`
+      SELECT COUNT(DISTINCT trader) as count
+      FROM trades
+      WHERE block_time > NOW() - INTERVAL '24 hours'
+    `);
+    return Number((res.rows[0] as any)?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+export async function getTotalTradeCount(): Promise<number> {
+  if (!db) return 0;
+  try {
+    const [res] = await db.select({ count: sql<number>`COUNT(*)::int` }).from(trades);
+    return res?.count || 0;
+  } catch {
+    return 0;
   }
 }

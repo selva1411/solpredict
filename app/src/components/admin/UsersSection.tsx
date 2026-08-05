@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, Variants } from "framer-motion";
 import { Users, Search, Loader2, ExternalLink } from "lucide-react";
+import { adminFetch } from "@/lib/admin-client";
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -35,7 +36,7 @@ export function UsersSection() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/users");
+      const res = await adminFetch("/api/admin/users");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setUsers(data.users ?? []);

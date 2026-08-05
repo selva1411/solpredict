@@ -142,7 +142,7 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
 
       <div className="flex items-center justify-between text-[11px] text-[#A5A8B8] font-mono pt-3 border-t border-white/5 relative z-10" style={{ transform: "translateZ(15px)" }}>
         <span className="flex items-center gap-1">
-          <Users size={11} /> {market.traders > 0 ? market.traders.toLocaleString() : "12"}
+          <Users size={11} /> {market.traders > 0 ? market.traders.toLocaleString() : "0"}
         </span>
         <span className="flex items-center gap-1">
           <TrendingUp size={11} /> {formatVolume(market.liquidity || (market.yesPool + market.noPool))} liq

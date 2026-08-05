@@ -52,6 +52,14 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
+const PERIODS = [
+  { key: "all", label: "All-Time" },
+  { key: "monthly", label: "30d" },
+  { key: "weekly", label: "7d" },
+  { key: "daily", label: "24h" },
+] as const;
+type Period = (typeof PERIODS)[number]["key"];
+
 function LeaderboardPage() {
   const { program } = useProgram();
   const wallet = useWallet();
@@ -60,15 +68,18 @@ function LeaderboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<"volume" | "wins" | "positions">("volume");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
   const [leaderboardFallback, setLeaderboardFallback] = useState<any[]>([]);
 
   const fetchLeaderboard = async () => {
     try {
       setLoading(true);
-      // DB is the primary source of truth
-      const apiRes = await fetch('/api/leaderboard').then(r => r.json()).catch(() => ({ ok: false, leaderboard: [] }));
+      // DB is the primary source of truth with period filtering
+      const apiRes = await fetch(`/api/leaderboard?period=${selectedPeriod}&sortBy=${sortBy}`).then(r => r.json()).catch(() => ({ ok: false, leaderboard: [] }));
       if (apiRes.ok && apiRes.leaderboard?.length > 0) {
         setLeaderboardFallback(apiRes.leaderboard);
+      } else {
+        setLeaderboardFallback([]);
       }
       // Try on-chain as enrichment only (may fail if validator is off)
       try {
@@ -88,7 +99,7 @@ function LeaderboardPage() {
     }
   };
 
-  useEffect(() => { fetchLeaderboard(); }, [program]);
+  useEffect(() => { fetchLeaderboard(); }, [program, selectedPeriod, sortBy]);
 
   const leaderboardStats = useMemo(() => {
     const marketByKey = new Map<string, any>();
@@ -151,8 +162,22 @@ function LeaderboardPage() {
           <span className="text-gradient">Trader Rankings</span>
         </h1>
         <p className="text-[#A5A8B8]">
-          Rankings compiled from confirmed on-chain activity logs across devnet.
+          Live rankings from on-chain activity and database records.
         </p>
+      </div>
+
+      {/* Period Tabs */}
+      <div className="flex items-center gap-1 mb-4 p-1 bg-[#0A0B12] rounded-xl border border-white/5 w-fit">
+        {PERIODS.map((p) => (
+          <button key={p.key} onClick={() => setSelectedPeriod(p.key)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+              selectedPeriod === p.key
+                ? "bg-[#7B3FE4] text-white shadow-lg shadow-[#7B3FE4]/25"
+                : "text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5"
+            }`}>
+            {p.label}
+          </button>
+        ))}
       </div>
 
       {myAddress && myRank > 0 && (

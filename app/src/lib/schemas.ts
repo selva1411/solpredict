@@ -59,6 +59,7 @@ export const analyzeMarketSchema = z.object({
   yesPool: z.number().min(0).optional(),
   noPool: z.number().min(0).optional(),
   category: z.string().max(50).optional(),
+  marketPubkey: z.string().max(64).optional(),
 });
 
 export const positionsGetSchema = z.object({

@@ -39,14 +39,7 @@ export function LiveCryptoChart({
   targetExpo,
   symbol = "",
 }: LiveCryptoChartProps) {
-  const [chartData, setChartData] = useState<Candle[]>(() => {
-    const now = Date.now();
-    const base = 150;
-    return Array.from({ length: 60 }, (_, i) => ({
-      time: now - (60 - i) * 3000,
-      price: base + (Math.random() - 0.5) * base * 0.02,
-    }));
-  });
+  const [chartData, setChartData] = useState<Candle[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
