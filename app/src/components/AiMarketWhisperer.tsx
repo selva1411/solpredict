@@ -64,7 +64,7 @@ export function AiMarketWhisperer({
                 POWERED BY CLAUDE
               </span>
             </h3>
-            <p className="text-[10px] text-[#A5A8B8]">Instant ML conviction synthesis, swinging factors & base rates</p>
+            <p className="text-[10px] text-[#808495]">Instant ML conviction synthesis, swinging factors & base rates</p>
           </div>
         </div>
         <ChevronDown className={`w-4 h-4 text-[#ffd89c] transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -74,7 +74,7 @@ export function AiMarketWhisperer({
         <div className="px-5 pb-5 pt-1 space-y-4 border-t border-[#ffd89c]/15 text-xs font-mono">
           {!summary && !loading && (
             <div className="flex flex-col items-center justify-center py-4 space-y-3">
-              <p className="text-[#A5A8B8] text-center text-[11px]">
+              <p className="text-[#808495] text-center text-[11px]">
                 Click below to generate real-time AI probability breakdown and swinging factor analysis.
               </p>
               <button
@@ -96,41 +96,41 @@ export function AiMarketWhisperer({
 
           {summary && (
             <div className="space-y-3 animate-fade-in">
-              <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#ffd89c]/20 space-y-1">
-                <div className="text-[9px] uppercase tracking-wider font-bold text-[#A5A8B8] flex items-center justify-between">
+              <div className="p-3 rounded-lg bg-[#1A1C22] border border-[#ffd89c]/20 space-y-1">
+                <div className="text-[9px] uppercase tracking-wider font-bold text-[#808495] flex items-center justify-between">
                   <span>AI Verdict</span>
                   <span className="text-[#22c55e]">{summary.confidenceLevel}</span>
                 </div>
-                <p className="text-xs text-[#F4F5FA] leading-relaxed font-sans">{summary.verdict}</p>
+                <p className="text-xs text-[#F4F4F9] leading-relaxed font-sans">{summary.verdict}</p>
               </div>
 
               {summary.tradingActivity && (
-                <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#22c55e]/25 space-y-1">
-                  <div className="text-[9px] uppercase tracking-wider font-bold text-[#A5A8B8] flex items-center justify-between">
+                <div className="p-3 rounded-lg bg-[#1A1C22] border border-[#22c55e]/25 space-y-1">
+                  <div className="text-[9px] uppercase tracking-wider font-bold text-[#808495] flex items-center justify-between">
                     <span>On-Chain Trading Activity</span>
                     <span className="text-[#22c55e]">{summary.tradingActivity.direction}</span>
                   </div>
                   <div className="flex items-center justify-between text-[10px] font-mono text-[#d6c4ac]">
                     <span>{summary.tradingActivity.trades24h} trades</span>
-                    <span className="text-[#C8FF00]">{summary.tradingActivity.yesVolume24h.toFixed(2)} SOL YES</span>
-                    <span className="text-[#FF4D6D]">{summary.tradingActivity.noVolume24h.toFixed(2)} SOL NO</span>
+                    <span className="text-[#4CAF50]">{summary.tradingActivity.yesVolume24h.toFixed(2)} SOL YES</span>
+                    <span className="text-[#E4574A]">{summary.tradingActivity.noVolume24h.toFixed(2)} SOL NO</span>
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-lg bg-[#0A0B12] border border-white/10/20 space-y-1">
-                  <div className="text-[9px] text-[#A5A8B8] uppercase font-bold">Historical Base Rate</div>
+                <div className="p-2.5 rounded-lg bg-[#1A1C22] border border-white/10/20 space-y-1">
+                  <div className="text-[9px] text-[#808495] uppercase font-bold">Historical Base Rate</div>
                   <div className="text-[11px] text-[#ffd89c]">{summary.historicalBaseRate}</div>
                 </div>
-                <div className="p-2.5 rounded-lg bg-[#0A0B12] border border-white/10/20 space-y-1">
-                  <div className="text-[9px] text-[#A5A8B8] uppercase font-bold">Strategy Hint</div>
+                <div className="p-2.5 rounded-lg bg-[#1A1C22] border border-white/10/20 space-y-1">
+                  <div className="text-[9px] text-[#808495] uppercase font-bold">Strategy Hint</div>
                   <div className="text-[11px] text-[#22c55e]">{summary.recommendation}</div>
                 </div>
               </div>
 
               <div className="space-y-1 pt-1">
-                <div className="text-[9px] uppercase tracking-wider font-bold text-[#A5A8B8]">Key Swinging Factors</div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-[#808495]">Key Swinging Factors</div>
                 <ul className="space-y-1 text-[11px] text-[#d6c4ac]">
                   {summary.swingingFactors.map((factor: string, i: number) => (
                     <li key={i} className="flex items-start gap-1.5">

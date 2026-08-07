@@ -139,7 +139,7 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
   return (
     <div className="glass-panel p-6 sm:p-8 space-y-4">
       <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
-        <TrendingUp className="w-4 h-4 text-[#06b6d4]" />
+        <TrendingUp className="w-4 h-4 text-[#FFA500]" />
         <span>Live Price Chart</span>
       </h3>
 
@@ -153,12 +153,12 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
             </span>
           )}
           {priceStatus === "loading" && (
-            <span className="h-2 w-2 rounded-full bg-[#A5A8B8] animate-pulse" />
+            <span className="h-2 w-2 rounded-full bg-[#808495] animate-pulse" />
           )}
           {priceStatus === "error" && (
             <span className="h-2 w-2 rounded-full bg-[#ffb4ab]" />
           )}
-          <span className="text-xs font-mono text-[#A5A8B8]">
+          <span className="text-xs font-mono text-[#808495]">
             {priceStatus === "loading" && "Fetching price..."}
             {priceStatus === "live" && `LIVE · SOL/USD · every ${POLL_MS / 1000}s`}
             {priceStatus === "error" && "Price feed unavailable"}
@@ -177,7 +177,7 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
       </div>
 
       {priceStatus === "error" ? (
-        <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-sm text-[#A5A8B8]">
+        <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-sm text-[#808495]">
           ⚠ Could not connect to price feed.
         </div>
       ) : (
@@ -195,8 +195,8 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
               tickFormatter={(t: unknown) =>
                 new Date(Number(t)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
               }
-              stroke="#A5A8B8"
-              tick={{ fill: "#A5A8B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
+              stroke="#808495"
+              tick={{ fill: "#808495", fontSize: 10, fontFamily: "JetBrains Mono" }}
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
@@ -204,8 +204,8 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
             />
             <YAxis
               domain={["auto", "auto"]}
-              stroke="#A5A8B8"
-              tick={{ fill: "#A5A8B8", fontSize: 10, fontFamily: "JetBrains Mono" }}
+              stroke="#808495"
+              tick={{ fill: "#808495", fontSize: 10, fontFamily: "JetBrains Mono" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v: unknown) => `$${Number(v).toFixed(2)}`}
@@ -214,11 +214,11 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
             <Tooltip
               contentStyle={{
                 background: "#1a1a1a",
-                border: "1px solid #A5A8B8",
+                border: "1px solid #808495",
                 borderRadius: 2,
                 fontFamily: "JetBrains Mono",
                 fontSize: 11,
-                color: "#F4F5FA",
+                color: "#F4F4F9",
                 padding: "6px 10px",
               }}
               labelFormatter={(t: unknown) =>

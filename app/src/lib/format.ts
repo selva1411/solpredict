@@ -1,19 +1,49 @@
 import BN from "bn.js";
 
-// ─── SOL FORMATTING ──────────────────────────────────────────
+/** Safety check for BigInt / u64 bounds */
+export function assertBigIntSafe(val: bigint | number | string): bigint {
+  try {
+    const b = BigInt(val);
+    if (b < 0n) throw new Error("Negative financial value");
+    return b;
+  } catch (e) {
+    throw new Error(`Invalid financial BigInt value: ${val}`);
+  }
+}
 
-/** Convert BN lamports → human SOL string. e.g. BN(1000000000) → "1.000" */
-export function formatSol(lamports: BN | number | null | undefined, decimals = 3): string {
+/** Format basis points to percentage display string (e.g. 5000 -> "50.0%", null -> "—") */
+export function formatBpsPct(bps: number | null | undefined): string {
+  if (bps == null) return "—";
+  return `${(bps / 100).toFixed(1)}%`;
+}
+
+/** Convert basis points (0-10000) to percentage number (0-100) */
+export function bpsToPct(bps: number | null | undefined): number | null {
+  if (bps == null) return null;
+  return bps / 100;
+}
+
+/** Convert BN / bigint lamports → human SOL string. e.g. 1000000000n → "1.000" */
+export function formatSol(lamports: BN | bigint | number | null | undefined, decimals = 3): string {
   if (lamports == null) return "0.000";
-  const n = lamports instanceof BN ? lamports.toNumber() : lamports;
+  let n: number;
+  if (typeof lamports === "bigint") {
+    n = Number(lamports);
+  } else if (lamports instanceof BN) {
+    n = lamports.toNumber();
+  } else {
+    n = lamports;
+  }
+  if (isNaN(n)) return "0.000";
   return (n / 1_000_000_000).toFixed(decimals);
 }
 
-/** Convert BN lamports → number (SOL). Safe for math. */
-export function lamportsToSol(lamports: BN | number | null | undefined): number {
+/** Convert lamports → number (SOL). Safe for math. */
+export function lamportsToSol(lamports: BN | bigint | number | null | undefined): number {
   if (lamports == null) return 0;
-  const n = lamports instanceof BN ? lamports.toNumber() : lamports;
-  return n / 1_000_000_000;
+  if (typeof lamports === "bigint") return Number(lamports) / 1_000_000_000;
+  if (lamports instanceof BN) return lamports.toNumber() / 1_000_000_000;
+  return Number(lamports) / 1_000_000_000;
 }
 
 export function bnToSol(lamports: BN | number | null | undefined): number {
@@ -30,27 +60,23 @@ export function bnToNum(value: BN | number | null | undefined): number {
 
 /** Format large numbers with commas: 1234567 → "1,234,567" */
 export function formatNumber(n: BN | number | null | undefined): string {
+  if (n == null) return "0";
   return bnToNum(n).toLocaleString("en-US");
 }
 
 /** Converts display SOL amount (e.g. 1.5) to lamports BN */
 export function solToLamports(solAmount: string | number): BN {
   const num = typeof solAmount === "string" ? parseFloat(solAmount) : solAmount;
+  if (isNaN(num) || num < 0) return new BN(0);
   return new BN(Math.floor(num * 1_000_000_000));
 }
 
 /** Shortens a base58 address for display */
-export function shortAddr(addr: string): string {
+export function shortAddr(addr: string | null | undefined): string {
   if (!addr) return "";
   return addr.slice(0, 4) + "..." + addr.slice(-4);
 }
 
-// ─── PROBABILITY ─────────────────────────────────────────────
-
-/**
- * Calculate YES percentage from pool sizes
- * Returns 50 if both pools empty (fair start)
- */
 export function calcYesPct(
   yesPool: BN | number | null | undefined,
   noPool: BN | number | null | undefined
@@ -62,15 +88,16 @@ export function calcYesPct(
   return Math.round((yes / total) * 100);
 }
 
-/** Returns NO percentage */
-export function calcNoPct(yesPool: BN | number | null | undefined, noPool: BN | number | null | undefined): number {
+export function calcNoPct(
+  yesPool: BN | number | null | undefined,
+  noPool: BN | number | null | undefined
+): number {
   return 100 - calcYesPct(yesPool, noPool);
 }
 
-// ─── TIMESTAMPS ──────────────────────────────────────────────
-
 /** BN unix timestamp → readable string "Jul 23, 2026 14:30" */
 export function formatTs(ts: BN | number | null | undefined): string {
+  if (ts == null) return "—";
   const t = bnToNum(ts);
   if (t === 0) return "—";
   return new Date(t * 1000).toLocaleString("en-US", {
@@ -84,6 +111,7 @@ export function formatTs(ts: BN | number | null | undefined): string {
 
 /** Returns time remaining until unix timestamp */
 export function timeUntil(ts: BN | number | null | undefined): string {
+  if (ts == null) return "—";
   const target = bnToNum(ts) * 1000;
   if (!target) return "—";
   const now = Date.now();
@@ -99,96 +127,61 @@ export function timeUntil(ts: BN | number | null | undefined): string {
   return `${mins}m`;
 }
 
-export function formatTimeLeft(endTs: BN | number | null | undefined): string {
-  return timeUntil(endTs);
+export function formatTimeLeft(ts: BN | number | null | undefined): string {
+  if (ts == null) return "—";
+  return timeUntil(ts);
 }
 
-/** Is timestamp in the future? */
 export function isActive(ts: BN | number | null | undefined): boolean {
-  return bnToNum(ts) * 1000 > Date.now();
+  if (ts == null) return false;
+  const target = bnToNum(ts) * 1000;
+  return target > Date.now();
 }
 
-// ─── MARKET HELPERS ───────────────────────────────────────────
-
-/** Get category name from category number */
-export function categoryName(cat: number): string {
-  return ["Crypto", "Sports", "Politics", "Tech", "Other"][cat] ?? "Other";
+/** Category name helper */
+export function categoryName(idx: number): string {
+  const cats = ["Crypto", "Sports", "Politics", "Tech", "Other"];
+  return cats[idx] ?? "Other";
 }
 
-/** Get CSS color variable for category */
-export function categoryColor(cat: number): string {
-  return [
-    "var(--color-crypto)",
-    "var(--color-sports)",
-    "var(--color-politics)",
-    "var(--color-tech)",
-    "var(--color-other)",
-  ][cat] ?? "var(--color-other)";
+/** Category color helper */
+export function categoryColor(idx: number): string {
+  return "var(--color-gray-400)";
 }
 
-/** Status label from number */
+/** Status label helper */
 export function statusLabel(status: number): string {
-  return ["Open", "Settled", "Cancelled"][status] ?? "Unknown";
+  if (status === 0) return "Open";
+  if (status === 1) return "Settled";
+  if (status === 2) return "Cancelled";
+  return "Unknown";
 }
 
-/** Winning outcome label */
-export function outcomeLabel(outcome: number): string {
-  return ["—", "YES ✓", "NO ✓"][outcome] ?? "—";
+/** Outcome label helper */
+export function outcomeLabel(winningOutcome: number): string {
+  if (winningOutcome === 1) return "YES ✓";
+  if (winningOutcome === 2) return "NO ✓";
+  return "—";
 }
 
-// ─── PAYOUT CALCULATOR ────────────────────────────────────────
-
-/**
- * Calculates expected payout for a buy
- */
+/** Calculate expected payout helper for bet panel */
 export function calcExpectedPayout(
   lamportsToBet: number,
-  sharePrice: number,
-  userWouldBet: "yes" | "no",
-  currentYesPool: number,
-  currentNoPool: number,
-  feeBps: number
-): {
-  tokens: number;
-  yesPct: number;
-  noPct: number;
-  estimatedPayout: number;
-  roi: number;
-} {
-  const tokens = Math.floor(lamportsToBet / (sharePrice || 10_000_000));
-
-  const newYesPool =
-    userWouldBet === "yes"
-      ? currentYesPool + lamportsToBet
-      : currentYesPool;
-  const newNoPool =
-    userWouldBet === "no"
-      ? currentNoPool + lamportsToBet
-      : currentNoPool;
-
-  const total = newYesPool + newNoPool;
-  const yesPct = total === 0 ? 50 : Math.round((newYesPool / total) * 100);
-  const noPct = 100 - yesPct;
-
-  const losingPool =
-    userWouldBet === "yes" ? newNoPool : newYesPool;
-  const fee = Math.floor((losingPool * feeBps) / 10_000);
-  const totalPayout = total - fee;
-  const winningSupply =
-    userWouldBet === "yes"
-      ? Math.floor(newYesPool / (sharePrice || 10_000_000))
-      : Math.floor(newNoPool / (sharePrice || 10_000_000));
-
-  const userTokensAfter = tokens;
-  const estimatedPayout =
-    winningSupply === 0
-      ? 0
-      : Math.floor((userTokensAfter / winningSupply) * totalPayout);
-
-  const roi =
-    lamportsToBet === 0
-      ? 0
-      : ((estimatedPayout - lamportsToBet) / lamportsToBet) * 100;
-
-  return { tokens, yesPct, noPct, estimatedPayout, roi };
+  price: number,
+  side: "yes" | "no",
+  yesPoolLamports: number,
+  noPoolLamports: number,
+  feeBps = 0
+) {
+  if (!lamportsToBet || lamportsToBet <= 0) {
+    return { tokens: 0, estimatedPayout: 0, roi: 0 };
+  }
+  const effectivePrice = Math.max(0.01, Math.min(0.99, price));
+  const feePct = feeBps / 10000;
+  const netBetLamports = lamportsToBet * (1 - feePct);
+  const tokens = netBetLamports / (effectivePrice * 1e9);
+  const estimatedPayoutSol = tokens;
+  const betSol = lamportsToBet / 1e9;
+  const roi = betSol > 0 ? ((estimatedPayoutSol - betSol) / betSol) * 100 : 0;
+  return { tokens, estimatedPayout: estimatedPayoutSol, roi };
 }

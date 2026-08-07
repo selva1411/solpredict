@@ -9,6 +9,7 @@
     "build:frontend": "npm --prefix app run build",
     "program:sync": "npx tsx scripts/sync-program-id.ts",
     "simulate": "npx tsx scripts/simulate-traders.ts",
+    "seed:devnet": "npx tsx scripts/seed-devnet.ts",
     "dev": "npm --prefix app run dev",
     "dev:full": "npm --prefix app run dev:full",
     "test": "ts-mocha tests/unit/*.test.ts",

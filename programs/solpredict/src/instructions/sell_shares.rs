@@ -6,8 +6,8 @@ use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount};
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::SharesSold;
-use crate::state::{Market, MarketStatus, Side, UserPosition};
-use crate::utils::{amm_math, payout_math};
+use crate::state::{EmergencyPause, Market, MarketStatus, Side, UserPosition};
+use crate::utils::{amm_math, check_not_paused, payout_math};
 
 #[derive(Accounts)]
 pub struct SellShares<'info> {
@@ -70,9 +70,14 @@ pub struct SellShares<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+
+    /// Optional emergency-pause account. When present and paused, trading is halted.
+    pub emergency_pause: Option<Account<'info, EmergencyPause>>,
 }
 
 pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()> {
+    check_not_paused(&ctx.accounts.emergency_pause)?;
+
     let market = &ctx.accounts.market;
 
     require!(market.status == MarketStatus::Open, SolPredictError::MarketNotOpen);
@@ -108,7 +113,7 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
         match is_yes {
             true => amm_math::get_sell_amount_out(pool_yes, pool_no, dy_in, fee_bps),
             false => amm_math::get_sell_amount_out(pool_no, pool_yes, dy_in, fee_bps),
-        }.unwrap_or_else(|_| payout_math::calculate_cost(quantity, market.share_price_lamports).unwrap_or(0) as u128)
+        }.map_err(|_| error!(SolPredictError::MathOverflow))?
     };
     let refund = u64::try_from(refund_u128)
         .unwrap_or(u64::MAX)

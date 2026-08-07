@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { getWatchlist } from "@/lib/watchlist";
-import { useOptimisticWatchlist } from "@/hooks/useOptimisticWatchlist";
 
 interface AppState {
   mobileMenuOpen: boolean;
@@ -17,51 +17,66 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-async function syncWatchlist(key: string): Promise<boolean> {
-  try {
-    const wallet = typeof window !== "undefined" ? localStorage.getItem("solpredict-wallet") : null;
-    const res = await fetch("/api/watchlist", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet, marketPubkey: key }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      const current = getWatchlist();
-      const next = current.includes(key)
-        ? current.filter(k => k !== key)
-        : [...current, key];
-      localStorage.setItem("solpredict-watchlist", JSON.stringify(next));
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { publicKey } = useWallet();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [initialKeys, setInitialKeys] = useState<string[]>([]);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  const walletPubkey = publicKey?.toBase58() ?? null;
+
+  // Persist the connected wallet so reads elsewhere stay consistent.
   useEffect(() => {
-    setInitialKeys(getWatchlist());
-    const onStorage = () => setInitialKeys(getWatchlist());
+    if (walletPubkey) {
+      localStorage.setItem("solpredict-wallet", walletPubkey);
+    }
+  }, [walletPubkey]);
+
+  // Initialize from localStorage and react to cross-tab changes.
+  useEffect(() => {
+    setWatchlist(getWatchlist());
+    const onStorage = () => setWatchlist(getWatchlist());
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const { watchlist, toggle } = useOptimisticWatchlist(initialKeys, syncWatchlist);
+  // Load the wallet's watchlist from the DB whenever the wallet changes.
+  useEffect(() => {
+    if (!walletPubkey) return;
+    fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/watchlist?wallet=${walletPubkey}`)
+      .then(r => r.json().catch(() => null))
+      .then((data) => {
+        if (data && data.ok && Array.isArray(data.keys)) {
+          localStorage.setItem("solpredict-watchlist", JSON.stringify(data.keys));
+          setWatchlist(data.keys);
+        }
+      })
+      .catch(() => {});
+  }, [walletPubkey]);
 
   const toggleWatchlistItem = useCallback((pubkey: string) => {
-    toggle(pubkey);
-  }, [toggle]);
+    const current = getWatchlist();
+    const next = current.includes(pubkey)
+      ? current.filter(k => k !== pubkey)
+      : [...current, pubkey];
+    localStorage.setItem("solpredict-watchlist", JSON.stringify(next));
+    setWatchlist(next);
+
+    // Sync directly with NeonDB in the background.
+    const wallet = walletPubkey ?? localStorage.getItem("solpredict-wallet");
+    if (wallet) {
+      fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, marketPubkey: pubkey }),
+      }).catch(() => {});
+    }
+  }, [walletPubkey]);
 
   const isWatched = useCallback((pubkey: string) => {
     return watchlist.includes(pubkey);

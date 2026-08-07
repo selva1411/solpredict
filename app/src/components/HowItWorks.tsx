@@ -47,7 +47,7 @@ export function HowItWorks() {
   return (
     <section className="space-y-8">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold font-display bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
+        <h2 className="text-2xl font-bold font-display bg-gradient-to-r from-amber-400 to-amber-400 bg-clip-text text-transparent">
           How It Works
         </h2>
         <p className="text-sm text-text-muted max-w-lg mx-auto">

@@ -22,10 +22,10 @@ export function MobileNav() {
     <div className="md:hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded bg-[#0A0B12] border border-white/10 hover:bg-[#11131C] transition-colors cursor-pointer"
+        className="p-2 rounded bg-[#1A1C22] border border-white/10 hover:bg-[#15171E] transition-colors cursor-pointer"
         aria-label={isOpen ? "Close menu" : "Open menu"}
       >
-        {isOpen ? <X className="w-5 h-5 text-[#F4F5FA]" /> : <Menu className="w-5 h-5 text-[#F4F5FA]" />}
+        {isOpen ? <X className="w-5 h-5 text-[#F4F4F9]" /> : <Menu className="w-5 h-5 text-[#F4F4F9]" />}
       </button>
 
       <AnimatePresence>
@@ -35,7 +35,7 @@ export function MobileNav() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="absolute top-16 left-0 right-0 z-40 overflow-hidden border-b border-white/10 bg-[#0A0B12]/95 backdrop-blur-xl"
+            className="absolute top-16 left-0 right-0 z-40 overflow-hidden border-b border-white/10 bg-[#1A1C22]/95 backdrop-blur-xl"
           >
             <nav className="flex flex-col px-4 py-4 space-y-1">
               {tabs.map((tab) => {
@@ -45,7 +45,7 @@ export function MobileNav() {
                     key={tab.href}
                     href={tab.href}
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#A5A8B8] hover:text-[#F4F5FA] hover:bg-white/5 rounded-lg transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5 rounded-lg transition-colors"
                   >
                     <Icon className="w-5 h-5" />
                     {tab.label}
@@ -56,7 +56,7 @@ export function MobileNav() {
                 <Link
                   href="/admin"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#7B3FE4] hover:bg-[#7B3FE4]/10 rounded-lg transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#FFA500] hover:bg-[#FFA500]/10 rounded-lg transition-colors"
                 >
                   <Settings className="w-5 h-5" />
                   Admin
@@ -85,7 +85,7 @@ export function MobileBottomNav() {
     : tabs;
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0B12]/90 backdrop-blur-xl border-t border-white/10">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1A1C22]/90 backdrop-blur-xl border-t border-white/10">
       <div className="flex items-center justify-around py-2">
         {allTabs.map((tab) => {
           const Icon = tab.icon;
@@ -93,7 +93,7 @@ export function MobileBottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium text-[#A5A8B8] hover:text-[#00E5FF] transition-colors"
+              className="flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium text-[#808495] hover:text-[#FFA500] transition-colors"
             >
               <Icon className="w-5 h-5" />
               {tab.label}

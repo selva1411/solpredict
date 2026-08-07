@@ -27,6 +27,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey, TransactionInstruction, Transaction, SystemProgram } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
+import { buyCostLamports, sellRefundLamports as sellRefundFn } from "@/lib/amm/cpmm";
 import { toast } from "sonner";
 import { OrderBookDepth } from "@/components/OrderBookDepth";
 const LivePriceChartPanel = dynamic(() => import("@/components/LivePriceChartPanel").then(m => m.LivePriceChartPanel), { ssr: false });
@@ -40,7 +41,7 @@ import { txAccounts } from "@/lib/anchor-utils";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { feedIdBytesToHex, isOracleCategory } from "@/lib/pyth-feeds";
 import { LivePriceBar } from "@/components/LivePriceBar";
-import DualFillGauge from "@/components/DualFillGauge";
+import ProbabilityOrb3D from "@/components/ProbabilityOrb3D";
 
 import { LoadingState, EmptyState, ErrorState, LiveIndicator } from "@/components/StatePanels";
 import { GlassPanel } from "@/components/GlassPanel";
@@ -105,7 +106,7 @@ interface ActivityItem {
 function ProbabilityChart({ data }: { data: number[] }) {
   if (data.length <= 1) {
     return (
-      <div className="h-32 flex items-center justify-center text-xs font-mono text-[#A5A8B8] border border-[rgba(165,168,184,0.4)]/20 bg-[#0A0B12] rounded">
+      <div className="h-32 flex items-center justify-center text-xs font-mono text-[#808495] border border-[rgba(165,168,184,0.4)]/20 bg-[#1A1C22] rounded">
         Insufficient activity records for charting.
       </div>
     );
@@ -122,8 +123,8 @@ function ProbabilityChart({ data }: { data: number[] }) {
   }).join(" ");
 
   return (
-    <div className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/30 p-4 rounded space-y-2 select-none">
-      <div className="flex justify-between items-center text-[10px] font-mono text-[#A5A8B8] uppercase font-bold">
+    <div className="w-full bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/30 p-4 rounded space-y-2 select-none">
+      <div className="flex justify-between items-center text-[10px] font-mono text-[#808495] uppercase font-bold">
         <span>Probability History Trend</span>
         <span className="text-[#a1d494]">YES %</span>
       </div>
@@ -149,7 +150,7 @@ function ProbabilityChart({ data }: { data: number[] }) {
           {/* Line Path */}
           <polyline
             fill="none"
-            stroke="#00E5FF"
+            stroke="#FFA500"
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -166,7 +167,7 @@ function ProbabilityChart({ data }: { data: number[] }) {
                 cx={x}
                 cy={y}
                 r="4"
-                className="fill-[#131313] stroke-[#00E5FF]"
+                className="fill-[#131313] stroke-[#FFA500]"
                 strokeWidth="2"
               />
             );
@@ -420,36 +421,52 @@ export default function MarketDetailPage() {
     try {
       let marketAcc: MarketDetails | null = null;
 
+      // 1. Try to fetch on-chain account
       try {
         marketAcc = await program.account.market.fetch(marketPda) as unknown as MarketDetails;
-      } catch {
-      // Fetch cached market from Neon DB to sync and select the latest pools
-      let cachedMarket: any = null;
-      try {
-        const res = await fetch("/api/markets/cached");
-        if (res.ok) {
-          const json = await res.json();
-          if (json.markets) {
-            cachedMarket = json.markets.find((c: any) =>
-              c.marketPubkey === id ||
-              c.marketPubkey === marketPda.toBase58() ||
-              String(c.marketId) === String(id)
-            );
-          }
-        }
-      } catch (e) {
-        console.warn("Could not fetch market fallback from database:", e);
+      } catch (err) {
+        console.log("On-chain market account fetch failed, attempting database fallback...", err);
       }
 
-      if (cachedMarket) {
-        const catIdx = CATEGORIES.indexOf(cachedMarket.category) >= 0 ? CATEGORIES.indexOf(cachedMarket.category) : 0;
-        const statusObj = cachedMarket.status === "settled" ? { settled: {} } : cachedMarket.status === "cancelled" ? { cancelled: {} } : { open: {} };
-        const winNorm = (cachedMarket.winningOutcome || "").toLowerCase();
-        const winObj = winNorm === "yes" ? { yes: {} } : winNorm === "no" ? { no: {} } : { unset: {} };
-        const dbYesLamports = Math.round((cachedMarket.yesPoolSol || 0) * 1e9);
-        const dbNoLamports = Math.round((cachedMarket.noPoolSol || 0) * 1e9);
+      // 2. If on-chain fetch failed or not deployed, fetch from database API
+      if (!marketAcc) {
+        let cachedMarket: any = null;
+        try {
+          const res = await fetch(`/api/markets/${id}`);
+          if (res.ok) {
+            const json = await res.json();
+            cachedMarket = json.market;
+          }
+          if (!cachedMarket) {
+            const res2 = await fetch("/api/markets/cached");
+            if (res2.ok) {
+              const json2 = await res2.json();
+              if (json2.markets) {
+                cachedMarket = json2.markets.find((c: any) =>
+                  c.marketPubkey === id ||
+                  c.marketPubkey === marketPda.toBase58() ||
+                  String(c.marketId) === String(id)
+                );
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Could not fetch market fallback from database:", e);
+        }
 
-        if (!marketAcc) {
+        if (cachedMarket) {
+          const catIdx = CATEGORIES.indexOf(cachedMarket.category) >= 0 ? CATEGORIES.indexOf(cachedMarket.category) : 0;
+          const statusObj = cachedMarket.status === "settled" ? { settled: {} } : cachedMarket.status === "cancelled" ? { cancelled: {} } : { open: {} };
+          const winNorm = (cachedMarket.winningOutcome || "").toLowerCase();
+          const winObj = winNorm === "yes" ? { yes: {} } : winNorm === "no" ? { no: {} } : { unset: {} };
+          const totalVol = Number(cachedMarket.totalVolume ?? cachedMarket.totalPool ?? 0);
+          const yesOdds = Number(cachedMarket.yesOdds ?? 0.5);
+          const dbYesLamports = Math.round(totalVol * yesOdds * 1e9);
+          const dbNoLamports = Math.round(totalVol * (1 - yesOdds) * 1e9);
+
+          const endTsVal = cachedMarket.endTs ? Math.floor(new Date(cachedMarket.endTs).getTime() / 1000) : Math.floor(Date.now() / 1000 + 86400);
+          const resolveTsVal = cachedMarket.resolveTs ? Math.floor(new Date(cachedMarket.resolveTs).getTime() / 1000) : endTsVal + 3600;
+
           marketAcc = {
             marketId: new anchor.BN(cachedMarket.marketId || 0),
             authority: PublicKey.default,
@@ -460,8 +477,8 @@ export default function MarketDetailPage() {
             targetPrice: new anchor.BN(20000),
             targetExpo: -2,
             comparison: 0,
-            endTs: new anchor.BN(Math.floor(new Date(cachedMarket.endTs).getTime() / 1000)),
-            resolveTs: new anchor.BN(Math.floor(new Date(cachedMarket.resolveTs).getTime() / 1000)),
+            endTs: new anchor.BN(endTsVal),
+            resolveTs: new anchor.BN(resolveTsVal),
             status: statusObj,
             winningOutcome: winObj,
             yesMint: PublicKey.default,
@@ -473,16 +490,7 @@ export default function MarketDetailPage() {
             totalPayoutPool: new anchor.BN(0),
             sharePriceLamports: new anchor.BN(0.01 * 1e9),
           };
-        } else {
-          // If DB pool is larger than on-chain pool (due to LP deposit or trade sync), merge DB pool values into state
-          const onChainTotal = marketAcc.yesPoolLamports.toNumber() + marketAcc.noPoolLamports.toNumber();
-          const dbTotal = dbYesLamports + dbNoLamports;
-          if (dbTotal > onChainTotal) {
-            marketAcc.yesPoolLamports = new anchor.BN(dbYesLamports);
-            marketAcc.noPoolLamports = new anchor.BN(dbNoLamports);
-          }
         }
-      }
       }
 
       if (!marketAcc) {
@@ -844,10 +852,10 @@ export default function MarketDetailPage() {
           <div className="h-8 bg-white/5 border border-white/10 rounded w-1/3" />
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-2 space-y-8">
-              <div className="holo-card p-10 h-96 shimmer bg-[#0A0B12]" />
-              <div className="holo-card p-10 h-64 shimmer bg-[#0A0B12]" />
+              <div className="holo-card p-10 h-96 shimmer bg-[#1A1C22]" />
+              <div className="holo-card p-10 h-64 shimmer bg-[#1A1C22]" />
             </div>
-            <div className="holo-card p-10 h-80 shimmer bg-[#0A0B12]" />
+            <div className="holo-card p-10 h-80 shimmer bg-[#1A1C22]" />
           </div>
         </div>
       </main>
@@ -925,40 +933,74 @@ export default function MarketDetailPage() {
   const yesProb = Math.max(1, Math.min(99, yesProbRaw));
   const noProb = 100 - yesProb;
   
-  const sharePriceSol = lamportsToSol(market.sharePriceLamports);
-  
-  // CPMM Effective Share Prices with 0.0005 SOL floor protection
-  const yesSharePriceSol = Math.max(0.0005, sharePriceSol * ((yesProb + 50) / 100));
-  const noSharePriceSol = Math.max(0.0005, sharePriceSol * ((noProb + 50) / 100));
-  const activeSharePriceSol = tradeSide === "YES" ? yesSharePriceSol : noSharePriceSol;
+  // Constant-product (xy=k) spot prices from the on-chain reserves. These
+  // match what buy_shares/sell_shares actually charge (see amm_math.rs).
+  const poolYesBI = BigInt(market.yesPoolLamports.toNumber());
+  const poolNoBI = BigInt(market.noPoolLamports.toNumber());
+  const fee = feeBps ?? 0;
+  const sharePriceLamportsBI = BigInt(market.sharePriceLamports.toNumber());
+  const qtyBI = BigInt(Math.max(0, quantity));
+  const dyOutBI = qtyBI * sharePriceLamportsBI; // value being traded, on-chain semantics
 
-  const tradeCost = quantity * activeSharePriceSol;
+  // Exactly mirrors buy_shares.rs: flat cost when a pool is empty, else CPMM.
+  const quoteBuyCostLamports = (): bigint => {
+    if (dyOutBI === 0n) return 0n;
+    if (poolYesBI === 0n || poolNoBI === 0n ||
+        (tradeSide === "YES" && dyOutBI >= poolYesBI) ||
+        (tradeSide === "NO" && dyOutBI >= poolNoBI)) {
+      return dyOutBI;
+    }
+    try {
+      return buyCostLamports({ poolYes: poolYesBI, poolNo: poolNoBI, feeBps: fee }, tradeSide, dyOutBI);
+    } catch {
+      return dyOutBI;
+    }
+  };
+  const quoteValueBI = quoteBuyCostLamports();
+  const tradeCost = lamportsToSol(Number(quoteValueBI));
 
-  // Estimated price impact = trade size relative to the opposite-side pool
-  const impactPool = tradeSide === "YES" ? noPool : yesPool;
-  const priceImpactPct = impactPool > 0 && tradeCost > 0
-    ? (tradeCost / (impactPool + tradeCost)) * 100
+  // Marginal cost of buying ~1 share (the on-chain "spot" the next trade pays).
+  const spotOneBI = dyOutBI > 0n ? ((): bigint => {
+    const one = dyOutBI / qtyBI; // price of a single share (lamports)
+    if (poolYesBI === 0n || poolNoBI === 0n) return one;
+    try {
+      return buyCostLamports({ poolYes: poolYesBI, poolNo: poolNoBI, feeBps: fee }, tradeSide, one);
+    } catch { return one; }
+  })() : 0n;
+
+  // Estimated price impact: how much buying the whole qty moves the price vs
+  // the marginal per-share cost.
+const marginalPerShareSol = qtyBI > 0n ? lamportsToSol(Number(spotOneBI)) : 0;
+const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
+  const priceImpactPct = avgPerShareSol > 0 && marginalPerShareSol > 0
+    ? (avgPerShareSol - marginalPerShareSol) / marginalPerShareSol * 100
     : 0;
   const slippageWarning = priceImpactPct >= 5;
 
-  const getPotentialPayout = (): number => {
-    const costLamports = quantity * market.sharePriceLamports.toNumber();
-    const yesSupply = market.yesSupply.toNumber() / 1e6;
-    const noSupply = market.noSupply.toNumber() / 1e6;
-    const totalPoolLamports = market.yesPoolLamports.toNumber() + market.noPoolLamports.toNumber();
-    
-    if (tradeSide === "YES") {
-      const simulatedYesSupply = yesSupply + quantity;
-      const simulatedTotalPool = totalPoolLamports + costLamports;
-      return simulatedYesSupply > 0 ? (simulatedTotalPool * quantity) / (simulatedYesSupply * 1e9) : 0;
-    } else {
-      const simulatedNoSupply = noSupply + quantity;
-      const simulatedTotalPool = totalPoolLamports + costLamports;
-      return simulatedNoSupply > 0 ? (simulatedTotalPool * quantity) / (simulatedNoSupply * 1e9) : 0;
-    }
-  };
+  // Nominal share value (0.01 SOL default) — what a share redeems for on a win.
+  const sharePriceSol = lamportsToSol(market.sharePriceLamports);
+  const potentialPayout = quantity * sharePriceSol;
 
-  const potentialPayout = getPotentialPayout();
+  // Active share price used by the UI (avg per share for the current qty).
+  const activeSharePriceSol = quantity > 0 ? tradeCost / quantity : sharePriceSol;
+  const yesSharePriceSol = tradeSide === "YES" ? activeSharePriceSol : sharePriceSol;
+  const noSharePriceSol = tradeSide === "NO" ? activeSharePriceSol : sharePriceSol;
+
+  // Sell refund quote — mirrors sell_shares.rs (get_sell_amount_out).
+  const sellQtyBI = BigInt(Math.max(0, sellQuantity));
+  const sellDyBI = sellQtyBI * sharePriceLamportsBI;
+  const sellRefundLamportsV = ((): bigint => {
+    if (sellDyBI === 0n) return 0n;
+    if (poolYesBI === 0n || poolNoBI === 0n) {
+      return sellDyBI;
+    }
+    try {
+      return sellRefundFn({ poolYes: poolYesBI, poolNo: poolNoBI, feeBps: fee }, sellSide, sellDyBI);
+    } catch {
+      return sellDyBI;
+    }
+  })();
+  const sellRefundSol = lamportsToSol(Number(sellRefundLamportsV));
 
   const handleBuy = async () => {
     if (!wallet || !wallet.publicKey) {
@@ -1269,13 +1311,13 @@ export default function MarketDetailPage() {
     <div className="space-y-0">
       {status !== "Open" ? (
         <div className="py-8 text-center space-y-4">
-          <div className="mx-auto w-12 h-12 bg-[#00E5FF]/10 text-[#00E5FF] rounded flex items-center justify-center border border-[#00E5FF]/25">
+          <div className="mx-auto w-12 h-12 bg-[#FFA500]/10 text-[#FFA500] rounded flex items-center justify-center border border-[#FFA500]/25">
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h4 className="text-sm font-bold text-[#F4F5FA] uppercase">TRADING TERMINATED</h4>
-            <p className="text-xs text-[#A5A8B8]">
-              This board has settled. Go to your <Link href="/dashboard" className="text-[#00E5FF] hover:underline font-bold">Dashboard</Link> to withdraw payout.
+            <h4 className="text-sm font-bold text-[#F4F4F9] uppercase">TRADING TERMINATED</h4>
+            <p className="text-xs text-[#808495]">
+              This board has settled. Go to your <Link href="/dashboard" className="text-[#FFA500] hover:underline font-bold">Dashboard</Link> to withdraw payout.
             </p>
           </div>
         </div>
@@ -1290,8 +1332,8 @@ export default function MarketDetailPage() {
                 onClick={() => setTradeTab(tab)}
                 className={`flex-1 py-3 text-xs sm:text-sm font-bold uppercase tracking-widest transition-all cursor-pointer ${
                   tradeTab === tab
-                    ? "border-b-2 border-[#00E5FF] text-[#00E5FF]"
-                    : "text-[#A5A8B8] hover:text-[#F4F5FA]"
+                    ? "border-b-2 border-[#FFA500] text-[#FFA500]"
+                    : "text-[#808495] hover:text-[#F4F4F9]"
                 }`}
               >
                 {tab === "liquidity" ? "💧 LP Pool" : tab}
@@ -1308,44 +1350,44 @@ export default function MarketDetailPage() {
                   onClick={() => setTradeSide("YES")}
                   className={`group relative flex flex-col items-center justify-center py-4 rounded-lg border-2 transition-all cursor-pointer ${
                     tradeSide === "YES"
-                      ? "border-[#C8FF00] bg-[#C8FF00]/12 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
-                      : "border-[rgba(165,168,184,0.4)]/25 bg-[#0A0B12] hover:border-[#C8FF00]/50 hover:bg-[#C8FF00]/5"
+                      ? "border-[#4CAF50] bg-[#4CAF50]/12 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
+                      : "border-[rgba(165,168,184,0.4)]/25 bg-[#1A1C22] hover:border-[#4CAF50]/50 hover:bg-[#4CAF50]/5"
                   }`}
                 >
                   <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
-                    tradeSide === "YES" ? "text-[#C8FF00]" : "text-[#A5A8B8] group-hover:text-[#C8FF00]"
+                    tradeSide === "YES" ? "text-[#4CAF50]" : "text-[#808495] group-hover:text-[#4CAF50]"
                   }`}>Yes</span>
                   <span className={`text-2xl font-black font-mono ${
-                    tradeSide === "YES" ? "text-[#C8FF00]" : "text-[#F4F5FA]"
+                    tradeSide === "YES" ? "text-[#4CAF50]" : "text-[#F4F4F9]"
                   }`}>{yesProb}¢</span>
-                  <span className="text-[10px] text-[#C8FF00] font-mono font-semibold mt-0.5">{yesSharePriceSol.toFixed(4)} SOL</span>
-                  <span className="text-[9px] text-[#A5A8B8] mt-0.5 font-mono">{yesPool.toFixed(2)} SOL pool</span>
+                  <span className="text-[10px] text-[#4CAF50] font-mono font-semibold mt-0.5">{yesSharePriceSol.toFixed(4)} SOL</span>
+                  <span className="text-[9px] text-[#808495] mt-0.5 font-mono">{yesPool.toFixed(2)} SOL pool</span>
                 </button>
                 <button
                   onClick={() => setTradeSide("NO")}
                   className={`group relative flex flex-col items-center justify-center py-4 rounded-lg border-2 transition-all cursor-pointer ${
                     tradeSide === "NO"
-                      ? "border-[#FF4D6D] bg-[#FF4D6D]/12 shadow-[0_0_20px_rgba(239,68,68,0.15)]"
-                      : "border-[rgba(165,168,184,0.4)]/25 bg-[#0A0B12] hover:border-[#FF4D6D]/50 hover:bg-[#FF4D6D]/5"
+                      ? "border-[#E4574A] bg-[#E4574A]/12 shadow-[0_0_20px_rgba(239,68,68,0.15)]"
+                      : "border-[rgba(165,168,184,0.4)]/25 bg-[#1A1C22] hover:border-[#E4574A]/50 hover:bg-[#E4574A]/5"
                   }`}
                 >
                   <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
-                    tradeSide === "NO" ? "text-[#FF4D6D]" : "text-[#A5A8B8] group-hover:text-[#FF4D6D]"
+                    tradeSide === "NO" ? "text-[#E4574A]" : "text-[#808495] group-hover:text-[#E4574A]"
                   }`}>No</span>
                   <span className={`text-2xl font-black font-mono ${
-                    tradeSide === "NO" ? "text-[#FF4D6D]" : "text-[#F4F5FA]"
+                    tradeSide === "NO" ? "text-[#E4574A]" : "text-[#F4F4F9]"
                   }`}>{noProb}¢</span>
-                  <span className="text-[10px] text-[#FF4D6D] font-mono font-semibold mt-0.5">{noSharePriceSol.toFixed(4)} SOL</span>
-                  <span className="text-[9px] text-[#A5A8B8] mt-0.5 font-mono">{noPool.toFixed(2)} SOL pool</span>
+                  <span className="text-[10px] text-[#E4574A] font-mono font-semibold mt-0.5">{noSharePriceSol.toFixed(4)} SOL</span>
+                  <span className="text-[9px] text-[#808495] mt-0.5 font-mono">{noPool.toFixed(2)} SOL pool</span>
                 </button>
               </div>
 
               {/* Amount input */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-[#A5A8B8] uppercase tracking-wider">Amount (Shares)</label>
+                  <label className="text-xs font-semibold text-[#808495] uppercase tracking-wider">Amount (Shares)</label>
                   {wallet?.publicKey && (
-                    <span className="text-[10px] font-mono text-[#A5A8B8]">
+                    <span className="text-[10px] font-mono text-[#808495]">
                       {tradeSide === "YES" ? `${userYesBalance.toFixed(1)} YES` : `${userNoBalance.toFixed(1)} NO`} held
                     </span>
                   )}
@@ -1353,18 +1395,18 @@ export default function MarketDetailPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 10))}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 hover:border-[rgba(165,168,184,0.4)]/60 text-[#F4F5FA] font-mono font-bold text-base cursor-pointer transition-all"
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 hover:border-[rgba(165,168,184,0.4)]/60 text-[#F4F4F9] font-mono font-bold text-base cursor-pointer transition-all"
                   >−</button>
                   <input
                     type="number"
                     value={quantity}
                     min={1}
                     onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
+                    className="flex-1 bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#F4F4F9] focus:outline-none focus:border-[#FFA500]/60"
                   />
                   <button
                     onClick={() => setQuantity(quantity + 10)}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 hover:border-[rgba(165,168,184,0.4)]/60 text-[#F4F5FA] font-mono font-bold text-base cursor-pointer transition-all"
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 hover:border-[rgba(165,168,184,0.4)]/60 text-[#F4F4F9] font-mono font-bold text-base cursor-pointer transition-all"
                   >+</button>
                 </div>
                 <div className="grid grid-cols-5 gap-1">
@@ -1372,8 +1414,8 @@ export default function MarketDetailPage() {
                     <button key={v} onClick={() => setQuantity(v)}
                       className={`py-1 rounded text-[10px] font-mono cursor-pointer transition-all border ${
                         quantity === v
-                          ? "border-[#00E5FF]/60 bg-[#00E5FF]/10 text-[#00E5FF]"
-                          : "border-[rgba(165,168,184,0.4)]/20 bg-[#0A0B12] text-[#A5A8B8] hover:text-[#F4F5FA] hover:border-[rgba(165,168,184,0.4)]/40"
+                          ? "border-[#FFA500]/60 bg-[#FFA500]/10 text-[#FFA500]"
+                          : "border-[rgba(165,168,184,0.4)]/20 bg-[#1A1C22] text-[#808495] hover:text-[#F4F4F9] hover:border-[rgba(165,168,184,0.4)]/40"
                       }`}>{v}</button>
                   ))}
                 </div>
@@ -1384,13 +1426,13 @@ export default function MarketDetailPage() {
                       <button
                         key={sol}
                         onClick={() => setQuantity(shares)}
-                        className="flex-1 py-1 rounded text-[9px] font-mono cursor-pointer transition-all border border-[rgba(165,168,184,0.4)]/20 bg-[#0A0B12] text-[#00E5FF]/80 hover:text-[#00E5FF] hover:border-[#00E5FF]/40"
+                        className="flex-1 py-1 rounded text-[9px] font-mono cursor-pointer transition-all border border-[rgba(165,168,184,0.4)]/20 bg-[#1A1C22] text-[#FFA500]/80 hover:text-[#FFA500] hover:border-[#FFA500]/40"
                       >
                         {sol} SOL
                       </button>
                     );
                   })}
-                  <span className="flex-1 py-1 text-center text-[9px] text-[#A5A8B8]/60 font-mono truncate">one-click</span>
+                  <span className="flex-1 py-1 text-center text-[9px] text-[#808495]/60 font-mono truncate">one-click</span>
                 </div>
               </div>
 
@@ -1398,34 +1440,34 @@ export default function MarketDetailPage() {
               <div className="border border-[rgba(165,168,184,0.4)]/20 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#A5A8B8] hover:text-[#A5A8B8] cursor-pointer transition-colors bg-[#0A0B12]"
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#808495] hover:text-[#808495] cursor-pointer transition-colors bg-[#1A1C22]"
                 >
                   <span>Advanced: Limit Order</span>
                   <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {showAdvanced && (
-                  <div className="px-3 pb-3 pt-2 bg-[#0A0B12] space-y-3 border-t border-[rgba(165,168,184,0.4)]/15">
+                  <div className="px-3 pb-3 pt-2 bg-[#1A1C22] space-y-3 border-t border-[rgba(165,168,184,0.4)]/15">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsLimitOrder(!isLimitOrder)}
                         className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
-                          isLimitOrder ? "bg-[#00E5FF]" : "bg-[#353534]"
+                          isLimitOrder ? "bg-[#FFA500]" : "bg-[#353534]"
                         }`}
                       >
                         <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
                           isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
                         }`} />
                       </button>
-                      <span className="text-[11px] text-[#A5A8B8]">Place as limit order</span>
+                      <span className="text-[11px] text-[#808495]">Place as limit order</span>
                     </div>
                     {isLimitOrder && (
                       <div className="space-y-1">
-                        <div className="flex justify-between items-center text-[10px] text-[#A5A8B8] uppercase tracking-wider">
+                        <div className="flex justify-between items-center text-[10px] text-[#808495] uppercase tracking-wider">
                           <span>Limit Price (SOL/share)</span>
                           <button
                             type="button"
                             onClick={() => setLimitPriceSol(Number(activeSharePriceSol.toFixed(4)))}
-                            className="text-[#00E5FF] hover:underline font-mono"
+                            className="text-[#FFA500] hover:underline font-mono"
                           >
                             Use Current ({activeSharePriceSol.toFixed(4)})
                           </button>
@@ -1434,7 +1476,7 @@ export default function MarketDetailPage() {
                           type="number" step="0.0001" min="0.0001" max="10"
                           value={limitPriceSol}
                           onChange={(e) => setLimitPriceSol(Math.max(0.0001, Math.min(10, Number(e.target.value))))}
-                          className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
+                          className="w-full bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F4F9] focus:outline-none focus:border-[#FFA500]/60"
                         />
                       </div>
                     )}
@@ -1443,42 +1485,42 @@ export default function MarketDetailPage() {
               </div>
 
               {/* Order Summary */}
-              <div className="bg-[#0A0B12] rounded-lg border border-[rgba(165,168,184,0.4)]/20 p-3 space-y-2 text-[11px] font-mono">
-                <div className="flex justify-between text-[#A5A8B8]">
+              <div className="bg-[#1A1C22] rounded-lg border border-[rgba(165,168,184,0.4)]/20 p-3 space-y-2 text-[11px] font-mono">
+                <div className="flex justify-between text-[#808495]">
                   <span>Price per share</span>
-                  <span className="text-[#F4F5FA]">{isLimitOrder ? `${limitPriceSol.toFixed(4)} SOL` : `${activeSharePriceSol.toFixed(4)} SOL`}</span>
+                  <span className="text-[#F4F4F9]">{isLimitOrder ? `${limitPriceSol.toFixed(4)} SOL` : `${activeSharePriceSol.toFixed(4)} SOL`}</span>
                 </div>
-                <div className="flex justify-between text-[#A5A8B8]">
+                <div className="flex justify-between text-[#808495]">
                   <span>Quantity</span>
-                  <span className="text-[#F4F5FA]">{quantity} shares</span>
+                  <span className="text-[#F4F4F9]">{quantity} shares</span>
                 </div>
-                <div className="flex justify-between text-[#F4F5FA] font-bold border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
+                <div className="flex justify-between text-[#F4F4F9] font-bold border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
                   <span>Total Investment Amount</span>
-                  <span className="text-[#00E5FF] font-mono text-xs">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
+                  <span className="text-[#FFA500] font-mono text-xs">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
                 </div>
                 <div className="flex justify-between border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
-                  <span className="text-[#A5A8B8]">Est. Payout on Win</span>
+                  <span className="text-[#808495]">Est. Payout on Win</span>
                   <span className={`font-bold ${
-                    tradeSide === "YES" ? "text-[#C8FF00]" : "text-[#FF4D6D]"
+                    tradeSide === "YES" ? "text-[#4CAF50]" : "text-[#E4574A]"
                   }`}>{potentialPayout.toFixed(4)} SOL</span>
                 </div>
                 {potentialPayout > 0 && (
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-[#A5A8B8]">Est. Net Profit</span>
-                    <span className="text-[#C8FF00] font-bold">
+                    <span className="text-[#808495]">Est. Net Profit</span>
+                    <span className="text-[#4CAF50] font-bold">
                       +{(potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)).toFixed(4)} SOL
                       {" "}(+{(((potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)) / Math.max(0.0001, (isLimitOrder ? quantity * limitPriceSol : tradeCost))) * 100).toFixed(0)}% return)
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[#A5A8B8]">Est. Price Impact</span>
-                  <span className={priceImpactPct >= 5 ? "text-[#FF4D6D] font-bold" : "text-[#A5A8B8]"}>
+                  <span className="text-[#808495]">Est. Price Impact</span>
+                  <span className={priceImpactPct >= 5 ? "text-[#E4574A] font-bold" : "text-[#808495]"}>
                     {priceImpactPct.toFixed(2)}%
                   </span>
                 </div>
                 {slippageWarning && (
-                  <div className="flex items-start gap-1.5 p-2 rounded bg-[#FF4D6D]/10 border border-[#FF4D6D]/30 text-[10px] text-[#FF4D6D]">
+                  <div className="flex items-start gap-1.5 p-2 rounded bg-[#E4574A]/10 border border-[#E4574A]/30 text-[10px] text-[#E4574A]">
                     <span>⚠</span>
                     <span>
                       High price impact (≥5%). This large order may move the market price significantly. Consider splitting it into smaller orders.
@@ -1493,8 +1535,8 @@ export default function MarketDetailPage() {
                 onClick={isLimitOrder ? () => handlePlaceLimitOrder(true) : handleBuy}
                 className={`w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2 ${
                   tradeSide === "YES"
-                    ? "bg-[#C8FF00] hover:bg-[#16a34a] text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)]"
-                    : "bg-[#FF4D6D] hover:bg-[#dc2626] text-white shadow-[0_4px_14px_rgba(239,68,68,0.3)]"
+                    ? "bg-[#4CAF50] hover:bg-[#16a34a] text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)]"
+                    : "bg-[#E4574A] hover:bg-[#dc2626] text-white shadow-[0_4px_14px_rgba(239,68,68,0.3)]"
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
@@ -1505,20 +1547,20 @@ export default function MarketDetailPage() {
               </button>
 
               {/* Tx status */}
-              {txState === "signing" && <p className="text-center text-xs font-mono text-[#00E5FF] animate-pulse">⏳ Approve in wallet...</p>}
-              {txState === "confirming" && <p className="text-center text-xs font-mono text-[#00E5FF] animate-pulse">⛓ Confirming on-chain...</p>}
+              {txState === "signing" && <p className="text-center text-xs font-mono text-[#FFA500] animate-pulse">⏳ Approve in wallet...</p>}
+              {txState === "confirming" && <p className="text-center text-xs font-mono text-[#FFA500] animate-pulse">⛓ Confirming on-chain...</p>}
               {txState === "success" && txSig && (
-                <p className="text-center text-xs font-mono text-[#C8FF00]">
+                <p className="text-center text-xs font-mono text-[#4CAF50]">
                   ✓ Done —{" "}
                   <a href={`https://solscan.io/tx/${txSig}?cluster=localnet`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a>
                 </p>
               )}
-              {txState === "error" && <p className="text-center text-xs font-mono text-[#FF4D6D]">✗ Transaction failed</p>}
+              {txState === "error" && <p className="text-center text-xs font-mono text-[#E4574A]">✗ Transaction failed</p>}
 
               {/* Active limit orders */}
               {userOrders.length > 0 && (
                 <div className="pt-2 border-t border-[rgba(165,168,184,0.4)]/20 space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#A5A8B8]">Your Open Orders</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#808495]">Your Open Orders</p>
                   {userOrders.map((ordAcc, idx) => {
                     const ord = ordAcc.account;
                     const sideStr = "yes" in ord.side ? "YES" : "NO";
@@ -1526,17 +1568,17 @@ export default function MarketDetailPage() {
                     const qty2 = ord.quantity.toNumber();
                     const filled = ord.filledQuantity.toNumber();
                     return (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/20 text-[10px] font-mono">
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/20 text-[10px] font-mono">
                         <div>
-                          <span className={ord.isBuy ? "text-[#C8FF00] font-bold" : "text-[#FF4D6D] font-bold"}>
+                          <span className={ord.isBuy ? "text-[#4CAF50] font-bold" : "text-[#E4574A] font-bold"}>
                             {ord.isBuy ? "BUY" : "SELL"} {sideStr}
                           </span>
-                          <span className="text-[#A5A8B8] ml-2">@ {priceSol} SOL</span>
-                          <span className="text-[#A5A8B8] ml-2">{filled}/{qty2} filled</span>
+                          <span className="text-[#808495] ml-2">@ {priceSol} SOL</span>
+                          <span className="text-[#808495] ml-2">{filled}/{qty2} filled</span>
                         </div>
                         <button
                           onClick={() => handleCancelOrder(ordAcc)}
-                          className="text-[#FF4D6D] hover:text-[#ff6b6b] cursor-pointer underline"
+                          className="text-[#E4574A] hover:text-[#ff6b6b] cursor-pointer underline"
                         >Cancel</button>
                       </div>
                     );
@@ -1549,13 +1591,13 @@ export default function MarketDetailPage() {
             <div className="space-y-4 pt-4">
               {/* User balances */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#C8FF00]/20 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-[#A5A8B8] font-bold">YES Shares</div>
-                  <div className="text-lg font-black font-mono text-[#C8FF00] mt-0.5">{userYesBalance.toFixed(1)}</div>
+                <div className="p-3 rounded-lg bg-[#1A1C22] border border-[#4CAF50]/20 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-[#808495] font-bold">YES Shares</div>
+                  <div className="text-lg font-black font-mono text-[#4CAF50] mt-0.5">{userYesBalance.toFixed(1)}</div>
                 </div>
-                <div className="p-3 rounded-lg bg-[#0A0B12] border border-[#FF4D6D]/20 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-[#A5A8B8] font-bold">NO Shares</div>
-                  <div className="text-lg font-black font-mono text-[#FF4D6D] mt-0.5">{userNoBalance.toFixed(1)}</div>
+                <div className="p-3 rounded-lg bg-[#1A1C22] border border-[#E4574A]/20 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-[#808495] font-bold">NO Shares</div>
+                  <div className="text-lg font-black font-mono text-[#E4574A] mt-0.5">{userNoBalance.toFixed(1)}</div>
                 </div>
               </div>
 
@@ -1566,9 +1608,9 @@ export default function MarketDetailPage() {
                     className={`py-2.5 rounded-lg border-2 text-sm font-bold uppercase tracking-wide cursor-pointer transition-all ${
                       sellSide === s
                         ? s === "YES"
-                          ? "border-[#C8FF00] bg-[#C8FF00]/10 text-[#C8FF00]"
-                          : "border-[#FF4D6D] bg-[#FF4D6D]/10 text-[#FF4D6D]"
-                        : "border-[rgba(165,168,184,0.4)]/25 bg-[#0A0B12] text-[#A5A8B8]"
+                          ? "border-[#4CAF50] bg-[#4CAF50]/10 text-[#4CAF50]"
+                          : "border-[#E4574A] bg-[#E4574A]/10 text-[#E4574A]"
+                        : "border-[rgba(165,168,184,0.4)]/25 bg-[#1A1C22] text-[#808495]"
                     }`}
                   >{s}</button>
                 ))}
@@ -1577,22 +1619,22 @@ export default function MarketDetailPage() {
               {/* Amount */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-[#A5A8B8] uppercase tracking-wider">Sell Quantity</label>
+                  <label className="text-xs font-semibold text-[#808495] uppercase tracking-wider">Sell Quantity</label>
                   <button
                     onClick={() => setSellQuantity(Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance))}
-                    className="text-[10px] text-[#00E5FF] hover:underline cursor-pointer font-mono font-bold"
+                    className="text-[10px] text-[#FFA500] hover:underline cursor-pointer font-mono font-bold"
                   >
                     MAX ({Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance)})
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 text-[#F4F5FA] font-mono font-bold cursor-pointer">−</button>
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 text-[#F4F4F9] font-mono font-bold cursor-pointer">−</button>
                   <input type="number" value={sellQuantity} min={1}
                     onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60" />
+                    className="flex-1 bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/40 rounded-lg px-3 py-2 text-center text-sm font-mono text-[#F4F4F9] focus:outline-none focus:border-[#FFA500]/60" />
                   <button onClick={() => setSellQuantity(sellQuantity + 5)}
-                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 text-[#F4F5FA] font-mono font-bold cursor-pointer">+</button>
+                    className="w-9 h-9 rounded-lg bg-[#1c1c1c] border border-[rgba(165,168,184,0.4)]/30 text-[#F4F4F9] font-mono font-bold cursor-pointer">+</button>
                 </div>
               </div>
 
@@ -1600,34 +1642,34 @@ export default function MarketDetailPage() {
               <div className="border border-[rgba(165,168,184,0.4)]/20 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#A5A8B8] hover:text-[#A5A8B8] cursor-pointer transition-colors bg-[#0A0B12]"
+                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-[#808495] hover:text-[#808495] cursor-pointer transition-colors bg-[#1A1C22]"
                 >
                   <span>Advanced: Limit Sell (Ask)</span>
                   <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
                 </button>
                 {showAdvanced && (
-                  <div className="px-3 pb-3 pt-2 bg-[#0A0B12] space-y-3 border-t border-[rgba(165,168,184,0.4)]/15">
+                  <div className="px-3 pb-3 pt-2 bg-[#1A1C22] space-y-3 border-t border-[rgba(165,168,184,0.4)]/15">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsLimitOrder(!isLimitOrder)}
                         className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
-                          isLimitOrder ? "bg-[#00E5FF]" : "bg-[#353534]"
+                          isLimitOrder ? "bg-[#FFA500]" : "bg-[#353534]"
                         }`}
                       >
                         <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
                           isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
                         }`} />
                       </button>
-                      <span className="text-[11px] text-[#A5A8B8]">Place as limit sell (ask)</span>
+                      <span className="text-[11px] text-[#808495]">Place as limit sell (ask)</span>
                     </div>
                     {isLimitOrder && (
                       <div className="space-y-1">
-                        <div className="flex justify-between items-center text-[10px] text-[#A5A8B8] uppercase tracking-wider">
+                        <div className="flex justify-between items-center text-[10px] text-[#808495] uppercase tracking-wider">
                           <span>Min Sell Price (SOL/share)</span>
                           <button
                             type="button"
                             onClick={() => setLimitPriceSol(Number(activeSharePriceSol.toFixed(4)))}
-                            className="text-[#00E5FF] hover:underline font-mono"
+                            className="text-[#FFA500] hover:underline font-mono"
                           >
                             Use Current ({activeSharePriceSol.toFixed(4)})
                           </button>
@@ -1636,7 +1678,7 @@ export default function MarketDetailPage() {
                           type="number" step="0.0001" min="0.0001" max="10"
                           value={limitPriceSol}
                           onChange={(e) => setLimitPriceSol(Math.max(0.0001, Math.min(10, Number(e.target.value))))}
-                          className="w-full bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF]/60"
+                          className="w-full bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/40 rounded px-3 py-1.5 text-sm font-mono text-[#F4F4F9] focus:outline-none focus:border-[#FFA500]/60"
                         />
                       </div>
                     )}
@@ -1645,15 +1687,15 @@ export default function MarketDetailPage() {
               </div>
 
               {/* Summary */}
-              <div className="bg-[#0A0B12] rounded-lg border border-[rgba(165,168,184,0.4)]/20 p-3 space-y-2 text-[11px] font-mono">
+              <div className="bg-[#1A1C22] rounded-lg border border-[rgba(165,168,184,0.4)]/20 p-3 space-y-2 text-[11px] font-mono">
                 <div className="flex justify-between">
-                  <span className="text-[#A5A8B8]">Shares to sell</span>
-                  <span className="text-[#F4F5FA]">{sellQuantity} {sellSide}</span>
+                  <span className="text-[#808495]">Shares to sell</span>
+                  <span className="text-[#F4F4F9]">{sellQuantity} {sellSide}</span>
                 </div>
                 <div className="flex justify-between border-t border-[rgba(165,168,184,0.4)]/15 pt-2">
-                  <span className="text-[#A5A8B8]">Est. payout</span>
-                  <span className="text-[#C8FF00] font-bold">
-                    {isLimitOrder ? (sellQuantity * limitPriceSol).toFixed(4) : (sellQuantity * sharePriceSol).toFixed(4)} SOL
+                  <span className="text-[#808495]">Est. payout</span>
+                  <span className="text-[#4CAF50] font-bold">
+                    {isLimitOrder ? (sellQuantity * limitPriceSol).toFixed(4) : sellRefundSol.toFixed(4)} SOL
                   </span>
                 </div>
               </div>
@@ -1663,8 +1705,8 @@ export default function MarketDetailPage() {
                 onClick={isLimitOrder ? () => handlePlaceLimitOrder(false) : handleSell}
                 className={`w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all ${
                   sellSide === "YES"
-                    ? "bg-[#C8FF00]/15 text-[#C8FF00] border-2 border-[#C8FF00]/40 hover:bg-[#C8FF00]/25"
-                    : "bg-[#FF4D6D]/15 text-[#FF4D6D] border-2 border-[#FF4D6D]/40 hover:bg-[#FF4D6D]/25"
+                    ? "bg-[#4CAF50]/15 text-[#4CAF50] border-2 border-[#4CAF50]/40 hover:bg-[#4CAF50]/25"
+                    : "bg-[#E4574A]/15 text-[#E4574A] border-2 border-[#E4574A]/40 hover:bg-[#E4574A]/25"
                 } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {submitting ? "Processing..." : isLimitOrder ? `Place Limit Sell Ask (${sellQuantity} ${sellSide})` : `Instant Sell ${sellQuantity} ${sellSide} Shares`}
@@ -1673,14 +1715,14 @@ export default function MarketDetailPage() {
           ) : (
             /* ── Custom Liquidity (LP) Tab ── */
             <div className="space-y-4 pt-4">
-              <div className="space-y-1 bg-[#00E5FF]/5 border border-[#00E5FF]/20 p-3 rounded font-mono text-[10px] text-[#A5A8B8] leading-normal">
-                <span className="text-[#00E5FF] font-bold">💡 Liquidity Provision (LP)</span>: 
+              <div className="space-y-1 bg-[#FFA500]/5 border border-[#FFA500]/20 p-3 rounded font-mono text-[10px] text-[#808495] leading-normal">
+                <span className="text-[#FFA500] font-bold">💡 Liquidity Provision (LP)</span>: 
                 Provide custom seed reserves directly to outcome pools to support larger trading volume and earn fees.
               </div>
 
               {/* LP Allocation Mode */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#A5A8B8] uppercase tracking-wider">LP Pool Allocation</label>
+                <label className="text-xs font-bold text-[#808495] uppercase tracking-wider">LP Pool Allocation</label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {(["balanced", "yes", "no"] as const).map((opt) => (
                     <button
@@ -1689,8 +1731,8 @@ export default function MarketDetailPage() {
                       onClick={() => setLpOption(opt)}
                       className={`py-2 px-1 rounded-lg text-[10px] font-bold uppercase tracking-wide cursor-pointer transition-all border ${
                         lpOption === opt
-                          ? "border-[#00E5FF] bg-[#00E5FF]/10 text-[#00E5FF]"
-                          : "border-white/10 bg-[#0A0B12] text-[#A5A8B8]"
+                          ? "border-[#FFA500] bg-[#FFA500]/10 text-[#FFA500]"
+                          : "border-white/10 bg-[#1A1C22] text-[#808495]"
                       }`}
                     >
                       {opt === "balanced" ? "Balanced 50:50" : opt === "yes" ? "YES Pool" : "NO Pool"}
@@ -1701,34 +1743,34 @@ export default function MarketDetailPage() {
 
               {/* LP Amount */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#A5A8B8] uppercase tracking-wider">Liquidity to Deposit (SOL)</label>
+                <label className="text-xs font-bold text-[#808495] uppercase tracking-wider">Liquidity to Deposit (SOL)</label>
                 <input
                   type="number"
                   step="0.5"
                   min={0.1}
                   value={lpDepositAmount}
                   onChange={(e) => setLpDepositAmount(Math.max(0.1, Number(e.target.value)))}
-                  className="w-full bg-[#0A0B12] border border-white/10 rounded-lg px-3 py-2 text-[#F4F5FA] focus:outline-none focus:border-[#00E5FF] font-mono text-sm"
+                  className="w-full bg-[#1A1C22] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#FFA500] font-mono text-sm"
                 />
               </div>
 
               {/* LP Impact summary */}
-              <div className="bg-[#0A0B12] rounded-lg border border-white/10 p-3 space-y-2 text-[10px] font-mono text-[#A5A8B8]">
+              <div className="bg-[#1A1C22] rounded-lg border border-white/10 p-3 space-y-2 text-[10px] font-mono text-[#808495]">
                 <div className="flex justify-between">
                   <span>Current YES Pool:</span>
-                  <span className="text-[#F4F5FA]">{yesPool.toFixed(2)} SOL</span>
+                  <span className="text-[#F4F4F9]">{yesPool.toFixed(2)} SOL</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Current NO Pool:</span>
-                  <span className="text-[#F4F5FA]">{noPool.toFixed(2)} SOL</span>
+                  <span className="text-[#F4F4F9]">{noPool.toFixed(2)} SOL</span>
                 </div>
-                <div className="flex justify-between border-t border-white/10 pt-2 text-[#00E5FF]">
+                <div className="flex justify-between border-t border-white/10 pt-2 text-[#FFA500]">
                   <span>New YES Pool:</span>
                   <span>
                     {(yesPool + (lpOption === "balanced" ? lpDepositAmount / 2 : lpOption === "yes" ? lpDepositAmount : 0)).toFixed(2)} SOL
                   </span>
                 </div>
-                <div className="flex justify-between text-[#00E5FF]">
+                <div className="flex justify-between text-[#FFA500]">
                   <span>New NO Pool:</span>
                   <span>
                     {(noPool + (lpOption === "balanced" ? lpDepositAmount / 2 : lpOption === "no" ? lpDepositAmount : 0)).toFixed(2)} SOL
@@ -1739,7 +1781,7 @@ export default function MarketDetailPage() {
               <button
                 disabled={submitting}
                 onClick={handleProvideLiquidity}
-                className="w-full py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest cursor-pointer transition-all bg-[#00E5FF] hover:bg-[#00839c] text-white shadow-[0_4px_14px_rgba(0,229,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3.5 rounded text-sm font-bold uppercase tracking-widest cursor-pointer transition-all bg-[#FFA500] hover:brightness-110 text-[#050608] shadow-[0_3px_0_#9E6600] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? "Processing..." : `Deposit ${lpDepositAmount} SOL Liquidity`}
               </button>
@@ -1753,7 +1795,7 @@ export default function MarketDetailPage() {
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <Link href="/markets" className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider font-display text-[#A5A8B8] hover:text-[#F4F5FA] transition-colors">
+      <Link href="/markets" className="inline-flex items-center space-x-2 text-xs uppercase tracking-wider font-display text-[#808495] hover:text-[#F4F4F9] transition-colors">
         <ArrowLeft className="w-4 h-4" />
         <span>Explorer Board</span>
       </Link>
@@ -1764,14 +1806,14 @@ export default function MarketDetailPage() {
           {/* Main info panel */}
           <div className="glass-panel p-6 sm:p-8 space-y-6">
             <div className="flex items-center space-x-3">
-              <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[rgba(165,168,184,0.4)]/30 text-[#00E5FF]">
+              <span className="px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded bg-white/5 border border-[rgba(165,168,184,0.4)]/30 text-[#FFA500]">
                 {categoryStr}
               </span>
-              <span className="text-xs font-mono text-[#A5A8B8]">BOARD ID #{market.marketId?.toString()}</span>
+              <span className="text-xs font-mono text-[#808495]">BOARD ID #{market.marketId?.toString()}</span>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#F4F5FA] uppercase leading-tight flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold font-display text-[#F4F4F9] uppercase leading-tight flex-1">
                 {market.question}
               </h1>
               <div className="flex items-center gap-2">
@@ -1779,28 +1821,28 @@ export default function MarketDetailPage() {
                   onClick={handleWatchlistToggle}
                   className={`p-2.5 rounded border transition-colors flex items-center justify-center cursor-pointer ${
                     isWatched
-                      ? "border-[#00E5FF] bg-[#00E5FF]/10 text-[#00E5FF]"
-                      : "border-[rgba(165,168,184,0.4)]/30 bg-black/20 text-[#A5A8B8] hover:text-[#F4F5FA] hover:border-[rgba(165,168,184,0.4)]/60"
+                      ? "border-[#FFA500] bg-[#FFA500]/10 text-[#FFA500]"
+                      : "border-[rgba(165,168,184,0.4)]/30 bg-black/20 text-[#808495] hover:text-[#F4F4F9] hover:border-[rgba(165,168,184,0.4)]/60"
                   }`}
                   title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
                 >
-                  <Star className={`w-4 h-4 ${isWatched ? "fill-current text-[#00E5FF]" : ""}`} />
+                  <Star className={`w-4 h-4 ${isWatched ? "fill-current text-[#FFA500]" : ""}`} />
                 </button>
 
                 <div className="relative">
                   <button
                     onClick={() => setShowShareOptions(!showShareOptions)}
-                    className="p-2.5 rounded border border-[rgba(165,168,184,0.4)]/30 bg-black/20 text-[#A5A8B8] hover:text-[#F4F5FA] hover:border-[rgba(165,168,184,0.4)]/60 transition-colors flex items-center justify-center cursor-pointer"
+                    className="p-2.5 rounded border border-[rgba(165,168,184,0.4)]/30 bg-black/20 text-[#808495] hover:text-[#F4F4F9] hover:border-[rgba(165,168,184,0.4)]/60 transition-colors flex items-center justify-center cursor-pointer"
                     title="Share market"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
                   
                   {showShareOptions && (
-                    <div className="absolute right-0 mt-2 w-40 bg-[#0A0B12] border border-[rgba(165,168,184,0.4)]/50 p-1.5 rounded shadow-2xl z-30 font-mono text-[10px] space-y-1">
+                    <div className="absolute right-0 mt-2 w-40 bg-[#1A1C22] border border-[rgba(165,168,184,0.4)]/50 p-1.5 rounded shadow-2xl z-30 font-mono text-[10px] space-y-1">
                       <button
                         onClick={copyShareLink}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F5FA] transition-colors flex items-center gap-2 cursor-pointer"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F4F9] transition-colors flex items-center gap-2 cursor-pointer"
                       >
                         🔗 Copy link
                       </button>
@@ -1808,9 +1850,9 @@ export default function MarketDetailPage() {
                         href={twitterShareUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F5FA] transition-colors flex items-center gap-2 block"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F4F9] transition-colors flex items-center gap-2 block"
                       >
-                        <svg className="w-3 h-3 fill-current text-[#00E5FF]" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3 fill-current text-[#FFA500]" viewBox="0 0 24 24">
                           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                         </svg>
                         Share on X
@@ -1819,7 +1861,7 @@ export default function MarketDetailPage() {
                         href={telegramShareUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F5FA] transition-colors flex items-center gap-2 block"
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-[#F4F4F9] transition-colors flex items-center gap-2 block"
                       >
                         <Send className="w-3 h-3 text-[#a1d494]" /> Telegram
                       </a>
@@ -1829,7 +1871,7 @@ export default function MarketDetailPage() {
               </div>
             </div>
 
-            <p className="text-sm text-[#A5A8B8] leading-relaxed font-medium">
+            <p className="text-sm text-[#808495] leading-relaxed font-medium">
               {market.description}
             </p>
 
@@ -1837,30 +1879,30 @@ export default function MarketDetailPage() {
               {isOracleCategory(market.category) ? (
                 <>
                   <div className="space-y-1 font-mono">
-                    <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Target Price</div>
-                    <div className="text-base sm:text-lg font-bold text-[#F4F5FA]">
+                    <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display font-bold">Target Price</div>
+                    <div className="text-base sm:text-lg font-bold text-[#F4F4F9]">
                       {formatTargetPrice(market.targetPrice, market.targetExpo)}
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
-                    <div className="text-base sm:text-lg font-bold text-[#F4F5FA] font-display uppercase tracking-wide">
+                    <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display font-bold">Comparison Rule</div>
+                    <div className="text-base sm:text-lg font-bold text-[#F4F4F9] font-display uppercase tracking-wide">
                       {market.comparison === 0 ? "Greater Than" : "Less Than"}
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="col-span-2 xl:col-span-2 space-y-1">
-                  <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Settlement Mode</div>
-                  <div className="text-sm font-bold text-[#00E5FF] font-display uppercase tracking-wide flex items-center gap-1.5 pt-0.5">
+                  <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display font-bold">Settlement Mode</div>
+                  <div className="text-sm font-bold text-[#FFA500] font-display uppercase tracking-wide flex items-center gap-1.5 pt-0.5">
                     ⚖️ Manual Settle
                   </div>
                 </div>
               )}
 
               <div className="space-y-1 col-span-2 xl:col-span-1">
-                <div className="text-[10px] text-[#A5A8B8] uppercase tracking-wider font-display font-bold">Ending clock</div>
+                <div className="text-[10px] text-[#808495] uppercase tracking-wider font-display font-bold">Ending clock</div>
                 <div className="pt-1">
                   <FlipCountdown endTs={market.endTs.toNumber()} compact />
                 </div>
@@ -1880,11 +1922,11 @@ export default function MarketDetailPage() {
             )}
 
             {isOracleCategory(market.category) && (
-              <div className="pt-4 border-t border-[rgba(165,168,184,0.4)]/30 text-xs font-mono text-[#A5A8B8] flex flex-col gap-1 text-left">
-                <div className="text-[10px] uppercase font-bold tracking-wider font-display text-[#A5A8B8]">Settlement Method</div>
-                <div className="text-[#00E5FF]">
+              <div className="pt-4 border-t border-[rgba(165,168,184,0.4)]/30 text-xs font-mono text-[#808495] flex flex-col gap-1 text-left">
+                <div className="text-[10px] uppercase font-bold tracking-wider font-display text-[#808495]">Settlement Method</div>
+                <div className="text-[#FFA500]">
                   🔮 Oracle Settle (via Pyth Network feed{" "}
-                  <span className="text-[#F4F5FA] select-all">
+                  <span className="text-[#F4F4F9] select-all">
                     {feedHex || getFeedIdHexString(market.oracleFeedId)}
                   </span>
                   )
@@ -1900,20 +1942,20 @@ export default function MarketDetailPage() {
 
           {/* Semicircle Probability Dial and Sparkline Trend */}
           <div className="glass-panel p-6 sm:p-8 space-y-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#A5A8B8] flex items-center space-x-2">
-              <TrendingUp className="w-4 h-4 text-[#00E5FF]" />
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#808495] flex items-center space-x-2">
+              <TrendingUp className="w-4 h-4 text-[#FFA500]" />
               <span>Implied Odds & Trend Dial</span>
             </h3>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-8 py-2">
               <div className="flex-1 w-full space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-2">
-                  <div className="p-3 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
-                    <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">YES Pool Weight</div>
+                  <div className="p-3 bg-[#1A1C22] rounded border border-[rgba(165,168,184,0.4)]/30">
+                    <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display font-bold">YES Pool Weight</div>
                     <div className="font-bold text-[#a1d494] text-sm pt-1">{yesPool.toFixed(2)} SOL</div>
                   </div>
-                  <div className="p-3 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
-                    <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">NO Pool Weight</div>
+                  <div className="p-3 bg-[#1A1C22] rounded border border-[rgba(165,168,184,0.4)]/30">
+                    <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display font-bold">NO Pool Weight</div>
                     <div className="font-bold text-[#ffb4ab] text-sm pt-1">{noPool.toFixed(2)} SOL</div>
                   </div>
                 </div>
@@ -1928,7 +1970,7 @@ export default function MarketDetailPage() {
 
               {/* Probability Gauge */}
               <div className="w-full sm:w-56 flex-shrink-0">
-                <DualFillGauge yesPct={yesProb} noPct={noProb} />
+                <ProbabilityOrb3D yesProb={yesProb} />
               </div>
             </div>
           </div>
@@ -1953,8 +1995,8 @@ export default function MarketDetailPage() {
 
           {/* Decoded On-chain Activity logs */}
           <div className="glass-panel p-6 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#A5A8B8] flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-[#00E5FF]" />
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#808495] flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-[#FFA500]" />
               <span>Decoded On-Chain Transactions</span>
               <div className="ml-auto flex items-center gap-2">
                 <LiveIndicator isLive={activity.length > 0} label={activity.length > 0 ? "Streaming" : "Idle"} />
@@ -1976,21 +2018,21 @@ export default function MarketDetailPage() {
                   const isNo = item.side === "NO";
                   const isNew = index < 3;
 
-                  let badgeColor = "bg-white/5 text-[#F4F5FA]";
+                  let badgeColor = "bg-white/5 text-[#F4F4F9]";
                   if (isYes) badgeColor = "bg-[#a1d494]/10 text-[#a1d494] border border-[#a1d494]/20";
                   if (isNo) badgeColor = "bg-[#ffb4ab]/10 text-[#ffb4ab] border border-[#ffb4ab]/20";
-                  if (isSettle) badgeColor = "bg-[#00E5FF]/10 text-[#00E5FF] border border-[#00E5FF]/20";
+                  if (isSettle) badgeColor = "bg-[#FFA500]/10 text-[#FFA500] border border-[#FFA500]/20";
 
                   return (
                     <div
                       key={item.signature + "-" + index}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[rgba(165,168,184,0.4)]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#00E5FF]/3 border-l-2 border-l-[#a1d494]" : ""}`}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-[rgba(165,168,184,0.4)]/10 hover:bg-white/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-[#FFA500]/3 border-l-2 border-l-[#a1d494]" : ""}`}
                     >
                       <div className="flex items-center space-x-2.5 min-w-0">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>
                           {item.side}
                         </span>
-                        <span className="text-[#F4F5FA] text-[11px] truncate">
+                        <span className="text-[#F4F4F9] text-[11px] truncate">
                           {isSettle ? (
                             <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
                           ) : isClaim ? (
@@ -2005,7 +2047,7 @@ export default function MarketDetailPage() {
                           </span>
                         )}
                       </div>
-                      <div className="text-[#A5A8B8] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
+                      <div className="text-[#808495] text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
                         <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
                         <span>{item.time}</span>
                       </div>
@@ -2018,38 +2060,38 @@ export default function MarketDetailPage() {
 
           {/* Trust Signals & Settlement Explainer Card */}
           <div className="glass-panel p-6 sm:p-8 space-y-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#00E5FF] flex items-center space-x-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#FFA500] flex items-center space-x-2">
               <Award className="w-4 h-4" />
               <span>⚖️ TRADER SAFETY & TRUST SIGNALS</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
-              <div className="p-4 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
-                <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
-                <div className="font-bold text-[#F4F5FA] text-sm pt-1">
+              <div className="p-4 bg-[#1A1C22] rounded border border-[rgba(165,168,184,0.4)]/30">
+                <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
+                <div className="font-bold text-[#F4F4F9] text-sm pt-1">
                   {lamportsToSol(treasuryBalance).toFixed(3)} SOL
                 </div>
-                <div className="text-[8px] text-[#A5A8B8]/60 pt-0.5">Secure Escrow PDA</div>
+                <div className="text-[8px] text-[#808495]/60 pt-0.5">Secure Escrow PDA</div>
               </div>
 
-              <div className="p-4 bg-[#0A0B12] rounded border border-[rgba(165,168,184,0.4)]/30">
-                <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">Protocol Fee BPS</div>
-                <div className="font-bold text-[#F4F5FA] text-sm pt-1">
+              <div className="p-4 bg-[#1A1C22] rounded border border-[rgba(165,168,184,0.4)]/30">
+                <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display font-bold">Protocol Fee BPS</div>
+                <div className="font-bold text-[#F4F4F9] text-sm pt-1">
                   {feeBps !== null ? `${(feeBps / 100).toFixed(1)}%` : "— BPS"}
                 </div>
-                <div className="text-[8px] text-[#A5A8B8]/60 pt-0.5">Max capped at 10%</div>
+                <div className="text-[8px] text-[#808495]/60 pt-0.5">Max capped at 10%</div>
               </div>
 
-              <div className="p-4 bg-[#0A0B12] rounded border border-board-border/30">
-                <div className="text-[#A5A8B8] text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
+              <div className="p-4 bg-[#1A1C22] rounded border border-board-border/30">
+                <div className="text-[#808495] text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
                 <div className="font-bold text-[#a1d494] text-sm pt-1">
                   {isOracleCategory(market.category) ? "Pyth Pull Oracle" : "Manual Settle"}
                 </div>
-                <div className="text-[8px] text-[#A5A8B8]/60 pt-0.5">Automated on-chain feed</div>
+                <div className="text-[8px] text-[#808495]/60 pt-0.5">Automated on-chain feed</div>
               </div>
             </div>
 
-            <div className="p-4 bg-[#0A0B12] rounded border border-board-border/30 space-y-2 text-xs font-sans text-text-muted leading-relaxed">
+            <div className="p-4 bg-[#1A1C22] rounded border border-board-border/30 space-y-2 text-xs font-sans text-text-muted leading-relaxed">
               <h4 className="font-display font-bold text-text-primary text-[10px] uppercase tracking-wider">How Settlement Works</h4>
               <p>
                 This prediction board is secured by a decentralized smart contract treasury. 
@@ -2078,12 +2120,12 @@ export default function MarketDetailPage() {
           >
             <div className="border-b border-[rgba(165,168,184,0.4)]/20 pb-3 mb-0">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold font-display text-[#F4F5FA]">
+                <h3 className="text-sm font-bold font-display text-[#F4F4F9]">
                   Trade
                 </h3>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#C8FF00] animate-pulse inline-block" />
-                  <span className="text-[#A5A8B8]">Live · {yesProb}% YES</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50] animate-pulse inline-block" />
+                  <span className="text-[#808495]">Live · {yesProb}% YES</span>
                 </div>
               </div>
             </div>
@@ -2093,10 +2135,10 @@ export default function MarketDetailPage() {
       </div>
 
       {/* Mobile Sticky floating trade button for thumb-reach */}
-      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-[#0A0B12] border-t border-[rgba(165,168,184,0.4)]/30 p-4 flex items-center justify-between shadow-2xl">
+      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-[#1A1C22] border-t border-[rgba(165,168,184,0.4)]/30 p-4 flex items-center justify-between shadow-2xl">
         <div className="text-left font-mono">
-          <div className="text-[8px] uppercase tracking-wider text-[#A5A8B8]">Current Odds</div>
-          <div className="text-xs font-bold text-[#00E5FF]">YES: {yesProb}% | NO: {noProb}%</div>
+          <div className="text-[8px] uppercase tracking-wider text-[#808495]">Current Odds</div>
+          <div className="text-xs font-bold text-[#FFA500]">YES: {yesProb}% | NO: {noProb}%</div>
         </div>
         <button
           onClick={() => setIsMobileDrawerOpen(true)}
@@ -2121,15 +2163,15 @@ export default function MarketDetailPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="fixed bottom-16 left-0 right-0 z-50 bg-[#0A0B12] border-t border-[rgba(165,168,184,0.4)] rounded-t-xl p-6 space-y-4"
+              className="fixed bottom-16 left-0 right-0 z-50 bg-[#1A1C22] border-t border-[rgba(165,168,184,0.4)] rounded-t-xl p-6 space-y-4"
             >
               <div className="flex justify-between items-center border-b border-[rgba(165,168,184,0.4)]/30 pb-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider font-display text-[#00E5FF]">
+                <h4 className="text-xs font-bold uppercase tracking-wider font-display text-[#FFA500]">
                   [■] Mobile Prediction Desk
                 </h4>
                 <button 
                   onClick={() => setIsMobileDrawerOpen(false)}
-                  className="text-xs text-[#A5A8B8] hover:text-[#F4F5FA] font-mono px-2 py-1 rounded border border-[rgba(165,168,184,0.4)]/30"
+                  className="text-xs text-[#808495] hover:text-[#F4F4F9] font-mono px-2 py-1 rounded border border-[rgba(165,168,184,0.4)]/30"
                 >
                   CLOSE
                 </button>

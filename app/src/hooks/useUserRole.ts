@@ -18,13 +18,17 @@ export function useUserRole() {
     async function determineRole() {
       const adminEnvWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET || "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS";
 
+      // Development (localnet): mirror the server-side `requireAdmin` dev
+      // bypass so the admin panel is reachable without importing a specific
+      // wallet. Production still resolves the role from on-chain ownership.
+      if (process.env.NODE_ENV === "development") {
+        setRole("admin");
+        setConfigExists(false);
+        setIsLoading(false);
+        return;
+      }
+
       if (!walletKey) {
-        if (process.env.NODE_ENV === "development") {
-          setRole("admin");
-          setConfigExists(false);
-          setIsLoading(false);
-          return;
-        }
         setRole("disconnected");
         setConfigExists(null);
         setIsLoading(false);
@@ -44,9 +48,9 @@ export function useUserRole() {
         setRole(isMatch ? "admin" : "user");
       } catch {
         if (cancelled) return;
-        // Bootstrap: config PDA not initialized yet, check if wallet matches adminEnvWallet or allow in dev
+        // Bootstrap: config PDA not initialized yet, allow the documented admin wallet.
         setConfigExists(false);
-        const isMatch = walletKey === adminEnvWallet || process.env.NODE_ENV === "development";
+        const isMatch = walletKey === adminEnvWallet;
         setRole(isMatch ? "admin" : "user");
       } finally {
         if (!cancelled) setIsLoading(false);

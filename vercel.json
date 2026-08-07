@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/index-backfill",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

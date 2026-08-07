@@ -30,29 +30,22 @@ export async function recordTradeInDb(data: {
       slot: data.slot || 0,
     }).onConflictDoNothing().returning();
 
-    // Update user stats in users table
+    // Update user record
     const solVolume = Math.abs(data.lamportsIn || 0) / 1e9;
     await db.insert(users).values({
       wallet: data.trader,
-      totalWagered: solVolume.toString(),
-      marketsTraded: 1,
       lastActive: new Date(),
     }).onConflictDoUpdate({
       target: users.wallet,
       set: {
-        totalWagered: sql`COALESCE(CAST(${users.totalWagered} AS NUMERIC), 0) + ${solVolume}`,
-        marketsTraded: sql`COALESCE(${users.marketsTraded}, 0) + 1`,
         lastActive: new Date(),
       }
     });
 
-    // Update market pool data after trade
+    // Update market volume
     try {
-      const yesPool = Number(data.side === 'YES' ? data.lamportsIn : 0) / 1e9;
-      const noPool = Number(data.side === 'NO' ? data.lamportsIn : 0) / 1e9;
       await db.update(marketsCache).set({
-        yesPoolSol: sql`CAST(COALESCE(CAST(${marketsCache.yesPoolSol} AS NUMERIC), 0) + ${yesPool} AS TEXT)`,
-        noPoolSol: sql`CAST(COALESCE(CAST(${marketsCache.noPoolSol} AS NUMERIC), 0) + ${noPool} AS TEXT)`,
+        totalVolume: sql`CAST(COALESCE(CAST(${marketsCache.totalVolume} AS NUMERIC), 0) + ${solVolume} AS TEXT)`,
         updatedAt: new Date(),
       }).where(eq(marketsCache.marketPubkey, data.marketPubkey));
     } catch {}

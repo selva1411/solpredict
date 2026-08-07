@@ -77,11 +77,11 @@ export function EmptyState({ icon: Icon = HelpCircle, title, description, action
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="holo-card py-16 text-center text-[#A5A8B8] flex flex-col items-center justify-center space-y-4"
+      className="holo-card py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4"
     >
-      <Icon className="w-12 h-12 opacity-30 text-[#00E5FF]" />
+      <Icon className="w-12 h-12 opacity-30 text-[#FFA500]" />
       <div className="space-y-1">
-        <h3 className="text-base font-bold text-[#F4F5FA] uppercase">{title}</h3>
+        <h3 className="text-base font-bold text-[#F4F4F9] uppercase">{title}</h3>
         <p className="text-xs max-w-sm mx-auto">{description}</p>
       </div>
       {action && (
@@ -89,14 +89,14 @@ export function EmptyState({ icon: Icon = HelpCircle, title, description, action
           {action.href ? (
             <a
               href={action.href}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#FFA500] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
             >
               {action.label}
             </a>
           ) : (
             <button
               onClick={action.onClick}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#FFA500] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
             >
               {action.label}
             </button>
@@ -114,16 +114,16 @@ interface ErrorStateProps {
 
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
-    <div className="holo-card py-16 text-center text-[#A5A8B8] flex flex-col items-center justify-center space-y-4">
-      <AlertTriangle className="w-12 h-12 opacity-30 text-[#FF4D6D]" />
+    <div className="holo-card py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
+      <AlertTriangle className="w-12 h-12 opacity-30 text-[#E4574A]" />
       <div className="space-y-1">
-        <h3 className="text-base font-bold text-[#F4F5FA] uppercase">Data Feed Error</h3>
+        <h3 className="text-base font-bold text-[#F4F4F9] uppercase">Data Feed Error</h3>
         <p className="text-xs max-w-sm mx-auto">{message || "Failed to load data from the network."}</p>
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#7B3FE4] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#FFA500] hover:bg-[#6A2FD4] text-white rounded-lg transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Retry Connection
@@ -140,10 +140,10 @@ interface LiveIndicatorProps {
 
 export function LiveIndicator({ isLive = true, label }: LiveIndicatorProps) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider ${isLive ? "text-[#C8FF00]" : "text-[#A5A8B8]"}`}>
-      <span className={`relative w-2 h-2 rounded-full ${isLive ? "bg-[#C8FF00]" : "bg-[#A5A8B8]"}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider ${isLive ? "text-[#4CAF50]" : "text-[#808495]"}`}>
+      <span className={`relative w-2 h-2 rounded-full ${isLive ? "bg-[#4CAF50]" : "bg-[#808495]"}`}>
         {isLive && (
-          <span className="absolute inset-0 rounded-full bg-[#C8FF00] animate-ping opacity-50" />
+          <span className="absolute inset-0 rounded-full bg-[#4CAF50] animate-ping opacity-50" />
         )}
       </span>
       {label || (isLive ? "Live" : "Offline")}

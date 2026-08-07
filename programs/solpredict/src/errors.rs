@@ -201,6 +201,9 @@ pub enum SolPredictError {
     #[msg("Emergency pause is not active")]
     NotPaused,
 
+    #[msg("Trading is halted — the market is under an emergency pause")]
+    EmergencyPaused,
+
     #[msg("Admin operation requires multisig approval")]
     MultisigRequired,
 

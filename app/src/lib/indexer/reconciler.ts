@@ -1,0 +1,244 @@
+import { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Program, AnchorProvider, Wallet, type IdlAccounts } from "@coral-xyz/anchor";
+import { getDb } from "@/lib/db/client";
+import { getConfigPda, getMarketPda } from "@/lib/pda";
+import { decodeMarket } from "@/lib/idl/decoders";
+import { applyEvent } from "@/lib/indexer/reducer";
+import { logger } from "@/lib/logger";
+import type { Solpredict } from "@/lib/idl/solpredict";
+
+type MarketAccount = IdlAccounts<Solpredict>["market"];
+type ConfigAccount = IdlAccounts<Solpredict>["config"];
+
+const CATEGORY_NAMES = ["Crypto", "Sports", "Politics", "Tech", "Other"] as const;
+const STATUS_NAMES = ["open", "settled", "cancelled"] as const;
+const OUTCOME_NAMES = ["unset", "yes", "no"] as const;
+
+interface ReconcileOptions {
+  connection: Connection;
+  program: Program<Solpredict>;
+  limit?: number;
+}
+
+function toLamports(value: number): number {
+  return Math.floor(value);
+}
+
+function bnToNumber(v: unknown): number {
+  if (typeof v === "object" && v !== null && "toNumber" in (v as Record<string, unknown>)) {
+    return Number((v as { toNumber(): number }).toNumber());
+  }
+  return Number(v ?? 0);
+}
+
+/**
+ * Pull every market PDA the program has initialized, decode the Anchor
+ * account, and reduce it into the DB cache. Idempotent: reruns converge.
+ */
+export async function reconcileMarkets({ connection, program, limit = 500 }: ReconcileOptions): Promise<number> {
+  if (!getDb()) return 0;
+
+  const configPda = getConfigPda(program.programId);
+  let nextMarketId = 0;
+
+  try {
+    const configAcct = await program.account.config.fetchNullable(configPda) as ConfigAccount | null;
+    if (configAcct) {
+      nextMarketId = bnToNumber((configAcct as Record<string, unknown>).marketCount);
+    }
+  } catch (e) {
+    logger.warn("reconcileMarkets: could not read config, defaulting nextMarketId=0:", e);
+  }
+
+  let synced = 0;
+  for (let marketId = 0; marketId < nextMarketId; marketId++) {
+    if (marketId >= limit) break;
+    const pda = getMarketPda(new (await import("@coral-xyz/anchor")).BN(marketId), program.programId);
+    try {
+      const acct = await program.account.market.fetchNullable(pda) as MarketAccount | null;
+      if (!acct) continue;
+      const m = decodeMarket(acct);
+      const category = CATEGORY_NAMES[m.category] ?? "Other";
+      const status = STATUS_NAMES[m.status] ?? "open";
+      const outcome = OUTCOME_NAMES[m.winningOutcome] ?? "unset";
+      await applyEvent({
+        type: "market",
+        marketPubkey: pda.toBase58(),
+        marketId,
+        question: m.question,
+        description: m.description,
+        category,
+        status,
+        winningOutcome: outcome === "unset" ? undefined : outcome,
+        yesPoolLamports: toLamports(m.yesPoolLamports),
+        noPoolLamports: toLamports(m.noPoolLamports),
+        yesSupply: toLamports(m.yesSupply),
+        noSupply: toLamports(m.noSupply),
+        feeCollectedLamports: toLamports(m.feeCollected),
+        totalPayoutPoolLamports: toLamports(m.totalPayoutPool),
+        endTs: m.endTs,
+        resolveTs: m.resolveTs,
+      });
+      synced++;
+    } catch (e) {
+      logger.debug(`reconcileMarkets: skip market ${marketId}:`, e);
+    }
+  }
+
+  logger.info(`[indexer] reconciled ${synced} markets`);
+  return synced;
+}
+
+/**
+ * Fetch recent transactions for the program and reduce swap/trade activity
+ * into the DB. Uses getSignaturesForAddress so it stays cursor-based.
+ */
+export async function reconcileTrades({
+  connection,
+  program,
+  before,
+  limit = 20,
+}: ReconcileOptions & { before?: string }): Promise<{ trades: number; nextCursor: string | null }> {
+  if (!getDb()) return { trades: 0, nextCursor: null };
+
+  const sigs = await connection.getSignaturesForAddress(program.programId, { limit, before });
+  if (sigs.length === 0) return { trades: 0, nextCursor: null };
+
+  let trades = 0;
+  for (const s of sigs) {
+    try {
+      const tx = await connection.getParsedTransaction(s.signature, {
+        maxSupportedTransactionVersion: 0,
+      });
+      if (!tx || !tx.meta?.err) continue;
+
+      const msg = tx.transaction.message;
+      const meta = tx.meta;
+      if (!meta) continue;
+      const accountKeys = msg.accountKeys;
+      const preBalances = meta.preBalances ?? [];
+      const postBalances = meta.postBalances ?? [];
+
+      for (const ix of msg.instructions) {
+        const prog = (ix as { programId?: PublicKey }).programId;
+        if (!prog?.equals(program.programId)) continue;
+
+        const decoded: any = (program.coder.instruction as any).decode(
+          Buffer.from((ix as { data?: string }).data ?? "", "base64")
+        );
+        const name: string = decoded?.name ?? "";
+        if (name !== "buyShares" && name !== "buy_shares" && name !== "sellShares" && name !== "sell_shares") continue;
+        const isBuy = name === "buyShares" || name === "buy_shares";
+
+        const accounts = (ix as { accounts?: PublicKey[] }).accounts ?? [];
+        const trader = accounts[0] as PublicKey | undefined;
+        const marketPubkey = accounts[1] as PublicKey | undefined;
+        const treasury = accounts[2] as PublicKey | undefined;
+        if (!trader || !marketPubkey || !treasury) continue;
+
+        const args = decoded.data;
+        const sideArg = (args?.side ?? args?.sideYes ?? {});
+        // buy/sell side enum: { yes: {} } | { no: {} }
+        const isNo = (sideArg as Record<string, unknown>).no !== undefined;
+        const side = isNo ? "NO" : "YES";
+
+        // Shares received or sold, on-chain base units (quantity * 1e6).
+        const quantity = Number((args?.quantity as unknown) ?? 0);
+        const tokensOut = isBuy ? quantity * 1_000_000 : -(quantity * 1_000_000);
+
+        // Cost = SOL moved out of / into the treasury.
+        const tIdx = accountKeys.findIndex((k) => (k.pubkey as PublicKey).equals(treasury));
+        const rawCost = tIdx >= 0 ? (postBalances[tIdx] ?? 0) - (preBalances[tIdx] ?? 0) : 0;
+        const lamportsIn = isBuy ? Math.abs(rawCost) : -Math.abs(rawCost);
+
+        await applyEvent({
+          type: "trade",
+          signature: s.signature,
+          marketPubkey: marketPubkey.toBase58(),
+          trader: trader.toBase58(),
+          side,
+          outcomeIndex: side === "YES" ? 0 : 1,
+          lamportsIn,
+          tokensOut,
+          pricePerToken: tokensOut > 0 ? Math.abs(lamportsIn) / LAMPORTS_PER_SOL / Math.abs(tokensOut) : 0,
+          blockTime: s.blockTime ?? Math.floor(Date.now() / 1000),
+          slot: s.slot,
+        });
+        trades++;
+      }
+    } catch (e) {
+      logger.debug("reconcileTrades: skip tx:", e);
+    }
+  }
+
+  return { trades, nextCursor: sigs[sigs.length - 1]?.signature ?? null };
+}
+
+type PositionAccount = IdlAccounts<Solpredict>["userPosition"];
+
+export interface ReconcilePositionsResult {
+  trades: number;
+  positions: number;
+}
+
+/**
+ * Reconstruct trades from the on-chain `user_position` accounts. This is
+ * signature-independent (works even when the RPC does not index transaction
+ * signatures, as on a bare solana-test-validator). Each holding is emitted as
+ * one YES and/or NO trade; cost is split proportionally when both sides held.
+ */
+export async function reconcilePositions({ program }: ReconcileOptions): Promise<ReconcilePositionsResult> {
+  if (!getDb()) return { trades: 0, positions: 0 };
+
+  let positions = 0;
+  let trades = 0;
+  try {
+    const accts = await program.account.userPosition.all();
+    for (const a of accts) {
+      const { publicKey: pda, account } = a as {
+        publicKey: PublicKey;
+        account: Record<string, unknown>;
+      };
+      const owner = account.owner as PublicKey | undefined;
+      const market = account.market as PublicKey | undefined;
+      if (!owner || !market) continue;
+
+      const yesAmount = bnToNumber(account.yesAmount);
+      const noAmount = bnToNumber(account.noAmount);
+      const totalSpent = bnToNumber(account.totalSpentLamports) ?? bnToNumber(account.totalSpent);
+      const totalShares = yesAmount + noAmount;
+      if (totalShares === 0) continue;
+      positions++;
+
+      const split = (amt: number) =>
+        totalSpent > 0 ? Math.round((totalSpent * amt) / totalShares) : 0;
+
+      const sides: { side: "YES" | "NO"; amt: number; cost: number }[] = [];
+      if (yesAmount > 0) sides.push({ side: "YES", amt: yesAmount, cost: split(yesAmount) });
+      if (noAmount > 0) sides.push({ side: "NO", amt: noAmount, cost: split(noAmount) });
+
+      const now = Math.floor(Date.now() / 1000);
+      for (const s of sides) {
+        await applyEvent({
+          type: "trade",
+          signature: `${pda.toBase58()}-${s.side === "YES" ? "y" : "n"}`,
+          marketPubkey: market.toBase58(),
+          trader: owner.toBase58(),
+          side: s.side,
+          outcomeIndex: s.side === "YES" ? 0 : 1,
+          lamportsIn: s.cost,
+          tokensOut: s.amt,
+          pricePerToken: s.amt > 0 ? s.cost / LAMPORTS_PER_SOL / s.amt : 0,
+          blockTime: now,
+          slot: 0,
+        });
+        trades++;
+      }
+    }
+  } catch (e) {
+    logger.warn("reconcilePositions: skipped:", e);
+  }
+
+  logger.info(`[indexer] reconcilePositions: ${positions} positions, ${trades} trades`);
+  return { trades, positions };
+}

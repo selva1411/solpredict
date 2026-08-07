@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { recordLeaderboardSnapshot } from "@/lib/db/store";
 import { db } from "@/lib/db/client";

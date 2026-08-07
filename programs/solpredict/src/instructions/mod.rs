@@ -1,4 +1,5 @@
 pub mod initialize_config;
+pub mod update_admin;
 pub mod initialize_market;
 pub mod buy_shares;
 pub mod sell_shares;
@@ -16,6 +17,7 @@ pub mod cancel_order;
 pub mod fill_order;
 
 pub use initialize_config::*;
+pub use update_admin::*;
 pub use initialize_market::*;
 pub use buy_shares::*;
 pub use sell_shares::*;

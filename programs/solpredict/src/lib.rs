@@ -12,7 +12,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("F6PbahxzxHZu4sjryABBJDK2D68kgG9c2a8g9Cb1cnDT");
+declare_id!("BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig");
 
 #[program]
 pub mod solpredict {
@@ -21,6 +21,11 @@ pub mod solpredict {
     /// One-time program bootstrap. Sets admin and fee percentage.
     pub fn initialize_config(ctx: Context<InitializeConfig>, fee_bps: u16) -> Result<()> {
         instructions::initialize_config::handler(ctx, fee_bps)
+    }
+
+    /// Transfer platform admin authority to a new wallet (admin-only).
+    pub fn update_admin(ctx: Context<UpdateAdmin>, new_admin: Pubkey) -> Result<()> {
+        instructions::update_admin::handler(ctx, new_admin)
     }
 
     /// Create a new prediction market (admin-only).

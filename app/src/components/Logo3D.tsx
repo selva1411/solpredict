@@ -1,18 +1,14 @@
-"use client";
-
-import { Canvas } from "@react-three/fiber";
-import { Icosahedron, Float } from "@react-three/drei";
-
 export function Logo3D() {
   return (
-    <Canvas camera={{ position: [0, 0, 3], fov: 50 }} style={{ width: 32, height: 32 }}>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1} />
-      <Float speed={2} rotationIntensity={1} floatIntensity={1}>
-        <Icosahedron args={[1, 0]}>
-          <meshStandardMaterial color="#7B3FE4" metalness={0.8} roughness={0.2} emissive="#FF3D9A" emissiveIntensity={0.3} />
-        </Icosahedron>
-      </Float>
-    </Canvas>
+    <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+      <rect x="1" y="1" width="14" height="14" rx="1" fill="#FFA500" stroke="#9E6600" strokeWidth="1.5" />
+      <rect x="1" y="17" width="14" height="14" rx="1" fill="#1A1C22" stroke="#2D3142" strokeWidth="1.5" />
+      <rect x="17" y="1" width="14" height="14" rx="1" fill="#1A1C22" stroke="#2D3142" strokeWidth="1.5" />
+      <rect x="17" y="17" width="14" height="14" rx="1" fill="#1A1C22" stroke="#2D3142" strokeWidth="1.5" />
+      <circle cx="8" cy="8" r="3" fill="#0C0D12" />
+      <circle cx="8" cy="24" r="3" fill="#FFA500" stroke="#9E6600" strokeWidth="1" />
+      <circle cx="24" cy="8" r="3" fill="#FFA500" stroke="#9E6600" strokeWidth="1" />
+      <circle cx="24" cy="24" r="3" fill="#0C0D12" />
+    </svg>
   );
 }

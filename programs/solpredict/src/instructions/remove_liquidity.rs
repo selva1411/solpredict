@@ -6,7 +6,8 @@ use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount};
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::LiquidityRemoved;
-use crate::state::{LiquidityPosition, Market};
+use crate::state::{EmergencyPause, LiquidityPosition, Market};
+use crate::utils::check_not_paused;
 
 #[derive(Accounts)]
 pub struct RemoveLiquidity<'info> {
@@ -63,12 +64,17 @@ pub struct RemoveLiquidity<'info> {
     )]
     pub liquidity_position: Account<'info, LiquidityPosition>,
 
+    /// Optional emergency-pause account. When present and paused, trading is halted.
+    pub emergency_pause: Option<Account<'info, EmergencyPause>>,
+
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<()> {
+    check_not_paused(&ctx.accounts.emergency_pause)?;
+
     let market = &mut ctx.accounts.market;
     let lp = &ctx.accounts.liquidity_position;
 

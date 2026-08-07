@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
 import { notifications } from "@/lib/db/schema";

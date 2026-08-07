@@ -42,10 +42,6 @@ export async function upsertMarketCache(entry: MarketCacheEntry) {
       category: entry.category,
       status: entry.status,
       winningOutcome: entry.winningOutcome,
-      yesPoolSol: entry.yesPoolSol.toString(),
-      noPoolSol: entry.noPoolSol.toString(),
-      yesSupply: entry.yesSupply,
-      noSupply: entry.noSupply,
       endTs: entry.endTs,
       resolveTs: entry.resolveTs,
       thumbnailUrl: entry.thumbnailUrl,
@@ -54,10 +50,9 @@ export async function upsertMarketCache(entry: MarketCacheEntry) {
     }).onConflictDoUpdate({
       target: marketsCache.marketPubkey,
       set: {
-        yesPoolSol: entry.yesPoolSol.toString(),
-        noPoolSol: entry.noPoolSol.toString(),
-        yesSupply: entry.yesSupply,
-        noSupply: entry.noSupply,
+        question: entry.question,
+        description: entry.description,
+        category: entry.category,
         status: entry.status,
         winningOutcome: entry.winningOutcome,
         updatedAt: new Date(),
@@ -93,14 +88,10 @@ export async function insertTrade(trade: TradeEntry) {
     const solVolume = Math.abs(trade.lamportsIn || 0) / 1e9;
     await db.insert(users).values({
       wallet: trade.trader,
-      totalWagered: solVolume.toString(),
-      marketsTraded: 1,
       lastActive: new Date(),
     }).onConflictDoUpdate({
       target: users.wallet,
       set: {
-        totalWagered: drizzleSql`COALESCE(CAST(${users.totalWagered} AS NUMERIC), 0) + ${solVolume}`,
-        marketsTraded: drizzleSql`COALESCE(${users.marketsTraded}, 0) + 1`,
         lastActive: new Date(),
       }
     });
@@ -182,7 +173,8 @@ export async function upvoteComment(commentId: number): Promise<boolean> {
 export async function recordLeaderboardSnapshot() {
   if (!db) return;
   try {
-    const topUsers = await db.select().from(users).orderBy(desc(users.totalWagered)).limit(50);
+    const { userStats } = await import('./schema');
+    const topUsers = await db.select().from(userStats).orderBy(desc(userStats.totalVolume)).limit(50);
     const todayStr = new Date().toISOString().slice(0, 10);
 
     for (let i = 0; i < topUsers.length; i++) {
@@ -191,9 +183,9 @@ export async function recordLeaderboardSnapshot() {
         wallet: u.wallet,
         period: 'daily',
         rank: i + 1,
-        profitSol: (u.totalProfit || '0').toString(),
-        winRate: (u.winRate || '0').toString(),
-        pasScore: u.pasScore || 0,
+        profitSol: (u.realizedPnl || '0').toString(),
+        winRate: (u.winRateBps ? (u.winRateBps / 100).toString() : '0'),
+        pasScore: 50,
         marketsCount: u.marketsTraded || 0,
         snapshotDate: todayStr,
       });
@@ -207,18 +199,31 @@ export async function getLeaderboardData() {
   if (!db) return [];
 
   try {
-    // 1. Try querying users table ordered by volume
-    const rows = await db.select().from(users).orderBy(desc(users.totalWagered)).limit(20);
+    const { userStats } = await import('./schema');
+    const rows = await db.select({
+      wallet: userStats.wallet,
+      totalVolume: userStats.totalVolume,
+      realizedPnl: userStats.realizedPnl,
+      winRateBps: userStats.winRateBps,
+      marketsTraded: userStats.marketsTraded,
+      username: users.username,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(userStats)
+    .leftJoin(users, eq(users.wallet, userStats.wallet))
+    .orderBy(desc(drizzleSql`CAST(${userStats.totalVolume} AS NUMERIC)`))
+    .limit(20);
+
     if (rows.length > 0) {
       return rows.map((u, i) => ({
         rank: i + 1,
         wallet: u.wallet,
         username: u.username || `${u.wallet.slice(0, 4)}...${u.wallet.slice(-4)}`,
         avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${u.wallet}`,
-        totalWagered: Number(u.totalWagered || 0),
-        totalProfit: Number(u.totalProfit || 0),
-        winRate: Number(u.winRate || 0),
-        pasScore: u.pasScore || 0,
+        totalWagered: Number(u.totalVolume || 0),
+        totalProfit: Number(u.realizedPnl || 0),
+        winRate: u.winRateBps != null ? u.winRateBps / 100 : 0,
+        pasScore: 50,
         marketsTraded: u.marketsTraded || 0,
       }));
     }

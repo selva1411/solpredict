@@ -1,8 +1,9 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db/client';
 import { marketComments } from '@/lib/db/schema';
 import { eq, desc, sql } from 'drizzle-orm';
-import { ok, badRequest, serverError } from '@/lib/api-response';
+import { ok, badRequest, serverError, serviceUnavailable } from '@/lib/api-response';
 import { apiHandler } from '@/lib/api-handler';
 
 export const GET = apiHandler(async (_req: NextRequest, context) => {
@@ -10,7 +11,7 @@ export const GET = apiHandler(async (_req: NextRequest, context) => {
   const marketPubkey = params.id;
   if (!marketPubkey) return badRequest('Market ID required');
 
-  if (!db) return ok({ ok: true, comments: [] });
+  if (!db) return serviceUnavailable('Database not available');
 
   try {
     const allComments = await db.select().from(marketComments)
@@ -54,19 +55,7 @@ export const POST = apiHandler(async (req: NextRequest, context) => {
     }
 
     if (!db) {
-      // Return optimistic response when DB not configured
-      return ok({
-        ok: true,
-        comment: {
-          id: Date.now(),
-          marketPubkey,
-          authorWallet: resolvedAuthor,
-          content: content.trim(),
-          parentId: parentId ?? null,
-          upvotes: 0,
-          createdAt: new Date(),
-        },
-      }, { status: 201 });
+      return serviceUnavailable('Database not available');
     }
 
     const [inserted] = await db.insert(marketComments).values({
@@ -96,7 +85,7 @@ export const PATCH = apiHandler(async (req: NextRequest, context) => {
     const { commentId } = body;
     if (!commentId) return badRequest('commentId is required');
 
-    if (!db) return ok({ ok: true });
+    if (!db) return serviceUnavailable('Database not available');
 
     await db.update(marketComments)
       .set({ upvotes: sql`COALESCE(${marketComments.upvotes}, 0) + 1` })

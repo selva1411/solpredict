@@ -1,8 +1,9 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db/client';
-import { marketsCache, trades, users, marketComments } from '@/lib/db/schema';
-import { sql } from 'drizzle-orm';
-import { ok, serverError } from '@/lib/api-response';
+import { marketsCache, trades, users, marketComments, userStats } from '@/lib/db/schema';
+import { sql, eq, desc } from 'drizzle-orm';
+import { ok, serverError, serviceUnavailable } from '@/lib/api-response';
 import { apiHandler } from '@/lib/api-handler';
 import { requireAdmin } from '@/lib/admin-guard';
 
@@ -11,24 +12,14 @@ export const GET = apiHandler(async (req: NextRequest) => {
   if (!guard.ok) return guard.response;
 
   if (!db) {
-    return ok({
-      ok: true,
-      stats: {
-        markets: { total: 0, open: 0, resolved: 0, totalVolume: 0, totalLiquidity: 0 },
-        trades: { total: 0, volume24h: 0 },
-        users: { total: 0 },
-        comments: { total: 0 },
-      },
-      recent: { markets: [], trades: [], topTraders: [] },
-      charts: { dailyVolume: [], categoryBreakdown: [] },
-    });
+    return serviceUnavailable('Database not available');
   }
 
   try {
     const [
       marketStats,
       tradeStats,
-      userStats,
+      userCount,
       commentStats,
       recentMarkets,
       recentTrades,
@@ -38,7 +29,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
         total: sql<number>`COUNT(*)::int`,
         open: sql<number>`COUNT(*) FILTER (WHERE status = 'open')::int`,
         resolved: sql<number>`COUNT(*) FILTER (WHERE status = 'settled')::int`,
-        totalLiquidity: sql<number>`COALESCE(SUM(CAST(yes_pool_sol AS NUMERIC) + CAST(no_pool_sol AS NUMERIC)), 0)`,
+        totalLiquidity: sql<number>`COALESCE(SUM(CAST(total_volume AS NUMERIC)), 0)`,
       }).from(marketsCache),
 
       db.select({
@@ -56,11 +47,10 @@ export const GET = apiHandler(async (req: NextRequest) => {
         question: marketsCache.question,
         category: marketsCache.category,
         status: marketsCache.status,
-        yesPoolSol: marketsCache.yesPoolSol,
-        noPoolSol: marketsCache.noPoolSol,
+        totalVolume: marketsCache.totalVolume,
         createdAt: marketsCache.createdAt,
       }).from(marketsCache)
-        .orderBy(sql`created_at DESC`)
+        .orderBy(desc(marketsCache.createdAt))
         .limit(5),
 
       // Recent 10 trades
@@ -73,18 +63,19 @@ export const GET = apiHandler(async (req: NextRequest) => {
         lamportsIn: trades.lamportsIn,
         blockTime: trades.blockTime,
       }).from(trades)
-        .orderBy(sql`block_time DESC`)
+        .orderBy(desc(trades.blockTime))
         .limit(10),
 
-      // Top 10 traders by volume
+      // Top 10 traders by volume from user_stats
       db.select({
-        wallet: users.wallet,
+        wallet: userStats.wallet,
         username: users.username,
-        volume: users.totalWagered,
-        pnl: users.totalProfit,
-        winRate: users.winRate,
-      }).from(users)
-        .orderBy(sql`CAST(total_wagered AS NUMERIC) DESC`)
+        volume: userStats.totalVolume,
+        pnl: userStats.realizedPnl,
+        winRateBps: userStats.winRateBps,
+      }).from(userStats)
+        .leftJoin(users, eq(users.wallet, userStats.wallet))
+        .orderBy(desc(sql`CAST(user_stats.total_volume AS NUMERIC)`))
         .limit(10),
     ]);
 
@@ -107,7 +98,6 @@ export const GET = apiHandler(async (req: NextRequest) => {
     const categoryBreakdown = await db.select({
       category: marketsCache.category,
       count: sql<number>`COUNT(*)::int`,
-      volume: sql<number>`COALESCE(SUM(CAST(yes_pool_sol AS NUMERIC) + CAST(no_pool_sol AS NUMERIC)), 0)`,
     }).from(marketsCache)
       .groupBy(marketsCache.category);
 
@@ -115,25 +105,34 @@ export const GET = apiHandler(async (req: NextRequest) => {
       ok: true,
       stats: {
         markets: {
-          total: marketStats[0]?.total || 0,
-          open: marketStats[0]?.open || 0,
-          resolved: marketStats[0]?.resolved || 0,
-          totalVolume: Number(tradeStats[0]?.totalVolume || 0),
-          totalLiquidity: Number(marketStats[0]?.totalLiquidity || 0),
+          total: marketStats[0]?.total ?? 0,
+          open: marketStats[0]?.open ?? 0,
+          resolved: marketStats[0]?.resolved ?? 0,
+          totalLiquidity: Number(marketStats[0]?.totalLiquidity ?? 0),
         },
         trades: {
-          total: tradeStats[0]?.total || 0,
-          volume24h: Number(tradeStats[0]?.volume24h || 0),
+          total: tradeStats[0]?.total ?? 0,
+          volume24h: Number(tradeStats[0]?.volume24h ?? 0),
+          totalVolume: Number(tradeStats[0]?.totalVolume ?? 0),
         },
-        users: { total: userStats[0]?.total || 0 },
-        comments: { total: commentStats[0]?.total || 0 },
-      },
-      recent: {
-        markets: recentMarkets,
-        trades: recentTrades,
-        topTraders,
-      },
-      charts: {
+        users: {
+          total: userCount[0]?.total ?? 0,
+        },
+        comments: {
+          total: commentStats[0]?.total ?? 0,
+        },
+        recentMarkets: recentMarkets.map(m => ({
+          ...m,
+          totalVolume: Number(m.totalVolume ?? 0),
+        })),
+        recentTrades,
+        topTraders: topTraders.map(t => ({
+          wallet: t.wallet,
+          username: t.username,
+          volume: Number(t.volume ?? 0),
+          pnl: Number(t.pnl ?? 0),
+          winRate: t.winRateBps != null ? t.winRateBps / 100 : null,
+        })),
         dailyVolume,
         categoryBreakdown,
       },

@@ -27,6 +27,7 @@ export const CATEGORY_ICONS: Record<CategoryName, string> = {
  */
 export interface UiMarket {
   id: string;
+  marketId: number;
   question: string;
   description: string;
   category: CategoryName;
@@ -65,6 +66,7 @@ export interface OnChainMarket {
     noPoolLamports: number;
     yesSupply: number;
     noSupply: number;
+    feeBps?: number;
     [key: string]: unknown;
   };
   // DB enrichment fields (passed from useMarkets)
@@ -89,6 +91,8 @@ export function lamportsToSol(lamports: number): number {
   return lamports / 1e9;
 }
 
+import { probabilityYesBps, DEFAULT_B } from "@/lib/amm/lmsr";
+
 /**
  * Core conversion function.
  * Pass an on-chain market + optional enrichment data (from Neon Postgres cache).
@@ -101,15 +105,14 @@ export function onChainToUiMarket(
     sparkline?: number[];
     trending?: boolean;
     hot?: boolean;
+    lastPriceBps?: number;
   },
 ): UiMarket {
-  const yesLamports = m.account.yesPoolLamports;
-  const noLamports = m.account.noPoolLamports;
-  const totalLamports = yesLamports + noLamports;
-  // LMSR/CPMM: YES probability = YES_pool / total (larger YES pool = higher YES price)
-  // Mirrors the on-chain LMSR probability_yes_bps and spot price conventions.
-  const yesPrice = totalLamports > 0 ? yesLamports / totalLamports : 0.5;
-  const liquidity = lamportsToSol(totalLamports);
+  const yesSupply = BigInt(m.account.yesSupply ?? 0);
+  const noSupply = BigInt(m.account.noSupply ?? 0);
+  const bps = enrichment?.lastPriceBps ?? probabilityYesBps(DEFAULT_B, yesSupply, noSupply);
+  const yesPrice = bps / 10000;
+  const liquidity = lamportsToSol(m.account.yesPoolLamports + m.account.noPoolLamports);
 
   // Use DB enrichment data if available (from useMarkets _db* fields)
   const volume24h = enrichment?.volume24h ?? m._dbVolume24h ?? 0;
@@ -117,12 +120,13 @@ export function onChainToUiMarket(
 
   return {
     id: m.publicKey.toBase58(),
+    marketId: m.account.marketId,
     question: m.account.question,
     description: m.account.description || "",
     category: categoryFromIndex(m.account.category),
     endDate: new Date(m.account.endTs * 1000).toISOString(),
-    yesPool: lamportsToSol(yesLamports),
-    noPool: lamportsToSol(noLamports),
+    yesPool: lamportsToSol(m.account.yesPoolLamports),
+    noPool: lamportsToSol(m.account.noPoolLamports),
     yesPrice,
     noPrice: 1 - yesPrice,
     volume24h,
@@ -148,6 +152,7 @@ export function onChainMarketsToUi(
     sparkline?: number[];
     trending?: boolean;
     hot?: boolean;
+    lastPriceBps?: number;
   }>,
 ): UiMarket[] {
   return markets.map((m) =>
@@ -156,34 +161,31 @@ export function onChainMarketsToUi(
 }
 
 /**
- * Convert a DB cache entry (Neon markets_cache + trades enrichment) to a UiMarket.
- * Used by DB-backed endpoints (trending, related, cached) so they render in the
- * same UiMarket shape as on-chain data.
+ * Convert a DB cache entry to a UiMarket.
  */
 export function cacheToUiMarket(
-  c: MarketCacheEntry,
+  c: MarketCacheEntry & { lastPriceBps?: number },
   opts?: { trending?: boolean; hot?: boolean },
 ): UiMarket {
-  const yesPool = Number(c.yesPoolSol ?? 0);
-  const noPool = Number(c.noPoolSol ?? 0);
-  const totalPool = yesPool + noPool;
-  const yesPrice = totalPool > 0 ? yesPool / totalPool : 0.5;
+  const bps = c.lastPriceBps ?? 5000;
+  const yesPrice = bps / 10000;
   const category = (CATEGORY_NAMES as readonly string[]).includes(c.category)
     ? (c.category as CategoryName)
     : "Other";
 
   return {
     id: c.marketPubkey,
+    marketId: c.marketId ?? 0,
     question: c.question,
     description: c.description ?? "",
     category,
     endDate: c.endTs ? new Date(c.endTs).toISOString() : new Date().toISOString(),
-    yesPool,
-    noPool,
+    yesPool: 0,
+    noPool: 0,
     yesPrice,
     noPrice: 1 - yesPrice,
     volume24h: c.volume24h ?? 0,
-    liquidity: c.liquidity ?? yesPool + noPool,
+    liquidity: c.liquidity ?? 0,
     traders: c.traders ?? 0,
     icon: categoryIcon(CATEGORY_NAMES.indexOf(category)),
     sparkline: [],

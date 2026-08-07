@@ -1,95 +1,187 @@
-import { NextRequest } from 'next/server';
-import { db } from '@/lib/db/client';
-import { marketsCache, trades, adminSettings, lpPoolStats } from '@/lib/db/schema';
-import { sql, eq } from 'drizzle-orm';
-import { ok, serverError } from '@/lib/api-response';
-import { apiHandler } from '@/lib/api-handler';
-import { requireAdmin } from '@/lib/admin-guard';
+export const dynamic = "force-dynamic";
 
+import { NextRequest } from "next/server";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { assertDb } from "@/lib/db/client";
+import { marketsCache, trades, treasuryLedger, platformConfig } from "@/lib/db/schema";
+import { sql, desc, eq } from "drizzle-orm";
+import { ok, badRequest, serverError } from "@/lib/api-response";
+import { apiHandler } from "@/lib/api-handler";
+import { requireAdmin } from "@/lib/admin-guard";
+
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+
+/**
+ * GET /api/admin/treasury
+ *
+ * Full treasury page data per spec §3.6:
+ * - Live on-chain SOL balance of treasury wallet via RPC
+ * - Full treasury_ledger history (paginated, filterable)
+ * - Accrued-but-unwithdrawn fees per market
+ * - Reconciliation strip: on-chain balance vs sum(ledger) with drift detection
+ */
 export const GET = apiHandler(async (req: NextRequest) => {
   const guard = await requireAdmin(req);
   if (!guard.ok) return guard.response;
-  if (!db) {
-    return ok({
-      ok: true,
-      treasury: {
-        totalFeeCollectedSol: 0,
-        totalFeeWithdrawnSol: 0,
-        pendingFeesSol: 0,
-        totalTreasuryBalanceSol: 0,
-        marketsWithFees: 0,
-        recentWithdrawals: [],
-      },
-    });
-  }
+
+  const url = new URL(req.url);
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
+  const offset = (page - 1) * limit;
+  const kind = url.searchParams.get("kind");
+  const direction = url.searchParams.get("direction");
 
   try {
-    // Read configured fee bps from admin_settings (default 200 = 2%)
-    let feeBps = 200;
+    const db = assertDb();
+
+    // 1. Fetch platform config for treasury wallet address
+    const [config] = await db.select().from(platformConfig).limit(1);
+    const treasuryAddress = config?.treasuryWallet || process.env.ADMIN_WALLET || "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS";
+
+    // 2. Live on-chain balance via RPC
+    let onChainBalanceLamports = 0;
     try {
-      const [feeSetting] = await db.select({ value: adminSettings.value })
-        .from(adminSettings)
-        .where(eq(adminSettings.key, 'feeBps'))
-        .limit(1);
-      const parsed = feeSetting ? Number(feeSetting.value) : NaN;
-      if (Number.isFinite(parsed) && parsed > 0) feeBps = parsed;
-    } catch {}
+      const conn = new Connection(RPC_URL, "confirmed");
+      onChainBalanceLamports = await conn.getBalance(new PublicKey(treasuryAddress));
+    } catch (e) {
+      console.warn("[Treasury API] RPC getBalance failed:", e);
+    }
+    const onChainBalanceSol = onChainBalanceLamports / 1e9;
 
-    // Tracked LP fee earnings (updated by indexers/LP withdrawal flows)
-    let lpFeeEarned = 0;
-    try {
-      const [lpFee] = await db.select({
-        total: sql<string>`COALESCE(SUM(CAST(fee_earned_sol AS NUMERIC)), 0)::text`,
-      }).from(lpPoolStats);
-      lpFeeEarned = Number(lpFee?.total || 0);
-    } catch {}
+    // 3. Query full treasury_ledger table
+    const ledgerWhere: any[] = [];
+    if (kind) ledgerWhere.push(eq(treasuryLedger.kind, kind));
+    if (direction) ledgerWhere.push(eq(treasuryLedger.direction, direction));
 
-    // Fees withdrawn so far (admin_settings, set on each withdrawal)
-    let totalWithdrawn = 0;
-    try {
-      const [wd] = await db.select({ value: adminSettings.value })
-        .from(adminSettings)
-        .where(eq(adminSettings.key, 'feesWithdrawnSol'))
-        .limit(1);
-      const parsed = wd ? Number(wd.value) : NaN;
-      if (Number.isFinite(parsed) && parsed > 0) totalWithdrawn = parsed;
-    } catch {}
+    const whereClause = ledgerWhere.length > 0 ? sql.join(ledgerWhere, sql` AND `) : undefined;
 
-    const [feeStats] = await db.select({
-      totalMarkets: sql<number>`COUNT(*)::int`,
-      totalLiquidity: sql<string>`COALESCE(SUM(CAST(yes_pool_sol AS NUMERIC) + CAST(no_pool_sol AS NUMERIC)), 0)::text`,
-    }).from(marketsCache);
+    const [ledgerRows, countRows, ledgerSum] = await Promise.all([
+      db
+        .select()
+        .from(treasuryLedger)
+        .where(whereClause)
+        .orderBy(desc(treasuryLedger.ts))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(treasuryLedger)
+        .where(whereClause),
+      db
+        .select({
+          totalIn: sql<string>`COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0)::text`,
+          totalOut: sql<string>`COALESCE(SUM(CASE WHEN direction = 'out' THEN amount ELSE 0 END), 0)::text`,
+        })
+        .from(treasuryLedger),
+    ]);
 
-    // Fees are charged on buy-side cost at the configured fee rate
-    const [tradeStats] = await db.select({
-      totalVolume: sql<string>`COALESCE(SUM(ABS(lamports_in)) / 1e9, 0)::text`,
-      buyVolume: sql<string>`COALESCE(SUM(CASE WHEN lamports_in > 0 THEN lamports_in ELSE 0 END) / 1e9, 0)::text`,
-      estimatedFees: sql<string>`COALESCE(SUM(CASE WHEN lamports_in > 0 THEN ABS(lamports_in) ELSE 0 END) / 1e9 * ${feeBps} / 10000, 0)::text`,
-    }).from(trades);
+    const totalLedgerInLamports = Number(ledgerSum[0]?.totalIn || 0);
+    const totalLedgerOutLamports = Number(ledgerSum[0]?.totalOut || 0);
+    const netLedgerLamports = totalLedgerInLamports - totalLedgerOutLamports;
+    const netLedgerSol = netLedgerLamports / 1e9;
 
-    const totalVolume = Number(tradeStats?.totalVolume || 0);
-    const estimatedFees = Number(tradeStats?.estimatedFees || 0);
-    const buyVolume = Number(tradeStats?.buyVolume || 0);
+    // Reconciliation drift: difference between live on-chain balance and net ledger
+    const driftSol = Math.abs(onChainBalanceSol - netLedgerSol);
+    const hasDrift = driftSol > 0.001; // > 0.001 SOL drift threshold
 
-    // Best-available collected fees: tracked LP fees, else trade-based estimate
-    const collected = lpFeeEarned > 0 ? lpFeeEarned : estimatedFees;
-    const pending = Math.max(0, collected - totalWithdrawn);
+    // 4. Market-level unwithdrawn fees
+    const marketFees = await db
+      .select({
+        marketPubkey: marketsCache.marketPubkey,
+        question: marketsCache.question,
+        feeCollectedLamports: marketsCache.feeCollectedLamports,
+        status: marketsCache.status,
+      })
+      .from(marketsCache)
+      .where(sql`COALESCE(fee_collected_lamports, 0) > 0`)
+      .limit(50);
 
     return ok({
       ok: true,
-      treasury: {
-        totalFeeCollectedSol: Number(collected.toFixed(4)),
-        totalFeeWithdrawnSol: Number(totalWithdrawn.toFixed(4)),
-        pendingFeesSol: Number(pending.toFixed(4)),
-        totalTreasuryBalanceSol: Number((feeStats?.totalLiquidity || 0)),
-        marketsWithFees: feeStats?.totalMarkets || 0,
-        totalTradeVolume: totalVolume,
-        buyVolume,
-        feeBps,
-        feeSource: lpFeeEarned > 0 ? "tracked LP fee earnings" : "estimated from on-chain trade volume",
+      treasuryWallet: treasuryAddress,
+      balances: {
+        onChainSol: Number(onChainBalanceSol.toFixed(4)),
+        netLedgerSol: Number(netLedgerSol.toFixed(4)),
+        totalLedgerInSol: Number((totalLedgerInLamports / 1e9).toFixed(4)),
+        totalLedgerOutSol: Number((totalLedgerOutLamports / 1e9).toFixed(4)),
+        driftSol: Number(driftSol.toFixed(4)),
+        hasDrift,
+      },
+      marketFees: marketFees.map((m) => ({
+        marketPubkey: m.marketPubkey,
+        question: m.question,
+        status: m.status,
+        feeLamports: m.feeCollectedLamports ?? 0,
+        feeSol: Number(((m.feeCollectedLamports ?? 0) / 1e9).toFixed(4)),
+      })),
+      ledger: {
+        items: ledgerRows.map((r) => ({
+          id: r.id,
+          ts: r.ts?.toISOString() ?? new Date().toISOString(),
+          signature: r.signature,
+          direction: r.direction,
+          kind: r.kind,
+          amountLamports: r.amount,
+          amountSol: Number((r.amount / 1e9).toFixed(4)),
+          marketPubkey: r.marketPubkey,
+          actor: r.actor,
+          note: r.note,
+        })),
+        pagination: {
+          page,
+          limit,
+          total: countRows[0]?.count ?? 0,
+          totalPages: Math.ceil((countRows[0]?.count ?? 0) / limit),
+        },
       },
     });
-  } catch (e) {
-    return serverError(e);
+  } catch (err) {
+    return serverError(err);
+  }
+});
+
+/**
+ * POST /api/admin/treasury
+ *
+ * Records a withdrawal transaction in the treasury_ledger.
+ */
+export const POST = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
+
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") return badRequest("Invalid JSON body");
+
+  const { amountSol, signature, recipient, kind, note, marketPubkey } = body as {
+    amountSol?: number;
+    signature?: string;
+    recipient?: string;
+    kind?: string;
+    note?: string;
+    marketPubkey?: string;
+  };
+
+  if (!amountSol || amountSol <= 0) return badRequest("Valid amountSol required");
+
+  try {
+    const db = assertDb();
+    const amountLamports = Math.floor(amountSol * 1e9);
+
+    const [row] = await db
+      .insert(treasuryLedger)
+      .values({
+        signature: signature ?? null,
+        direction: "out",
+        kind: kind || "withdrawal",
+        amount: amountLamports,
+        marketPubkey: marketPubkey ?? null,
+        actor: recipient ?? guard.identity.wallet,
+        note: note || `Admin fee withdrawal of ${amountSol} SOL`,
+      })
+      .returning();
+
+    return ok({ ok: true, ledgerItem: row }, { status: 201 });
+  } catch (err) {
+    return serverError(err);
   }
 });

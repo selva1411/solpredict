@@ -30,9 +30,9 @@ export default function ActivityFeed({ limit = 20 }: { limit?: number }) {
   const fetchActivities = useCallback(async () => {
     const fetchFromDbApi = async () => {
       try {
-        const res = await fetch('/api/activity/recent').catch(() => null);
-        if (!res || !res.ok) return false;
-        const data = await res.json().catch(() => null);
+        const res = await fetch('/api/activity/recent');
+        if (!res.ok) return false;
+        const data = await res.json();
         if (data && data.ok && data.activities?.length > 0) {
           const entries = data.activities.map((a: any) => ({
             id: a.signature,

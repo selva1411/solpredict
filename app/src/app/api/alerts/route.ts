@@ -1,14 +1,15 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
 import { priceAlerts } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { ok, badRequest, serverError } from "@/lib/api-response";
+import { ok, badRequest, serverError, serviceUnavailable } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 
 export const GET = apiHandler(async (req: NextRequest) => {
   const wallet = req.nextUrl.searchParams.get("wallet");
   if (!wallet) return badRequest("wallet required");
-  if (!db) return ok({ ok: true, alerts: [] });
+  if (!db) return serviceUnavailable('Database not available');
 
   const rows = await db
     .select()

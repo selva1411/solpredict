@@ -20,6 +20,10 @@ export const ERROR_MAP: Record<string, string> = {
   "TreasuryInsufficient": "Treasury balance insufficient for payout",
   "FeeTooHigh": "Fee percentage exceeds maximum allowed (10%)",
   "FeeAlreadyWithdrawn": "Protocol fee has already been withdrawn",
+  "AlreadyPaused": "Emergency pause is already active",
+  "NotPaused": "Emergency pause is not active",
+  "EmergencyPaused": "Trading is halted — the market is under an emergency pause",
+  "MultisigRequired": "Admin operation requires multisig approval",
 };
 
 export function getFriendlyErrorMessage(err: unknown): string {

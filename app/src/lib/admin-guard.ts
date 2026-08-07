@@ -27,6 +27,14 @@ function adminResponse(status: number, message: string): NextResponse {
 export async function requireAdmin(req: NextRequest): Promise<
   { ok: true; identity: AdminIdentity } | { ok: false; response: NextResponse }
 > {
+  // Development (localnet): the panel runs against a local test validator and
+  // the admin wallet is any browser wallet connected to the app (e.g. it was
+  // made the on-chain `config.admin` via "Initialize Config PDA"). Allow any
+  // request here; production below still enforces real authentication.
+  if (process.env.NODE_ENV === "development") {
+    return { ok: true, identity: { wallet: "dev", method: "dev" } };
+  }
+
   const configured = (process.env.ADMIN_WALLET || "").split(",").map((w) => w.trim()).filter(Boolean);
 
   // Fallback: allow the documented CLI admin keypair / dev admin wallet so the
@@ -71,12 +79,6 @@ export async function requireAdmin(req: NextRequest): Promise<
     if (session && isAdminWallet(session.wallet, allowed)) {
       return { ok: true, identity: { wallet: session.wallet, method: "session" } };
     }
-  }
-
-  // Path 3: development-only bypass (localnet panel, CLI admin keypair).
-  // Headers take precedence when present, so real verification still wins.
-  if (process.env.NODE_ENV === "development") {
-    return { ok: true, identity: { wallet: "dev", method: "dev" } };
   }
 
   return { ok: false, response: adminResponse(401, "Admin authentication required") };

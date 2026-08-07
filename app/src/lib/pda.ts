@@ -1,6 +1,14 @@
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 
+export function getEmergencyPausePda(programId: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("emergency_pause")],
+    programId
+  );
+  return pda;
+}
+
 export function getConfigPda(programId: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from("config")],

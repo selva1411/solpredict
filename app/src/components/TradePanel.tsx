@@ -11,21 +11,42 @@ import { BN } from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/hooks/useProgram";
 import type { UiMarket } from "@/lib/market-adapter";
+import { getBuyAmountOut, getSellAmountOut, getSpotPriceYes, getSpotPriceNo } from "@/lib/amm/cpmm";
 
 interface TradePanelProps {
   market: UiMarket;
   onTrade?: (side: "YES" | "NO", amount: number, type: "amm" | "limit") => void;
 }
 
-function calculateAmmOutput(amountIn: number, pool: number): number {
-  const fee = amountIn * 0.003;
-  const effectiveIn = amountIn - fee;
-  return (effectiveIn * pool) / (pool + effectiveIn);
+// Amount in SOL → shares out, using the on-chain constant-product engine.
+function calculateAmmOutput(amountIn: number, side: "YES" | "NO", poolYesLamports: number, poolNoLamports: number, feeBps: number): number {
+  if (amountIn <= 0) return 0;
+  const dxIn = BigInt(Math.round(amountIn * 1e9));
+  const poolYes = BigInt(poolYesLamports);
+  const poolNo = BigInt(poolNoLamports);
+  try {
+    const out = side === "YES"
+      ? getBuyAmountOut(poolYes, poolNo, dxIn, feeBps)
+      : getBuyAmountOut(poolNo, poolYes, dxIn, feeBps);
+    return Number(out) / 1e9;
+  } catch {
+    return 0;
+  }
 }
 
-function calculatePriceImpact(amountIn: number, pool: number): number {
-  if (amountIn === 0) return 0;
-  return (amountIn / (pool + amountIn)) * 100;
+function calculatePriceImpact(amountIn: number, side: "YES" | "NO", poolYesLamports: number, poolNoLamports: number, feeBps: number): number {
+  if (amountIn <= 0) return 0;
+  const poolYes = BigInt(poolYesLamports);
+  const poolNo = BigInt(poolNoLamports);
+  const spot = side === "YES"
+    ? getSpotPriceYes(poolYes, poolNo, feeBps)
+    : getSpotPriceNo(poolYes, poolNo, feeBps);
+  if (spot === 0n) return 0;
+  const spotPerShareSol = Number(spot) / 1e12;
+  const out = calculateAmmOutput(amountIn, side, poolYesLamports, poolNoLamports, feeBps);
+  if (out <= 0) return 0;
+  const avgPerShareSol = amountIn / out;
+  return ((avgPerShareSol - spotPerShareSol) / spotPerShareSol) * 100;
 }
 
 export function TradePanel({ market, onTrade }: TradePanelProps) {
@@ -37,10 +58,15 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
   const { program } = useProgram();
 
   const numAmount = parseFloat(amount) || 0;
-  const pool = side === "YES" ? market.yesPool : market.noPool;
-  const currentPrice = side === "YES" ? market.yesPrice : market.noPrice;
-  const sharesOut = calculateAmmOutput(numAmount, pool);
-  const priceImpact = calculatePriceImpact(numAmount, pool);
+  const poolYesLamports = Math.round((market.yesPool ?? 0) * 1e9);
+  const poolNoLamports = Math.round((market.noPool ?? 0) * 1e9);
+  const feeBps = 300;
+  const spotYes = getSpotPriceYes(BigInt(poolYesLamports), BigInt(poolNoLamports), feeBps);
+  const currentPrice = side === "YES"
+    ? spotYes === 0n ? market.yesPrice : Number(spotYes) / 1e12
+    : spotYes === 0n ? market.noPrice : 1 - Number(spotYes) / 1e12;
+  const sharesOut = calculateAmmOutput(numAmount, side, poolYesLamports, poolNoLamports, feeBps);
+  const priceImpact = calculatePriceImpact(numAmount, side, poolYesLamports, poolNoLamports, feeBps);
   const avgPrice = numAmount > 0 && sharesOut > 0 ? numAmount / sharesOut : 0;
   const potentialPayout = sharesOut;
   const potentialProfit = potentialPayout - numAmount;
@@ -90,8 +116,8 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
           }}
           className={`py-2.5 rounded-xl font-mono font-bold text-sm transition-all ${
             side === "YES"
-              ? "bg-[#C8FF00] text-[#050507] shadow-[0_0_24px_-4px_#C8FF00]"
-              : "bg-white/5 text-[#C8FF00] border border-[#C8FF00]/20 hover:bg-[#C8FF00]/10"
+              ? "bg-[#F5A524] text-[#0A0C14] shadow-[0_0_24px_-4px_#F5A524]"
+              : "bg-white/5 text-[#F5A524] border border-[#F5A524]/25 hover:bg-[#F5A524]/10"
           }`}
         >
           BUY YES · ${market.yesPrice.toFixed(2)}
@@ -103,8 +129,8 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
           }}
           className={`py-2.5 rounded-xl font-mono font-bold text-sm transition-all ${
             side === "NO"
-              ? "bg-[#FF4D6D] text-white shadow-[0_0_24px_-4px_#FF4D6D]"
-              : "bg-white/5 text-[#FF4D6D] border border-[#FF4D6D]/20 hover:bg-[#FF4D6D]/10"
+              ? "bg-[#E4574A] text-white shadow-[0_0_24px_-4px_#E4574A]"
+              : "bg-white/5 text-[#E4574A] border border-[#E4574A]/20 hover:bg-[#E4574A]/10"
           }`}
         >
           BUY NO · ${market.noPrice.toFixed(2)}
@@ -113,17 +139,17 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
 
       <Tabs defaultValue="amm" className="relative z-10">
         <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/5 h-9">
-          <TabsTrigger value="amm" className="text-xs data-[state=active]:bg-[#7B3FE4] data-[state=active]:text-white">
+          <TabsTrigger value="amm" className="text-xs data-[state=active]:bg-[#F5A524] data-[state=active]:text-[#0A0C14] data-[state=active]:font-bold">
             <Zap size={12} className="mr-1.5" /> Instant
           </TabsTrigger>
-          <TabsTrigger value="limit" className="text-xs data-[state=active]:bg-[#7B3FE4] data-[state=active]:text-white">
+          <TabsTrigger value="limit" className="text-xs data-[state=active]:bg-[#F5A524] data-[state=active]:text-[#0A0C14] data-[state=active]:font-bold">
             <ArrowUpDown size={12} className="mr-1.5" /> Limit
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="amm" className="mt-4 space-y-3">
           <div>
-            <label className="text-[11px] text-[#A5A8B8] font-mono uppercase tracking-wider mb-1.5 block">
+            <label className="text-[11px] text-[#808495] font-mono uppercase tracking-wider mb-1.5 block">
               Amount (SOL)
             </label>
             <Input
@@ -131,14 +157,14 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="bg-white/5 border-white/10 text-[#F4F5FA] font-mono text-base h-12 focus:border-[#7B3FE4]"
+              className="bg-white/5 border-white/10 text-[#F4F4F9] font-mono text-base h-12 focus:border-[#F5A524]"
             />
             <div className="flex gap-1.5 mt-2">
               {[10, 50, 100, 500].map((q) => (
                 <button
                   key={q}
                   onClick={() => setAmount(String(q))}
-                  className="flex-1 py-1.5 text-[11px] font-mono text-[#A5A8B8] bg-white/5 rounded-md hover:bg-white/10 hover:text-[#F4F5FA] transition-colors"
+                  className="flex-1 py-1.5 text-[11px] font-mono text-[#808495] bg-white/5 rounded-md hover:bg-white/10 hover:text-[#F4F4F9] transition-colors"
                 >
                   ${q}
                 </button>
@@ -155,23 +181,23 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
                 className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2"
               >
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#A5A8B8]">Shares out</span>
-                  <span className="text-[#F4F5FA] font-semibold">{sharesOut.toFixed(2)} {side}</span>
+                  <span className="text-[#808495]">Shares out</span>
+                  <span className="text-[#F4F4F9] font-semibold">{sharesOut.toFixed(2)} {side}</span>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#A5A8B8]">Avg price</span>
-                  <span className="text-[#F4F5FA] font-semibold">${avgPrice.toFixed(3)}</span>
+                  <span className="text-[#808495]">Avg price</span>
+                  <span className="text-[#F4F4F9] font-semibold">${avgPrice.toFixed(3)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#A5A8B8]">Price impact</span>
-                  <span className={priceImpact > 5 ? "text-[#FF4D6D]" : "text-[#C8FF00]"}>
+                  <span className="text-[#808495]">Price impact</span>
+                  <span className={priceImpact > 5 ? "text-[#E4574A]" : "text-[#4CAF50]"}>
                     {priceImpact.toFixed(2)}%
                   </span>
                 </div>
                 <div className="h-px bg-white/5 my-2" />
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#A5A8B8]">If {side} wins</span>
-                  <span className="text-[#C8FF00] font-semibold">+${potentialProfit.toFixed(2)}</span>
+                  <span className="text-[#808495]">If {side} wins</span>
+                  <span className="text-[#4CAF50] font-semibold">+${potentialProfit.toFixed(2)}</span>
                 </div>
               </motion.div>
             )}
@@ -182,20 +208,20 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
             disabled={submitting || numAmount <= 0}
             className={`w-full h-12 font-mono font-bold text-sm rounded-xl transition-all ${
               side === "YES"
-                ? "bg-[#C8FF00] text-[#050507] hover:bg-[#C8FF00]/90 shadow-[0_0_24px_-4px_#C8FF00]"
-                : "bg-[#FF4D6D] text-white hover:bg-[#FF4D6D]/90 shadow-[0_0_24px_-4px_#FF4D6D]"
+                ? "bg-[#F5A524] text-[#0A0C14] hover:bg-[#F5A524]/90 shadow-[0_0_24px_-4px_#F5A524]"
+                : "bg-[#E4574A] text-white hover:bg-[#E4574A]/90 shadow-[0_0_24px_-4px_#E4574A]"
             }`}
           >
             {submitting ? "Submitting..." : `Buy ${side} · $${(numAmount || 0).toFixed(2)}`}
           </Button>
-          <p className="text-[10px] text-[#A5A8B8] text-center font-mono">
-            0.3% fee · Settles in SOL · Pyth oracle resolution
+          <p className="text-[10px] text-[#808495] text-center font-mono">
+            {(feeBps / 100).toFixed(2)}% fee · Settles in SOL · Pyth oracle resolution
           </p>
         </TabsContent>
 
         <TabsContent value="limit" className="mt-4 space-y-3">
           <div>
-            <label className="text-[11px] text-[#A5A8B8] font-mono uppercase tracking-wider mb-1.5 block">
+            <label className="text-[11px] text-[#808495] font-mono uppercase tracking-wider mb-1.5 block">
               Limit Price ($ per share)
             </label>
             <Input
@@ -206,11 +232,11 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
               placeholder={currentPrice.toFixed(2)}
               value={limitPrice}
               onChange={(e) => setLimitPrice(e.target.value)}
-              className="bg-white/5 border-white/10 text-[#F4F5FA] font-mono text-base h-12 focus:border-[#7B3FE4]"
+              className="bg-white/5 border-white/10 text-[#F4F4F9] font-mono text-base h-12 focus:border-[#F5A524]"
             />
           </div>
           <div>
-            <label className="text-[11px] text-[#A5A8B8] font-mono uppercase tracking-wider mb-1.5 block">
+            <label className="text-[11px] text-[#808495] font-mono uppercase tracking-wider mb-1.5 block">
               Amount (SOL)
             </label>
             <Input
@@ -218,19 +244,19 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="bg-white/5 border-white/10 text-[#F4F5FA] font-mono text-base h-12 focus:border-[#7B3FE4]"
+              className="bg-white/5 border-white/10 text-[#F4F4F9] font-mono text-base h-12 focus:border-[#F5A524]"
             />
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
             <div className="flex justify-between text-xs font-mono">
-              <span className="text-[#A5A8B8]">Shares requested</span>
-              <span className="text-[#F4F5FA] font-semibold">
+              <span className="text-[#808495]">Shares requested</span>
+              <span className="text-[#F4F4F9] font-semibold">
                 {(numAmount / (parseFloat(limitPrice) || currentPrice)).toFixed(2)} {side}
               </span>
             </div>
             <div className="flex justify-between text-xs font-mono">
-              <span className="text-[#A5A8B8]">Expires in</span>
-              <span className="text-[#F4F5FA] font-semibold">7 days</span>
+              <span className="text-[#808495]">Expires in</span>
+              <span className="text-[#F4F4F9] font-semibold">7 days</span>
             </div>
           </div>
           <Button
@@ -238,13 +264,13 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
             disabled={submitting || numAmount <= 0}
             className={`w-full h-12 font-mono font-bold text-sm rounded-xl transition-all ${
               side === "YES"
-                ? "bg-[#C8FF00] text-[#050507] hover:bg-[#C8FF00]/90"
-                : "bg-[#FF4D6D] text-white hover:bg-[#FF4D6D]/90"
+                ? "bg-[#F5A524] text-[#0A0C14] hover:bg-[#F5A524]/90"
+                : "bg-[#E4574A] text-white hover:bg-[#E4574A]/90"
             }`}
           >
             {submitting ? "Placing..." : `Place ${side} Order @ $${parseFloat(limitPrice || "0").toFixed(2)}`}
           </Button>
-          <p className="text-[10px] text-[#A5A8B8] text-center font-mono">
+          <p className="text-[10px] text-[#808495] text-center font-mono">
             Order enters the CLOB · Matched by keeper bot · Auto-cancel on expiry
           </p>
         </TabsContent>

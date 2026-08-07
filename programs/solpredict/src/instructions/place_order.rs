@@ -4,7 +4,8 @@ use anchor_spl::token::{self, Token, Transfer};
 
 use crate::constants::*;
 use crate::errors::SolPredictError;
-use crate::state::{Market, MarketStatus, Order, OrderStatus, Side};
+use crate::state::{EmergencyPause, Market, MarketStatus, Order, OrderStatus, Side};
+use crate::utils::check_not_paused;
 
 #[derive(Accounts)]
 #[instruction(order_id: u64)]
@@ -37,6 +38,9 @@ pub struct PlaceOrder<'info> {
     #[account(mut)]
     pub order_token_escrow: UncheckedAccount<'info>,
 
+    /// Optional emergency-pause account. When present and paused, trading is halted.
+    pub emergency_pause: Option<Account<'info, EmergencyPause>>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
@@ -49,6 +53,8 @@ pub fn handler(
     price_bps: u64,
     quantity: u64,
 ) -> Result<()> {
+    check_not_paused(&ctx.accounts.emergency_pause)?;
+
     let clock = Clock::get()?;
     require!(
         clock.unix_timestamp < ctx.accounts.market.end_ts,

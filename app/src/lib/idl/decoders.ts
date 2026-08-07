@@ -28,6 +28,20 @@ function toPubkey(v: unknown): PublicKey {
   return new PublicKey(toStr(v));
 }
 
+function toCategory(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (v === null || v === undefined) return 4;
+  const obj = v as Record<string, unknown>;
+  if (typeof obj === "object") {
+    if (obj.crypto !== undefined || obj.Crypto !== undefined) return 0;
+    if (obj.sports !== undefined || obj.Sports !== undefined) return 1;
+    if (obj.politics !== undefined || obj.Politics !== undefined) return 2;
+    if (obj.tech !== undefined || obj.Tech !== undefined) return 3;
+    if (obj.other !== undefined || obj.Other !== undefined) return 4;
+  }
+  return 4;
+}
+
 export interface TypedMarketAccount {
   marketId: number;
   authority: PublicKey;
@@ -80,7 +94,7 @@ export function decodeMarket(acct: unknown): TypedMarketAccount {
     authority: toPubkey(a.authority),
     question: toStr(a.question),
     description: toStr(a.description),
-    category: toNum(a.category),
+    category: toCategory(a.category),
     oracleFeedId: (a.oracleFeedId as number[]) ?? [],
     targetPrice: toNum(a.targetPrice),
     targetExpo: toNum(a.targetExpo),

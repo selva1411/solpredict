@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import {
   TrendingUp, Users, DollarSign, Activity, MessageSquare,
-  BarChart3, ArrowUpRight, ArrowDownRight, RefreshCw,
+  BarChart3, RefreshCw,
   CheckCircle2, Clock, type LucideIcon,
 } from 'lucide-react';
 import { adminFetch } from '@/lib/admin-client';
@@ -32,25 +32,24 @@ interface StatCardProps {
   sub?: string;
   icon: LucideIcon;
   color: 'cyan' | 'purple' | 'amber' | 'green';
-  trend?: number;
   delay?: number;
 }
 
 const colorMap = {
-  cyan:   { bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20',   icon: 'text-cyan-400',   glow: 'rgba(6,182,212,0.08)' },
-  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', icon: 'text-purple-400', glow: 'rgba(139,92,246,0.08)' },
+  cyan:   { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  glow: 'rgba(245,158,11,0.08)' },
+  purple: { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  glow: 'rgba(245,158,11,0.08)' },
   amber:  { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  glow: 'rgba(245,158,11,0.08)' },
   green:  { bg: 'bg-green-500/10',  border: 'border-green-500/20',  icon: 'text-green-400',  glow: 'rgba(16,185,129,0.08)' },
 };
 
-function StatCard({ title, value, sub, icon: Icon, color, trend, delay = 0 }: StatCardProps) {
+function StatCard({ title, value, sub, icon: Icon, color, delay = 0 }: StatCardProps) {
   const c = colorMap[color];
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4, ease: 'easeOut' }}
-      className={`relative overflow-hidden rounded-2xl bg-[#0A0B12] border ${c.border} p-5 group`}
+      className={`relative overflow-hidden rounded-2xl bg-[#1A1C22] border ${c.border} p-5 group`}
     >
       <div className="absolute inset-0 rounded-2xl transition-opacity duration-500 opacity-0 group-hover:opacity-100"
            style={{ background: `radial-gradient(circle at 70% 30%, ${c.glow} 0%, transparent 60%)` }} />
@@ -59,12 +58,6 @@ function StatCard({ title, value, sub, icon: Icon, color, trend, delay = 0 }: St
           <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-2">{title}</p>
           <p className="text-2xl font-bold text-white font-mono">{value}</p>
           {sub && <p className="text-xs text-gray-600 mt-1">{sub}</p>}
-          {trend !== undefined && (
-            <div className={`flex items-center gap-1 mt-2 text-xs ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {trend >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-              <span>{Math.abs(trend).toFixed(1)}% vs yesterday</span>
-            </div>
-          )}
         </div>
         <div className={`p-2.5 rounded-xl ${c.bg} flex-shrink-0`}>
           <Icon className={`w-5 h-5 ${c.icon}`} />
@@ -80,10 +73,10 @@ function RecentTable({ title, children }: { title: string; children: React.React
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4, duration: 0.4 }}
-      className="rounded-2xl bg-[#0A0B12] border border-white/[0.06] p-5"
+      className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-5"
     >
       <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-cyan-400" />
+        <BarChart3 className="w-4 h-4 text-amber-400" />
         {title}
       </h3>
       {children}
@@ -201,7 +194,7 @@ export default function AdminDashboardPage() {
 
       {/* Secondary stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="rounded-2xl bg-[#0A0B12] border border-white/[0.06] p-4 flex items-center gap-4">
+        <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-4 flex items-center gap-4">
           <div className="p-2.5 rounded-xl bg-blue-500/10">
             <MessageSquare className="w-5 h-5 text-blue-400" />
           </div>
@@ -210,7 +203,7 @@ export default function AdminDashboardPage() {
             <p className="text-xl font-bold text-white font-mono">{stats?.comments.total ?? 0}</p>
           </div>
         </div>
-        <div className="rounded-2xl bg-[#0A0B12] border border-white/[0.06] p-4 flex items-center gap-4">
+        <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-4 flex items-center gap-4">
           <div className="p-2.5 rounded-xl bg-green-500/10">
             <CheckCircle2 className="w-5 h-5 text-green-400" />
           </div>
@@ -219,7 +212,7 @@ export default function AdminDashboardPage() {
             <p className="text-xl font-bold text-white font-mono">{stats?.markets.open ?? 0}</p>
           </div>
         </div>
-        <div className="rounded-2xl bg-[#0A0B12] border border-white/[0.06] p-4 flex items-center gap-4">
+        <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-4 flex items-center gap-4">
           <div className="p-2.5 rounded-xl bg-yellow-500/10">
             <Clock className="w-5 h-5 text-yellow-400" />
           </div>
@@ -245,7 +238,7 @@ export default function AdminDashboardPage() {
                 <div key={m.marketPubkey} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/[0.03] transition-colors">
                   <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
                     m.status === 'open' ? 'bg-green-400' :
-                    m.status === 'settled' ? 'bg-cyan-400' : 'bg-gray-600'
+                    m.status === 'settled' ? 'bg-amber-400' : 'bg-gray-600'
                   }`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-white truncate">{m.question}</p>
@@ -266,7 +259,7 @@ export default function AdminDashboardPage() {
               {recent.topTraders.map((t, i) => (
                 <div key={t.wallet} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/[0.03] transition-colors">
                   <span className="text-xs text-gray-600 font-mono w-5 text-right">{i + 1}</span>
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
                     {t.wallet.slice(0, 2)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -274,7 +267,7 @@ export default function AdminDashboardPage() {
                       {t.username || `${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}`}
                     </p>
                   </div>
-                  <span className="text-xs text-cyan-400 font-mono flex-shrink-0">
+                  <span className="text-xs text-amber-400 font-mono flex-shrink-0">
                     {Number(t.volume || 0).toFixed(1)} SOL
                   </span>
                 </div>

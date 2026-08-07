@@ -1,8 +1,9 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
-import { marketsCache, trades, users, marketComments } from "@/lib/db/schema";
+import { marketsCache, trades, users, marketComments, userStats } from "@/lib/db/schema";
 import { sql } from "drizzle-orm";
-import { ok } from "@/lib/api-response";
+import { ok, serviceUnavailable } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 import { requireAdmin } from "@/lib/admin-guard";
 
@@ -10,19 +11,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
   const guard = await requireAdmin(req);
   if (!guard.ok) return guard.response;
   if (!db) {
-    return ok({
-      ok: true,
-      stats: {
-        totalMarkets: 0,
-        openMarkets: 0,
-        settledMarkets: 0,
-        totalTrades: 0,
-        totalUsers: 0,
-        totalVolume: 0,
-        totalComments: 0,
-        avgWinRate: 0,
-      },
-    });
+    return serviceUnavailable('Database not available');
   }
 
   const [marketStats] = await db
@@ -30,7 +19,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
       total: sql<number>`COUNT(*)::int`,
       open: sql<number>`COUNT(*) FILTER (WHERE status = 'open')::int`,
       settled: sql<number>`COUNT(*) FILTER (WHERE status = 'settled')::int`,
-      totalLiquidity: sql<number>`COALESCE(SUM(CAST(yes_pool_sol AS NUMERIC) + CAST(no_pool_sol AS NUMERIC)), 0)`,
+      totalLiquidity: sql<number>`COALESCE(SUM(CAST(total_volume AS NUMERIC)), 0)`,
     })
     .from(marketsCache);
 
@@ -41,12 +30,12 @@ export const GET = apiHandler(async (req: NextRequest) => {
     })
     .from(trades);
 
-  const [userStats] = await db
+  const [userAgg] = await db
     .select({
       total: sql<number>`COUNT(*)::int`,
-      avgWinRate: sql<number>`COALESCE(AVG(CAST(win_rate AS NUMERIC)), 0)`,
+      avgWinRate: sql<number>`COALESCE(AVG(win_rate_bps), 0) / 100`,
     })
-    .from(users);
+    .from(userStats);
 
   const [commentStats] = await db
     .select({
@@ -71,7 +60,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
   const categoryBreakdown = await db.select({
     category: marketsCache.category,
     count: sql<number>`COUNT(*)::int`,
-    volume: sql<number>`COALESCE(SUM(CAST(${marketsCache.yesPoolSol} AS NUMERIC) + CAST(${marketsCache.noPoolSol} AS NUMERIC)), 0)`,
+    volume: sql<number>`COALESCE(SUM(CAST(${marketsCache.totalVolume} AS NUMERIC)), 0)`,
   }).from(marketsCache).groupBy(marketsCache.category);
 
   return ok({
@@ -81,13 +70,11 @@ export const GET = apiHandler(async (req: NextRequest) => {
       openMarkets: marketStats?.open || 0,
       settledMarkets: marketStats?.settled || 0,
       totalTrades: tradeStats?.total || 0,
-      totalUsers: userStats?.total || 0,
+      totalUsers: userAgg?.total || 0,
       totalVolume: Number(tradeStats?.totalVolume || 0),
       totalLiquidity: Number(marketStats?.totalLiquidity || 0),
+      avgWinRate: Number(userAgg?.avgWinRate || 0),
       totalComments: commentStats?.total || 0,
-      avgWinRate: Number(userStats?.avgWinRate || 0),
-    },
-    charts: {
       dailyVolume,
       categoryBreakdown,
     },

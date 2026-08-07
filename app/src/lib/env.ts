@@ -39,7 +39,7 @@ export const ENV = {
 
   get programId(): PublicKey {
     const id = process.env.NEXT_PUBLIC_PROGRAM_ID
-      ?? "HVshSwptqBYKWM9MpZrA1bdP7zQ6RzJXVbr5PUR7wvtr";
+      ?? "BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig";
     return new PublicKey(id);
   },
 

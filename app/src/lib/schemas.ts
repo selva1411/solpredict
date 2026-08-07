@@ -30,6 +30,7 @@ export const syncTradeSchema = z.object({
   lamportsIn: z.number().min(0),
   tokensOut: z.number().min(0),
   pricePerToken: z.number().min(0).optional(),
+  feePaidLamports: z.number().min(0).optional(),
   yesPoolSol: z.number().min(0).optional(),
   noPoolSol: z.number().min(0).optional(),
   yesPct: z.number().min(0).max(100).optional(),

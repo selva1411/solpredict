@@ -1,8 +1,9 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db/client';
 import { adminSettings } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { ok, badRequest } from '@/lib/api-response';
+import { ok, badRequest, serviceUnavailable, serverError } from '@/lib/api-response';
 import { apiHandler } from '@/lib/api-handler';
 import { requireAdmin } from '@/lib/admin-guard';
 
@@ -10,15 +11,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
   const guard = await requireAdmin(req);
   if (!guard.ok) return guard.response;
   if (!db) {
-    return ok({
-      ok: true,
-      settings: {
-        feeBps: 200,
-        adminWallet: process.env.ADMIN_WALLET || '',
-        platformName: 'PREDICT-X',
-        maintenanceMode: false,
-      },
-    });
+    return serviceUnavailable('Database not available');
   }
 
   try {
@@ -40,15 +33,8 @@ export const GET = apiHandler(async (req: NextRequest) => {
         minMarketDuration: Number(settingsMap.minMarketDuration || 300),
       },
     });
-  } catch {
-    return ok({
-      ok: true,
-      settings: {
-        feeBps: '200',
-        platformName: 'PREDICT-X',
-        maintenanceMode: 'false',
-      },
-    });
+  } catch (e) {
+    return serverError(e);
   }
 });
 

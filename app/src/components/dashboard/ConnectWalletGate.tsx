@@ -1,65 +1,34 @@
 "use client";
 
-import React, { Suspense, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial } from "@react-three/drei";
-import * as THREE from "three";
+import React from "react";
 import { motion } from "framer-motion";
 import { Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-function FloatingCore() {
-  const ref = useRef<THREE.Mesh>(null);
-
-  useFrame(({ clock }) => {
-    if (ref.current) {
-      ref.current.rotation.y = clock.getElapsedTime() * 0.35;
-      ref.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.5) * 0.15;
-    }
-  });
-
-  return (
-    <Float speed={2} rotationIntensity={0.4} floatIntensity={1.2}>
-      <mesh ref={ref}>
-        <icosahedronGeometry args={[1.1, 1]} />
-        <MeshDistortMaterial
-          color="#ffd89c"
-          emissive="#7B3FE4"
-          emissiveIntensity={0.25}
-          roughness={0.35}
-          metalness={0.85}
-          distort={0.22}
-          speed={2.5}
-        />
-      </mesh>
-    </Float>
-  );
-}
-
-function OrbitRing() {
-  const ref = useRef<THREE.Mesh>(null);
-
-  useFrame(({ clock }) => {
-    if (ref.current) ref.current.rotation.z = clock.getElapsedTime() * 0.6;
-  });
-
-  return (
-    <mesh ref={ref} rotation={[Math.PI / 2.5, 0, 0]}>
-      <torusGeometry args={[1.65, 0.04, 12, 64]} />
-      <meshStandardMaterial color="#7B3FE4" metalness={0.9} roughness={0.2} emissive="#7B3FE4" emissiveIntensity={0.08} />
-    </mesh>
-  );
-}
-
 function GateScene() {
   return (
-    <>
-      <ambientLight intensity={0.6} />
-      <pointLight position={[4, 4, 4]} intensity={2.5} color="#ffd89c" />
-      <pointLight position={[-3, -2, 2]} intensity={1.2} color="#a1d494" />
-      <FloatingCore />
-      <OrbitRing />
-    </>
+    <svg viewBox="0 0 120 100" className="w-full h-full" aria-hidden="true">
+      <circle cx="60" cy="50" r="34" fill="none" stroke="#2D3142" strokeWidth="2" strokeDasharray="2 3" />
+      <circle cx="60" cy="50" r="26" fill="none" stroke="#9E6600" strokeWidth="2" />
+      <path
+        d="M 60 50 L 60 26 A 24 24 0 0 1 83 41"
+        fill="none"
+        stroke="#FFA500"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+      <circle cx="60" cy="50" r="3.5" fill="#FFA500" />
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        const x1 = 60 + Math.cos(rad) * 30;
+        const y1 = 50 + Math.sin(rad) * 30;
+        const x2 = 60 + Math.cos(rad) * 38;
+        const y2 = 50 + Math.sin(rad) * 38;
+        return (
+          <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#FFA500" strokeWidth="1.5" />
+        );
+      })}
+    </svg>
   );
 }
 
@@ -81,36 +50,32 @@ export function ConnectWalletGate({
         animate={{ opacity: 1, y: 0, rotateX: 0 }}
         transition={{ duration: 0.55, ease: "easeOut" }}
         style={{ perspective: 1200 }}
-        className="holo-card py-10 text-center space-y-6 max-w-xl mx-auto w-full px-6 bg-[#0A0B12] holo-card-3d border-white/10"
+        className="holo-card py-10 text-center space-y-6 max-w-xl mx-auto w-full px-6 bg-[#1A1C22] holo-card-3d border-white/10"
       >
-        <div className="relative h-44 w-full overflow-hidden rounded border border-white/10/40 bg-[#0A0B12]">
-          <Suspense
-            fallback={
-              <div className="w-full h-full flex items-center justify-center font-mono text-[#7B3FE4] text-xs animate-pulse">
-                INITIALIZING TERMINAL...
-              </div>
-            }
-          >
-            <Canvas camera={{ position: [0, 0, 4.5], fov: 45 }} gl={{ antialias: true, alpha: true }}>
-              <GateScene />
-            </Canvas>
-          </Suspense>
-          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#0d0d0d] to-transparent pointer-events-none" />
+        <div className="relative h-44 w-full overflow-hidden rounded border border-white/10/40 bg-[#1A1C22]">
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <GateScene />
+          </div>
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3 py-1.5 font-mono text-[9px] uppercase tracking-widest text-[#808495]">
+            <span>GENESIS BOARD</span>
+            <span className="text-[#4CAF50]">● CALIBRATED</span>
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-[#0C0D12]/70 to-transparent pointer-events-none" />
         </div>
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mx-auto w-14 h-14 bg-[#0A0B12] border border-white/10/40 rounded flex items-center justify-center text-[#7B3FE4] shadow-[0_0_20px_rgba(123,63,228,0.15)]"
+          className="mx-auto w-14 h-14 bg-[#1A1C22] border border-white/10/40 rounded flex items-center justify-center text-[#FFA500] shadow-[0_0_20px_rgba(255,165,0,0.15)]"
         >
           <Icon className="w-7 h-7" />
         </motion.div>
 
         <div className="space-y-3">
-          <h2 className="text-2xl font-bold font-display text-[#F4F5FA] uppercase tracking-wide">{title}</h2>
+          <h2 className="text-2xl font-bold font-display text-[#F4F4F9] uppercase tracking-wide">{title}</h2>
           <p className="text-[#d6c4ac] text-sm max-w-sm mx-auto leading-relaxed">{description}</p>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-[#7B3FE4]/70 pt-2 font-bold">
+          <p className="text-[10px] font-mono uppercase tracking-widest text-[#FFA500]/70 pt-2 font-bold">
             Connect wallet above — routing is automatic by authority role
           </p>
         </div>

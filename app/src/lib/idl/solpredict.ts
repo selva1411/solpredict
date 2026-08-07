@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "F6PbahxzxHZu4sjryABBJDK2D68kgG9c2a8g9Cb1cnDT",
+  "address": "BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",
@@ -334,6 +334,13 @@ export type Solpredict = {
               }
             ]
           }
+        },
+        {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is halted."
+          ],
+          "optional": true
         },
         {
           "name": "tokenProgram",
@@ -975,6 +982,14 @@ export type Solpredict = {
           }
         },
         {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is",
+            "halted. Absent when the program has never been paused."
+          ],
+          "optional": true
+        },
+        {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -1154,6 +1169,13 @@ export type Solpredict = {
         {
           "name": "orderTokenEscrow",
           "writable": true
+        },
+        {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is halted."
+          ],
+          "optional": true
         },
         {
           "name": "tokenProgram",
@@ -2150,6 +2172,13 @@ export type Solpredict = {
           "writable": true
         },
         {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is halted."
+          ],
+          "optional": true
+        },
+        {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -2528,6 +2557,13 @@ export type Solpredict = {
         {
           "name": "orderTokenEscrow",
           "writable": true
+        },
+        {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is halted."
+          ],
+          "optional": true
         },
         {
           "name": "tokenProgram",
@@ -3039,6 +3075,13 @@ export type Solpredict = {
           }
         },
         {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is halted."
+          ],
+          "optional": true
+        },
+        {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -3397,6 +3440,13 @@ export type Solpredict = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "emergencyPause",
+          "docs": [
+            "Optional emergency-pause account. When present and paused, trading is halted."
+          ],
+          "optional": true
         }
       ],
       "args": [
@@ -3548,6 +3598,60 @@ export type Solpredict = {
         {
           "name": "outcome",
           "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "updateAdmin",
+      "docs": [
+        "Transfer platform admin authority to a new wallet (admin-only)."
+      ],
+      "discriminator": [
+        161,
+        176,
+        40,
+        213,
+        60,
+        184,
+        179,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Current admin signer — must match `config.admin`."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Config PDA — its `admin` field is overwritten."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "newAdmin",
+          "type": "pubkey"
         }
       ]
     },
@@ -4389,26 +4493,31 @@ export type Solpredict = {
     },
     {
       "code": 6064,
+      "name": "emergencyPaused",
+      "msg": "Trading is halted — the market is under an emergency pause"
+    },
+    {
+      "code": 6065,
       "name": "multisigRequired",
       "msg": "Admin operation requires multisig approval"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "resolutionSourceMismatch",
       "msg": "Market resolution source mismatch"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "batchSizeExceeded",
       "msg": "Batch size exceeds maximum"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "proposalNotPending",
       "msg": "Proposal is not in Pending state"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "proposalBondTooLow",
       "msg": "Proposal bond is below the minimum required"
     }

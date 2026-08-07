@@ -1,12 +1,13 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
-import { db } from "@/lib/db/client";
-import { insertTrade } from "@/lib/db/store";
+import { getDb } from "@/lib/db/client";
 import { serverError, ok } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 import { logAudit } from "@/lib/audit";
+import { applyEvent } from "@/lib/indexer/reducer";
 
 export const POST = apiHandler(async (req: NextRequest) => {
-  if (!db) return serverError("Database not configured");
+  if (!getDb()) return serverError("Database not configured");
 
   const secret = process.env.HELIUS_WEBHOOK_SECRET;
   if (secret) {
@@ -39,7 +40,8 @@ export const POST = apiHandler(async (req: NextRequest) => {
         ? Number((nativeTransfers[0] as Record<string, unknown>).amount || 0) / 1e9
         : 0;
 
-      await insertTrade({
+      await applyEvent({
+        type: "trade",
         signature,
         marketPubkey: mint,
         trader: userAccount,
@@ -47,7 +49,7 @@ export const POST = apiHandler(async (req: NextRequest) => {
         lamportsIn: Math.floor(nativeAmount * 1e9),
         tokensOut: tokenAmount,
         pricePerToken: tokenAmount > 0 ? nativeAmount / tokenAmount : 0,
-        blockTime: new Date(timestamp * 1000),
+        blockTime: timestamp,
         slot: 0,
       });
       count++;

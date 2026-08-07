@@ -69,8 +69,9 @@ describe("onChainToUiMarket", () => {
   it("returns Crypto category", () => expect(onChainToUiMarket(makeMock()).category).toBe("Crypto"));
   it("computes yesPrice = 0.5 for equal pools", () => expect(onChainToUiMarket(makeMock()).yesPrice).toBeCloseTo(0.5));
   it("computes yesPrice = 0.75 for 3:1 ratio", () => {
-    const m = makeMock({ yesPoolLamports: 300_000_000, noPoolLamports: 100_000_000 });
-    expect(onChainToUiMarket(m).yesPrice).toBeCloseTo(0.75);
+    const m = makeMock({ yesSupply: 300_000_000_000, noSupply: 100_000_000_000 });
+    const result = onChainToUiMarket(m, { lastPriceBps: 7500 });
+    expect(result.yesPrice).toBeCloseTo(0.75);
   });
   it("computes yesPrice = 0.5 for zero pools", () => {
     const m = makeMock({ yesPoolLamports: 0, noPoolLamports: 0 });

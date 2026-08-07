@@ -26,7 +26,7 @@ interface StatsResponse {
   };
 }
 
-const COLORS = ["#00E5FF", "#8b5cf6", "#f59e0b", "#ef4444", "#22c55e", "#f472b6", "#38bdf8", "#a3e635"];
+const COLORS = ["#FFA500", "#8b5cf6", "#f59e0b", "#ef4444", "#22c55e", "#f472b6", "#38bdf8", "#a3e635"];
 
 export function AdminCharts() {
   const [data, setData] = useState<StatsResponse | null>(null);
@@ -50,7 +50,7 @@ export function AdminCharts() {
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-6 text-xs text-[#A5A8B8]">
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-6 text-xs text-[#808495]">
         Unable to load chart data.
       </div>
     );
@@ -63,19 +63,19 @@ export function AdminCharts() {
           Volume Trend (30 Days)
         </h3>
         {dailyVolume.length === 0 ? (
-          <p className="text-xs text-[#A5A8B8] py-10 text-center">No trading volume in the last 30 days.</p>
+          <p className="text-xs text-[#808495] py-10 text-center">No trading volume in the last 30 days.</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={dailyVolume}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="date" stroke="#A5A8B8" fontSize={10} tickFormatter={(v: string) => v.slice(5)} />
-              <YAxis stroke="#A5A8B8" fontSize={10} tickFormatter={(v: number) => v.toFixed(1)} />
+              <XAxis dataKey="date" stroke="#808495" fontSize={10} tickFormatter={(v: string) => v.slice(5)} />
+              <YAxis stroke="#808495" fontSize={10} tickFormatter={(v: number) => v.toFixed(1)} />
               <Tooltip
-                contentStyle={{ background: "#0A0B12", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: 12 }}
+                contentStyle={{ background: "#1A1C22", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: 12 }}
                 labelFormatter={(l) => `Date: ${String(l)}`}
                 formatter={(value) => [`${Number(value).toFixed(2)} SOL`, "Volume"]}
               />
-              <Line type="monotone" dataKey="volume" stroke="#00E5FF" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="volume" stroke="#FFA500" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -86,7 +86,7 @@ export function AdminCharts() {
           Category Breakdown
         </h3>
         {categoryBreakdown.length === 0 ? (
-          <p className="text-xs text-[#A5A8B8] py-10 text-center">No markets cached yet.</p>
+          <p className="text-xs text-[#808495] py-10 text-center">No markets cached yet.</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
@@ -105,7 +105,7 @@ export function AdminCharts() {
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "#0A0B12", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: 12 }}
+                contentStyle={{ background: "#1A1C22", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: 12 }}
                 formatter={(value, name) => [`${Number(value).toFixed(2)} SOL`, String(name)]}
               />
             </PieChart>

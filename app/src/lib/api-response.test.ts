@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ok, badRequest, serverError, unauthorized, notFound, forbidden } from "./api-response";
+import { ok, badRequest, serverError, unauthorized, notFound, forbidden, serviceUnavailable } from "./api-response";
 
 describe("ok", () => {
   it("returns 200 with data", async () => {
@@ -82,5 +82,21 @@ describe("forbidden", () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain("no access");
+  });
+});
+
+describe("serviceUnavailable", () => {
+  it("returns 503 with default message", async () => {
+    const res = serviceUnavailable();
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("Database not available");
+  });
+
+  it("returns 503 with custom message", async () => {
+    const res = serviceUnavailable("DB down");
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("DB down");
   });
 });

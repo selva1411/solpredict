@@ -15,12 +15,20 @@ export function WebVitals() {
       id: metric.id,
     };
 
-    fetch("/api/monitor/web-vitals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      keepalive: true,
-    }).catch(() => {});
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify(body)], { type: "application/json" });
+      navigator.sendBeacon("/api/monitor/web-vitals", blob);
+    } else {
+      fetch("/api/monitor/web-vitals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        keepalive: true,
+      }).catch((err) => {
+        // Web-vitals telemetry is deliberately best-effort; log, never throw.
+        console.warn("web-vitals report failed:", err);
+      });
+    }
   });
 
   return null;

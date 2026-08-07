@@ -2,40 +2,88 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { DollarSign, TrendingUp, Wallet, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { DollarSign, TrendingUp, Wallet, ArrowDownRight, RefreshCw, ExternalLink } from 'lucide-react';
 import { adminFetch } from '@/lib/admin-client';
 
+interface Withdrawal {
+  amountSol: number;
+  signature: string | null;
+  createdAt: string;
+}
+
 interface TreasuryData {
-  totalFees: number;
-  pendingWithdrawal: number;
-  marketCount: number;
-  totalVolume: number;
+  totalFeeCollectedSol: number;
+  totalFeeWithdrawnSol: number;
+  pendingFeesSol: number;
+  totalTreasuryBalanceSol: number;
+  marketsWithFees: number;
+  totalTradeVolume: number;
+  buyVolume: number;
+  feeBps: number;
+  feeSource: string;
+  recentWithdrawals: Withdrawal[];
 }
 
 export default function AdminTreasuryPage() {
   const [data, setData] = useState<TreasuryData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recording, setRecording] = useState(false);
 
-  useEffect(() => {
-    adminFetch('/api/admin/stats')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((json) => {
-        setData({
-          totalFees: (json.stats?.totalVolume || 0) * 0.02,
-          pendingWithdrawal: 0,
-          marketCount: json.stats?.totalMarkets || 0,
-          totalVolume: json.stats?.totalVolume || 0,
-        });
-      })
+  const load = () => {
+    setLoading(true);
+    adminFetch('/api/admin/treasury')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((json) => setData(json.treasury as TreasuryData))
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
+
+  const handleRecordWithdrawal = async () => {
+    const amountSol = data?.pendingFeesSol ?? 0;
+    if (amountSol <= 0) return;
+    const recipient = window.prompt(
+      'Recipient wallet for the withdrawal (defaults to admin):',
+      ''
+    )?.trim();
+    const signature = window.prompt(
+      'On-chain withdraw transaction signature (paste the sig from the admin console):',
+      ''
+    )?.trim();
+
+    setRecording(true);
+    try {
+      const res = await adminFetch('/api/admin/treasury', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountSol, recipient: recipient || undefined, signature: signature || undefined }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      load();
+    } catch {
+      window.alert('Failed to record withdrawal. Check that the transaction confirmed.');
+    } finally {
+      setRecording(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center gap-3">
-        <DollarSign className="w-5 h-5 text-green-400" />
-        <h2 className="text-xl font-bold text-white">Treasury Dashboard</h2>
+      <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-3">
+          <DollarSign className="w-5 h-5 text-green-400" />
+          <h2 className="text-xl font-bold text-white">Treasury Dashboard</h2>
+        </div>
+        <button
+          onClick={load}
+          className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh
+        </button>
       </div>
 
       {loading ? (
@@ -48,17 +96,17 @@ export default function AdminTreasuryPage() {
         <>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: 'Total Platform Fees', value: `${(data?.totalFees || 0).toFixed(2)} SOL`, icon: DollarSign, color: 'text-green-400', bg: 'bg-green-500/10' },
-              { label: 'Total Volume', value: `${(data?.totalVolume || 0).toFixed(2)} SOL`, icon: TrendingUp, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-              { label: 'Markets Created', value: String(data?.marketCount || 0), icon: Wallet, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-              { label: 'Fee Rate', value: '2%', icon: ArrowDownRight, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { label: 'Fees Collected', value: `${(data?.totalFeeCollectedSol || 0).toFixed(4)} SOL`, icon: DollarSign, color: 'text-green-400', bg: 'bg-green-500/10' },
+              { label: 'Fees Withdrawn', value: `${(data?.totalFeeWithdrawnSol || 0).toFixed(4)} SOL`, icon: ArrowDownRight, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { label: 'Pending Fees', value: `${(data?.pendingFeesSol || 0).toFixed(4)} SOL`, icon: Wallet, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { label: 'Trade Volume', value: `${(data?.totalTradeVolume || 0).toFixed(2)} SOL`, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/10' },
             ].map((card, i) => (
               <motion.div
                 key={card.label}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="rounded-2xl bg-[#0A0B12] border border-white/[0.06] p-5"
+                className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-5"
               >
                 <div className="flex items-start justify-between mb-3">
                   <p className="text-xs text-gray-500 uppercase tracking-wider">{card.label}</p>
@@ -71,26 +119,62 @@ export default function AdminTreasuryPage() {
             ))}
           </div>
 
-          <div className="rounded-2xl bg-[#0A0B12] border border-white/[0.06] p-6">
-            <h3 className="text-sm font-semibold text-white mb-4">Fee Withdrawal</h3>
+          <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-6">
+            <h3 className="text-sm font-semibold text-white mb-2">Fee Withdrawal</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Fee data source: <span className="text-gray-300 font-mono">{data?.feeSource ?? '—'}</span>
+            </p>
             <p className="text-xs text-gray-500 mb-4">
-              Accumulated fees are held in the on-chain treasury vault. Use the admin panel or Anchor CLI to withdraw.
+              Execute the on-chain withdraw (Admin Console → Markets → Withdraw Fees), then record it here so the
+              ledger stays accurate.
             </p>
             <div className="flex items-center gap-3">
               <div className="flex-1 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                 <p className="text-xs text-gray-500">Available for withdrawal</p>
                 <p className="text-lg font-bold font-mono text-white mt-0.5">
-                  {(data?.totalFees || 0).toFixed(4)} SOL
+                  {(data?.pendingFeesSol || 0).toFixed(4)} SOL
                 </p>
               </div>
               <button
                 className="btn-primary whitespace-nowrap"
-                onClick={() => alert('Use the Admin Panel → Markets section to withdraw fees per-market.')}
+                onClick={handleRecordWithdrawal}
+                disabled={recording || (data?.pendingFeesSol ?? 0) <= 0}
               >
-                <DollarSign className="w-4 h-4" />
-                Withdraw All
+                {recording ? 'Recording...' : 'Record Withdrawal'}
               </button>
             </div>
+          </div>
+
+          <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-6">
+            <h3 className="text-sm font-semibold text-white mb-4">Withdrawal History</h3>
+            {!data?.recentWithdrawals?.length ? (
+              <p className="text-xs text-gray-500">No withdrawals recorded yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {data.recentWithdrawals.map((w, i) => (
+                  <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-white">{w.amountSol.toFixed(4)} SOL</span>
+                      {w.signature ? (
+                        <a
+                          href={`https://explorer.solana.com/tx/${w.signature}${process.env.NEXT_PUBLIC_CLUSTER === 'devnet' ? '?cluster=devnet' : ''}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-400 hover:text-amber-300"
+                        >
+                          {w.signature.slice(0, 12)}… <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      ) : (
+                        <span className="text-[10px] font-mono text-gray-600">no sig</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-500">
+                      {new Date(w.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}

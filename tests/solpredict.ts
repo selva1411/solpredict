@@ -1485,6 +1485,37 @@ describe("SOLPredict Integration Suite", () => {
       expect(pauseAccount.paused).to.be.true;
     });
 
+    it("buy_shares is rejected while emergency paused", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+      const pos1 = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
+      const b1YesAta = getAssociatedTokenAddressSync(yesMintPda, buyer1.publicKey);
+
+      // Pause is active from the previous test.
+      const pauseAccount = await program.account.emergencyPause.fetch(pausePda);
+      expect(pauseAccount.paused).to.be.true;
+
+      try {
+        await program.methods
+          .buyShares({ yes: {} } as any, new anchor.BN(5))
+          .accounts({
+            buyer: buyer1.publicKey,
+            market: marketPda,
+            treasury: treasuryPda,
+            yesMint: yesMintPda,
+            noMint: noMintPda,
+            buyerYesAta: b1YesAta,
+            buyerNoAta: getAssociatedTokenAddressSync(noMintPda, buyer1.publicKey),
+            userPosition: pos1,
+            emergencyPause: pausePda,
+          } as any)
+          .signers([buyer1])
+          .rpc();
+        expect.fail("Should have failed with EmergencyPaused");
+      } catch (err: any) {
+        expect(err.message).to.include("EmergencyPaused");
+      }
+    });
+
     it("Emergency withdraw from paused market", async () => {
       const pausePda = getEmergencyPausePda(program.programId);
 

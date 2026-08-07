@@ -6,8 +6,8 @@ use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::SharesPurchased;
-use crate::state::{Market, MarketStatus, Side, UserPosition};
-use crate::utils::{amm_math, payout_math};
+use crate::state::{EmergencyPause, Market, MarketStatus, Side, UserPosition};
+use crate::utils::{amm_math, check_not_paused, payout_math};
 
 /// Accounts for the `buy_shares` instruction.
 ///
@@ -84,6 +84,10 @@ pub struct BuyShares<'info> {
     )]
     pub user_position: Account<'info, UserPosition>,
 
+    /// Optional emergency-pause account. When present and paused, trading is
+    /// halted. Absent when the program has never been paused.
+    pub emergency_pause: Option<Account<'info, EmergencyPause>>,
+
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -94,6 +98,8 @@ pub struct BuyShares<'info> {
 /// Validates market state, transfers SOL to treasury, mints YES or NO tokens
 /// to buyer's ATA, and updates pool/supply/position accounting.
 pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()> {
+    check_not_paused(&ctx.accounts.emergency_pause)?;
+
     let market = &ctx.accounts.market;
 
     require!(
@@ -125,7 +131,7 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         match side {
             Side::Yes => amm_math::get_buy_cost_in(pool_yes, pool_no, dy_out, fee_bps),
             Side::No => amm_math::get_buy_cost_in(pool_no, pool_yes, dy_out, fee_bps),
-        }.unwrap_or_else(|_| payout_math::calculate_cost(quantity, market.share_price_lamports).unwrap_or(0) as u128)
+        }.map_err(|_| error!(SolPredictError::MathOverflow))?
     };
     let cost = u64::try_from(cost_u128).map_err(|_| error!(SolPredictError::MathOverflow))?;
 

@@ -6,7 +6,8 @@ use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::LiquidityAdded;
-use crate::state::{LiquidityPosition, Market, MarketStatus};
+use crate::state::{EmergencyPause, LiquidityPosition, Market, MarketStatus};
+use crate::utils::check_not_paused;
 
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
@@ -66,12 +67,17 @@ pub struct AddLiquidity<'info> {
     )]
     pub liquidity_position: Account<'info, LiquidityPosition>,
 
+    /// Optional emergency-pause account. When present and paused, trading is halted.
+    pub emergency_pause: Option<Account<'info, EmergencyPause>>,
+
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn handler(ctx: Context<AddLiquidity>, yes_lamports: u64, no_lamports: u64) -> Result<()> {
+    check_not_paused(&ctx.accounts.emergency_pause)?;
+
     // Get AccountInfo before mutable borrow
     let market_info = ctx.accounts.market.to_account_info();
     let market = &mut ctx.accounts.market;

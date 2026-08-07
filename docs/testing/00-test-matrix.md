@@ -22,6 +22,9 @@
 | cancel_market | Admin-only cancellation | Open market cancels. Settle/Cancelled state rejects cancellation | Integration |
 | claim_refund | Exact SOL returned | Cancelled market refund returns exact deposit amount. Burns YES and NO tokens | Integration |
 | withdraw_fees | Protocol fees | Admin withdraws fee_collected from settled market. FeeAlreadyWithdrawn prevents reuse | Integration |
+| emergency_pause | Trading halted while paused | buy/sell/add/remove/place/fill/cancel all fail with EmergencyPaused when pause account exists and `paused == true` | Integration |
+| emergency_pause | No pause account / unpaused | Same instructions succeed when pause account absent or `paused == false` (optional-account backward compat) | Integration |
+| emergency_pause | Admin winding-down unaffected | settle/cancel/withdraw_fees/claim still succeed while paused | Integration |
 
 ## Frontend Coverage Requirements
 

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { useSolPrice } from "@/hooks/useSolPrice";
+import { keys } from "@/lib/api/keys";
 
 interface Position {
   marketPubkey: string;
@@ -45,25 +47,27 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<PortfolioStats>({
     netWorthSol: 0, pnl24hSol: 0, pnl24hPct: 0, winRate: 0,
   });
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState(false);
 
-  useEffect(() => {
-    if (!publicKey) { setLoading(false); return; }
-    setLoading(true);
-    setFetchError(false);
-    fetch(`/api/user/positions?wallet=${publicKey.toBase58()}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.ok) {
-          if (data.positions) setPositions(data.positions);
-          if (data.lpPositions) setLpPositions(data.lpPositions);
-          if (data.stats) setStats(data.stats);
-        }
-      })
-      .catch(() => { setFetchError(true); })
-      .finally(() => setLoading(false));
-  }, [publicKey]);
+  const walletStr = publicKey?.toBase58() ?? null;
+
+  const { isLoading, isError } = useQuery({
+    queryKey: keys.user.positions(walletStr ?? "none"),
+    queryFn: async () => {
+      const r = await fetch(`/api/user/positions?wallet=${walletStr}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      if (data?.ok) {
+        if (data.positions) setPositions(data.positions);
+        if (data.lpPositions) setLpPositions(data.lpPositions);
+        if (data.stats) setStats(data.stats);
+      }
+      return data;
+    },
+    enabled: !!walletStr,
+    staleTime: 15_000,
+  });
+  const loading = !!walletStr ? isLoading : false;
+  const fetchError = !!walletStr ? isError : false;
 
   const winningPositions = positions.filter((p) => p.pnlSol > 0).length;
   const losingPositions = positions.filter((p) => p.pnlSol < 0).length;
@@ -83,7 +87,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card p-12 text-center text-[#A5A8B8] animate-pulse">Loading dashboard...</div>
+        <div className="holo-card p-12 text-center text-[#808495] animate-pulse">Loading dashboard...</div>
       </main>
     );
   }
@@ -91,10 +95,10 @@ export default function DashboardPage() {
   if (fetchError) {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card py-16 text-center text-[#A5A8B8] flex flex-col items-center justify-center space-y-4">
-          <AlertTriangle className="w-12 h-12 opacity-30 text-[#FF4D6D]" />
+        <div className="holo-card py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
+          <AlertTriangle className="w-12 h-12 opacity-30 text-[#E4574A]" />
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-[#F4F5FA] uppercase">Data Feed Error</h3>
+            <h3 className="text-base font-bold text-[#F4F4F9] uppercase">Data Feed Error</h3>
             <p className="text-xs max-w-sm mx-auto">Failed to load dashboard data from the server. Please try again.</p>
           </div>
         </div>
@@ -110,45 +114,45 @@ export default function DashboardPage() {
         <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
           <span className="text-gradient">Dashboard</span>
         </h1>
-        <p className="text-[#A5A8B8]">Your personal analytics</p>
+        <p className="text-[#808495]">Your personal analytics</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="holo-card p-5">
-          <p className="text-xs text-[#A5A8B8] uppercase tracking-wider mb-2">Net Worth</p>
-          <p className="font-display text-2xl font-bold text-[#F4F5FA]">{stats.netWorthSol.toFixed(2)} SOL</p>
-          {usdValue && <p className="text-xs text-[#A5A8B8] mt-1">${usdValue} USD</p>}
+          <p className="text-xs text-[#808495] uppercase tracking-wider mb-2">Net Worth</p>
+          <p className="font-display text-2xl font-bold text-[#F4F4F9]">{stats.netWorthSol.toFixed(2)} SOL</p>
+          {usdValue && <p className="text-xs text-[#808495] mt-1">${usdValue} USD</p>}
         </div>
         <div className="holo-card p-5">
-          <p className="text-xs text-[#A5A8B8] uppercase tracking-wider mb-2">24h P&L</p>
-          <p className={`font-display text-2xl font-bold ${stats.pnl24hSol >= 0 ? "text-[#C8FF00]" : "text-[#FF4D6D]"}`}>
+          <p className="text-xs text-[#808495] uppercase tracking-wider mb-2">24h P&L</p>
+          <p className={`font-display text-2xl font-bold ${stats.pnl24hSol >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
             {stats.pnl24hSol >= 0 ? "+" : ""}{stats.pnl24hSol.toFixed(2)} SOL
           </p>
-          <p className={`text-xs mt-1 ${stats.pnl24hPct >= 0 ? "text-[#C8FF00]" : "text-[#FF4D6D]"}`}>
+          <p className={`text-xs mt-1 ${stats.pnl24hPct >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
             {stats.pnl24hPct >= 0 ? "+" : ""}{stats.pnl24hPct.toFixed(2)}%
           </p>
         </div>
         <div className="holo-card p-5">
-          <p className="text-xs text-[#A5A8B8] uppercase tracking-wider mb-2">Win Rate</p>
-          <p className="font-display text-2xl font-bold text-[#F4F5FA]">{(stats.winRate * 100).toFixed(0)}%</p>
+          <p className="text-xs text-[#808495] uppercase tracking-wider mb-2">Win Rate</p>
+          <p className="font-display text-2xl font-bold text-[#F4F4F9]">{(stats.winRate * 100).toFixed(0)}%</p>
           <div className="w-full h-1.5 bg-white/5 rounded-full mt-3 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-[#7B3FE4] to-[#00E5FF] rounded-full" style={{ width: `${stats.winRate * 100}%` }} />
+            <div className="h-full bg-gradient-to-r from-[#FFA500] to-[#FFA500] rounded-full" style={{ width: `${stats.winRate * 100}%` }} />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 holo-card p-6">
-          <h3 className="font-display text-lg font-bold text-[#F4F5FA] mb-6">
+          <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-6">
             Active Positions ({positions.length})
           </h3>
           {positions.length === 0 ? (
-            <p className="text-center text-[#A5A8B8] py-8">No open positions yet.</p>
+            <p className="text-center text-[#808495] py-8">No open positions yet.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="text-xs text-[#A5A8B8] uppercase tracking-wider border-b border-white/5">
+                  <tr className="text-xs text-[#808495] uppercase tracking-wider border-b border-white/5">
                     <th className="pb-3 pr-4">Market</th>
                     <th className="pb-3 pr-4">Side</th>
                     <th className="pb-3 pr-4 text-right">Shares</th>
@@ -160,14 +164,14 @@ export default function DashboardPage() {
                 <tbody>
                   {positions.map((p, i) => (
                     <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
-                      <td className="py-4 pr-4 font-medium text-[#F4F5FA] max-w-xs truncate">{p.question}</td>
+                      <td className="py-4 pr-4 font-medium text-[#F4F4F9] max-w-xs truncate">{p.question}</td>
                       <td className="py-4 pr-4">
-                        <span className={`text-xs font-bold ${p.side === "YES" ? "text-[#C8FF00]" : "text-[#FF4D6D]"}`}>{p.side}</span>
+                        <span className={`text-xs font-bold ${p.side === "YES" ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>{p.side}</span>
                       </td>
-                      <td className="py-4 pr-4 text-right font-mono text-[#A5A8B8]">{p.shares.toFixed(2)}</td>
-                      <td className="py-4 pr-4 text-right font-mono text-[#A5A8B8]">{p.avgPriceSol.toFixed(3)}</td>
-                      <td className="py-4 pr-4 text-right font-mono text-[#A5A8B8]">{p.currentPriceSol.toFixed(3)}</td>
-                      <td className={`py-4 pr-4 text-right font-mono font-bold ${p.pnlSol >= 0 ? "text-[#C8FF00]" : "text-[#FF4D6D]"}`}>
+                      <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.shares.toFixed(2)}</td>
+                      <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.avgPriceSol.toFixed(3)}</td>
+                      <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.currentPriceSol.toFixed(3)}</td>
+                      <td className={`py-4 pr-4 text-right font-mono font-bold ${p.pnlSol >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
                         {p.pnlSol >= 0 ? "+" : ""}{p.pnlSol.toFixed(3)}
                         <span className="block text-[10px] opacity-70">({p.pnlPercent >= 0 ? "+" : ""}{p.pnlPercent.toFixed(1)}%)</span>
                       </td>
@@ -180,20 +184,26 @@ export default function DashboardPage() {
 
           {/* LP Tokens & Yield Section */}
           <div className="mt-6 pt-6 border-t border-white/10">
-            <h3 className="font-display text-lg font-bold text-[#F4F5FA] mb-4 flex items-center justify-between">
+            <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-4 flex items-center justify-between">
               <span className="flex items-center gap-2">💧 Liquidity Positions & LP Tokens</span>
-              <span className="text-xs bg-[#00E5FF]/10 text-[#00E5FF] px-2 py-0.5 rounded border border-[#00E5FF]/30 font-mono font-normal">
-                Earning 2% Trade Fees
-              </span>
+              {lpPositions.some((lp) => lp.estFeeEarnedSol > 0) ? (
+                <span className="text-xs bg-[#4CAF50]/10 text-[#4CAF50] px-2 py-0.5 rounded border border-[#4CAF50]/30 font-mono font-normal">
+                  Earning LP Fees
+                </span>
+              ) : (
+                <span className="text-xs bg-white/5 text-[#808495] px-2 py-0.5 rounded border border-white/10 font-mono font-normal">
+                  Fees tracked on-chain
+                </span>
+              )}
             </h3>
 
             {lpPositions.length === 0 ? (
-              <p className="text-sm text-[#A5A8B8]">No liquidity provided yet. Visit any market&apos;s LP tab to deposit reserves and earn trading fees.</p>
+              <p className="text-sm text-[#808495]">No liquidity provided yet. Visit any market&apos;s LP tab to deposit reserves and earn trading fees.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-xs text-[#A5A8B8] uppercase tracking-wider border-b border-white/5">
+                    <tr className="text-xs text-[#808495] uppercase tracking-wider border-b border-white/5">
                       <th className="pb-3 pr-4">Market</th>
                       <th className="pb-3 pr-4 text-right">Deposited SOL</th>
                       <th className="pb-3 pr-4 text-right">LP Tokens</th>
@@ -205,15 +215,15 @@ export default function DashboardPage() {
                   <tbody>
                     {lpPositions.map((lp, i) => (
                       <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
-                        <td className="py-4 pr-4 font-medium text-[#F4F5FA] max-w-xs truncate">{lp.question}</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#F4F5FA] font-bold">{lp.amountSol.toFixed(2)} SOL</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#00E5FF] font-bold">{lp.lpTokens.toLocaleString()} LP</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#C8FF00] font-bold">+{lp.estFeeEarnedSol.toFixed(3)} SOL</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#00E5FF]">{lp.apy}</td>
+                        <td className="py-4 pr-4 font-medium text-[#F4F4F9] max-w-xs truncate">{lp.question}</td>
+                        <td className="py-4 pr-4 text-right font-mono text-[#F4F4F9] font-bold">{lp.amountSol.toFixed(2)} SOL</td>
+                        <td className="py-4 pr-4 text-right font-mono text-[#FFA500] font-bold">{lp.lpTokens.toLocaleString()} LP</td>
+                        <td className="py-4 pr-4 text-right font-mono text-[#4CAF50] font-bold">{lp.estFeeEarnedSol > 0 ? `+${lp.estFeeEarnedSol.toFixed(3)} SOL` : "\u2014"}</td>
+                        <td className="py-4 pr-4 text-right font-mono text-[#FFA500]">{lp.apy}</td>
                         <td className="py-4 pr-4 text-right">
                           <a
                             href={`/market/${lp.marketPubkey}`}
-                            className="inline-block px-3 py-1 bg-[#00E5FF]/10 text-[#00E5FF] hover:bg-[#00E5FF]/20 text-xs font-bold rounded border border-[#00E5FF]/40 transition-colors"
+                            className="inline-block px-3 py-1 bg-[#FFA500]/10 text-[#FFA500] hover:bg-[#FFA500]/20 text-xs font-bold rounded border border-[#FFA500]/40 transition-colors"
                           >
                             Manage LP
                           </a>
@@ -229,34 +239,34 @@ export default function DashboardPage() {
 
         <div className="lg:col-span-4 space-y-6">
           <div className="holo-card p-6">
-            <h3 className="font-display text-lg font-bold text-[#F4F5FA] mb-4">Breakdown</h3>
+            <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-4">Breakdown</h3>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#A5A8B8]">Winning</span>
-                  <span className="text-[#C8FF00]">{winningPositions}</span>
+                  <span className="text-[#808495]">Winning</span>
+                  <span className="text-[#4CAF50]">{winningPositions}</span>
                 </div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#A5A8B8]">Losing</span>
-                  <span className="text-[#FF4D6D]">{losingPositions}</span>
+                  <span className="text-[#808495]">Losing</span>
+                  <span className="text-[#E4574A]">{losingPositions}</span>
                 </div>
               </div>
               <div className="border-t border-white/5 pt-4">
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#A5A8B8]">YES positions</span>
-                  <span className="text-[#C8FF00]">{yesCount}</span>
+                  <span className="text-[#808495]">YES positions</span>
+                  <span className="text-[#4CAF50]">{yesCount}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#A5A8B8]">NO positions</span>
-                  <span className="text-[#FF4D6D]">{noCount}</span>
+                  <span className="text-[#808495]">NO positions</span>
+                  <span className="text-[#E4574A]">{noCount}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="holo-card p-6">
-            <h3 className="font-display text-lg font-bold text-[#F4F5FA] mb-4">Historical Data</h3>
-            <p className="text-sm text-[#A5A8B8]">
+            <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-4">Historical Data</h3>
+            <p className="text-sm text-[#808495]">
               Historical data available after your first trade.
             </p>
           </div>

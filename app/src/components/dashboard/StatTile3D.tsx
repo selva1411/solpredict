@@ -68,7 +68,7 @@ export function StatTile3D({
         transformStyle: "preserve-3d",
         perspective: 900,
       }}
-      className={`holo-card p-5 flex flex-col justify-between h-32 bg-[#0A0B12] holo-card-3d relative overflow-hidden group ${accentColors[accent]}`}
+      className={`holo-card p-5 flex flex-col justify-between h-32 bg-[var(--surface-1)] holo-card-3d relative overflow-hidden group ${accentColors[accent]}`}
     >
       <motion.div
         style={{ opacity: glowOpacity }}

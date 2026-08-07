@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { serverError, ok, badRequest } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";

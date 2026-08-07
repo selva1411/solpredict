@@ -1,30 +1,33 @@
 /**
- * Database seeder — run with:
- *   npx tsx scripts/seed-cache.ts
+ * Seed script — populates Neon database with initial sample markets,
+ * admin settings, and demo users.
  *
- * Populates the database with realistic sample markets, admin settings,
- * and demo user profiles for local development and staging.
+ * Usage:
+ *   npx tsx scripts/seed-cache.ts
+ *   or: pnpm seed
  */
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from '../src/lib/db/schema';
-import { sql } from 'drizzle-orm';
+import * as dotenv from 'dotenv';
+import path from 'path';
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error('❌  DATABASE_URL not set. Add it to your .env.local file.');
+// Load .env.local from app root
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl) {
+  console.error('❌  DATABASE_URL is not set in environment or .env.local');
   process.exit(1);
 }
 
-const db = drizzle(neon(DATABASE_URL), { schema });
+const sql = neon(dbUrl);
+const db = drizzle(sql, { schema });
 
-// ── Sample markets ──────────────────────────────────────────────────────────
-
-const now = Date.now();
-const DAY = 86_400_000;
-
-function futureDate(days: number) {
-  return new Date(now + days * DAY);
+function futureDate(daysFromNow: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  return d;
 }
 
 function randomPubkey() {
@@ -42,10 +45,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if BTC/USD closes above $120,000 on any day before the end of 2025 according to Pyth Network price feed.',
     category: 'Crypto',
     status: 'open',
-    yesPoolSol: '48.50',
-    noPoolSol: '31.20',
-    yesSupply: 48500,
-    noSupply: 31200,
     endTs: futureDate(60),
     resolveTs: futureDate(61),
     thumbnailUrl: null,
@@ -59,10 +58,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if SOL/USD on Pyth Network closes at or above $400 at any point before January 1, 2026.',
     category: 'Crypto',
     status: 'open',
-    yesPoolSol: '22.10',
-    noPoolSol: '37.90',
-    yesSupply: 22100,
-    noSupply: 37900,
     endTs: futureDate(90),
     resolveTs: futureDate(91),
     thumbnailUrl: null,
@@ -74,12 +69,8 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     marketId: 3,
     question: 'Will the US Federal Reserve cut interest rates in Q3 2025?',
     description: 'Resolves YES if the Federal Reserve cuts the target federal funds rate by at least 25 basis points at their July or September 2025 meeting.',
-    category: 'Finance',
+    category: 'Politics',
     status: 'open',
-    yesPoolSol: '15.00',
-    noPoolSol: '10.00',
-    yesSupply: 15000,
-    noSupply: 10000,
     endTs: futureDate(120),
     resolveTs: futureDate(121),
     thumbnailUrl: null,
@@ -93,10 +84,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if SpaceX achieves a successful crewed or uncrewed Mars landing mission before December 31, 2029.',
     category: 'Tech',
     status: 'open',
-    yesPoolSol: '8.20',
-    noPoolSol: '41.80',
-    yesSupply: 8200,
-    noSupply: 41800,
     endTs: futureDate(1800),
     resolveTs: futureDate(1801),
     thumbnailUrl: null,
@@ -110,10 +97,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if total net inflows across all spot Ethereum ETFs exceed $1,000,000,000 in their first calendar week of trading.',
     category: 'Crypto',
     status: 'open',
-    yesPoolSol: '33.60',
-    noPoolSol: '16.40',
-    yesSupply: 33600,
-    noSupply: 16400,
     endTs: futureDate(30),
     resolveTs: futureDate(31),
     thumbnailUrl: null,
@@ -127,10 +110,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if the Republican Party candidate wins the 2028 US Presidential Election.',
     category: 'Politics',
     status: 'open',
-    yesPoolSol: '29.00',
-    noPoolSol: '21.00',
-    yesSupply: 29000,
-    noSupply: 21000,
     endTs: futureDate(1095),
     resolveTs: futureDate(1096),
     thumbnailUrl: null,
@@ -144,10 +123,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if Brazil wins the FIFA World Cup 2026 tournament final.',
     category: 'Sports',
     status: 'open',
-    yesPoolSol: '11.00',
-    noPoolSol: '39.00',
-    yesSupply: 11000,
-    noSupply: 39000,
     endTs: futureDate(360),
     resolveTs: futureDate(361),
     thumbnailUrl: null,
@@ -161,10 +136,6 @@ const SAMPLE_MARKETS: Array<typeof schema.marketsCache.$inferInsert> = [
     description: 'Resolves YES if OpenAI GPT-5 (or equivalent) passes a recognized standardized Turing Test evaluation published in a peer-reviewed venue by the end of 2025.',
     category: 'Tech',
     status: 'open',
-    yesPoolSol: '18.50',
-    noPoolSol: '31.50',
-    yesSupply: 18500,
-    noSupply: 31500,
     endTs: futureDate(180),
     resolveTs: futureDate(181),
     thumbnailUrl: null,
@@ -192,32 +163,14 @@ const DEMO_USERS: Array<typeof schema.users.$inferInsert> = [
   {
     wallet: '7gWnJRMNMXrWFGLJStJMX7xVJgRXxW6RNGiX6JLbVSrF',
     username: 'WhaleProphet',
-    totalWagered: '450.00',
-    totalWon: '510.00',
-    totalProfit: '60.00',
-    marketsTraded: 42,
-    winRate: '68.00',
-    pasScore: 82,
   },
   {
     wallet: 'CrBvmLCX9MLmPFhT2JxQZmhPQiamTK8wVBqbg3nMEdKs',
     username: 'AlphaTrader',
-    totalWagered: '280.00',
-    totalWon: '310.00',
-    totalProfit: '30.00',
-    marketsTraded: 28,
-    winRate: '61.00',
-    pasScore: 74,
   },
   {
     wallet: 'DXmkLZBq7qRJ9VNF4UXjNyHcPqsqmBfevMJWrH7SkFHG',
     username: 'OracleSeeker',
-    totalWagered: '175.50',
-    totalWon: '160.00',
-    totalProfit: '-15.50',
-    marketsTraded: 19,
-    winRate: '47.00',
-    pasScore: 58,
   },
 ];
 
@@ -236,8 +189,6 @@ async function main() {
           target: schema.marketsCache.marketPubkey,
           set: {
             question: market.question,
-            yesPoolSol: market.yesPoolSol,
-            noPoolSol: market.noPoolSol,
             viewCount: market.viewCount ?? 0,
             updatedAt: new Date(),
           },
@@ -260,7 +211,7 @@ async function main() {
         });
       console.log(`  ✅  ${setting.key} = ${setting.value}`);
     } catch (e) {
-      console.error(`  ❌  Failed: ${setting.key}`, e);
+      console.error(`  ❌  Failed setting ${setting.key}`, e);
     }
   }
 
@@ -274,24 +225,19 @@ async function main() {
           target: schema.users.wallet,
           set: {
             username: user.username,
-            totalWagered: user.totalWagered,
-            totalWon: user.totalWon,
-            totalProfit: user.totalProfit,
-            marketsTraded: user.marketsTraded,
-            winRate: user.winRate,
+            lastActive: new Date(),
           },
         });
-      console.log(`  ✅  ${user.username} (${user.wallet.slice(0, 8)}...)`);
+      console.log(`  ✅  User ${user.username} (${user.wallet.slice(0, 8)}...)`);
     } catch (e) {
-      console.error(`  ❌  Failed: ${user.username}`, e);
+      console.error(`  ❌  Failed user ${user.wallet}`, e);
     }
   }
 
-  console.log('\n✨  Seed complete!');
-  process.exit(0);
+  console.log('\n🎉  Database seed complete!');
 }
 
-main().catch(e => {
-  console.error('❌  Seed failed:', e);
+main().catch((err) => {
+  console.error('Fatal seed error:', err);
   process.exit(1);
 });

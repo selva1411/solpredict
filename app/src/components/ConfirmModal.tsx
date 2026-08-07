@@ -53,7 +53,7 @@ export function ConfirmModal({
             className="relative glass-panel p-8 max-w-md w-full space-y-6 z-10"
           >
             <div className="flex items-start space-x-4">
-              <div className={`p-3 rounded-xl ${destructive ? "bg-red-500/10 text-[#FF4D6D]" : "bg-amber-500/10 text-amber-400"}`}>
+              <div className={`p-3 rounded-xl ${destructive ? "bg-red-500/10 text-[#E4574A]" : "bg-amber-500/10 text-amber-400"}`}>
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div className="space-y-2 flex-1">
@@ -77,7 +77,7 @@ export function ConfirmModal({
                 onClick={onConfirm}
                 className={`px-5 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   destructive
-                    ? "bg-red-500/15 border border-red-500/30 text-[#FF4D6D] hover:bg-red-500/25"
+                    ? "bg-red-500/15 border border-red-500/30 text-[#E4574A] hover:bg-red-500/25"
                     : "btn-primary"
                 }`}
               >

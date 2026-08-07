@@ -38,11 +38,11 @@ export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) 
       <div className="flex items-center justify-between mb-4 relative z-10">
         <div>
           <h3 className="font-display text-sm font-semibold">YES Price History</h3>
-          <p className="text-[10px] font-mono text-[#A5A8B8]">Pyth oracle feed · real-time</p>
+          <p className="text-[10px] font-mono text-[#808495]">Pyth oracle feed · real-time</p>
         </div>
         <div className="flex items-center gap-4 text-[10px] font-mono">
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#7B3FE4]"></span> Price
+            <span className="w-2 h-2 rounded-full bg-[#FFA500]"></span> Price
           </span>
         </div>
       </div>
@@ -51,15 +51,15 @@ export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) 
         <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7B3FE4" stopOpacity={0.5} />
-              <stop offset="100%" stopColor="#7B3FE4" stopOpacity={0} />
+              <stop offset="0%" stopColor="#FFA500" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="#FFA500" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
             tickFormatter={formatTime}
-            stroke="#A5A8B8"
+            stroke="#808495"
             tick={{ fontSize: 10, fontFamily: "monospace" }}
             tickLine={false}
             axisLine={false}
@@ -67,7 +67,7 @@ export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) 
           />
           <YAxis
             domain={["auto", "auto"]}
-            stroke="#A5A8B8"
+            stroke="#808495"
             tick={{ fontSize: 10, fontFamily: "monospace" }}
             tickLine={false}
             axisLine={false}
@@ -75,12 +75,12 @@ export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) 
           />
           <Tooltip
             contentStyle={{
-              background: "rgba(10,11,18,0.95)",
-              border: "1px solid rgba(123,63,228,0.4)",
-              borderRadius: "8px",
+              background: "rgba(12,13,18,0.95)",
+              border: "2px solid #2D3142",
+              borderRadius: "4px",
               fontSize: "11px",
               fontFamily: "monospace",
-              color: "#F4F5FA",
+              color: "#F4F4F9",
             }}
             labelFormatter={(label) => formatTime(Number(label))}
             formatter={(value: any) => [`$${Number(value).toFixed(3)}`, "Price"]}
@@ -88,11 +88,11 @@ export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) 
           <Area
             type="monotone"
             dataKey="price"
-            stroke="#7B3FE4"
+            stroke="#FFA500"
             strokeWidth={2}
             fill="url(#priceFill)"
             dot={false}
-            activeDot={{ r: 4, fill: "#7B3FE4", stroke: "#fff", strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: "#FFA500", stroke: "#fff", strokeWidth: 2 }}
           />
         </ComposedChart>
       </ResponsiveContainer>

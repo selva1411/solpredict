@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 export interface PythPriceData {
   price: number | null;
@@ -24,79 +24,54 @@ function isValidPythHex(id: string): boolean {
 const failedFeedIds = new Set<string>();
 
 export function usePythPrices(feedIds: string[]): Record<string, PythPriceData> {
-  const [data, setData] = useState<Record<string, PythPriceData>>({});
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const activeRef = useRef(true);
-
   const rawDeduped = [...new Set(feedIds.map(hexToId).filter(Boolean))];
-  const validHermesFeeds = rawDeduped.filter(id => isValidPythHex(id) && !failedFeedIds.has(id));
+  const validHermesFeeds = rawDeduped.filter((id) => isValidPythHex(id) && !failedFeedIds.has(id));
+  const feedsKey = validHermesFeeds.sort().join(",");
 
-  useEffect(() => {
-    activeRef.current = true;
-
-    const fetchPrices = async () => {
-      if (validHermesFeeds.length === 0) return;
-
+  const { data } = useQuery({
+    queryKey: ["pyth", "prices", feedsKey],
+    queryFn: async (): Promise<Record<string, PythPriceData>> => {
+      if (validHermesFeeds.length === 0) return {};
       const url = `https://hermes.pyth.network/v2/updates/price/latest?${validHermesFeeds.map((id) => `ids%5B%5D=${id}`).join("&")}`;
-
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          if (res.status === 404) {
-            validHermesFeeds.forEach(id => failedFeedIds.add(id));
-          }
-          return;
+      const res = await fetch(url);
+      if (!res.ok) {
+        if (res.status === 404) {
+          validHermesFeeds.forEach((id) => failedFeedIds.add(id));
         }
-        const json = await res.json();
-        if (!activeRef.current) return;
-
-        if (json.parsed) {
-          setData((prev) => {
-            let changed = false;
-            const next = { ...prev };
-            for (const update of json.parsed) {
-              const pid = update.id.toLowerCase();
-              const p = update.price;
-              if (p) {
-                const price = Number(p.price) * Math.pow(10, p.expo);
-                const conf = p.conf ? Number(p.conf) * Math.pow(10, p.expo) : null;
-                const existing = prev[pid];
-                // Only update if price actually changed by more than 0.001%
-                if (!existing || Math.abs((existing.price ?? 0) - price) / (price || 1) > 0.00001) {
-                  next[pid] = { price, confidence: conf, publishTime: p.publish_time ?? Math.floor(Date.now() / 1000), error: null };
-                  changed = true;
-                }
-              }
-            }
-            return changed ? next : prev; // Return same reference if nothing changed → no re-render
-          });
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const json = (await res.json()) as {
+        parsed?: Array<{ id: string; price: { price: string; conf?: string; expo: number; publish_time?: number } }>;
+      };
+      const out: Record<string, PythPriceData> = {};
+      for (const update of json.parsed ?? []) {
+        const pid = update.id.toLowerCase();
+        const p = update.price;
+        if (p) {
+          const price = Number(p.price) * Math.pow(10, p.expo);
+          const conf = p.conf ? Number(p.conf) * Math.pow(10, p.expo) : null;
+          out[pid] = {
+            price,
+            confidence: conf,
+            publishTime: p.publish_time ?? Math.floor(Date.now() / 1000),
+            error: null,
+          };
         }
-      } catch (err: unknown) {
-        if (!activeRef.current) return;
       }
-    };
-
-    if (validHermesFeeds.length > 0) {
-      fetchPrices();
-      timerRef.current = setInterval(fetchPrices, POLL_MS);
-    }
-
-    return () => {
-      activeRef.current = false;
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [JSON.stringify(validHermesFeeds)]);
+      return out;
+    },
+    enabled: validHermesFeeds.length > 0,
+    refetchInterval: POLL_MS,
+    staleTime: 0,
+    // Keep last known prices between polls so a transient failure never blanks
+    // the UI with placeholder zeros.
+    placeholderData: (prev) => prev,
+  });
 
   const result: Record<string, PythPriceData> = {};
   for (const id of rawDeduped) {
-    if (data[id]) {
-      result[id] = data[id];
-    } else {
-      result[id] = { price: null, confidence: null, publishTime: null, error: "Feed not loaded yet" };
-    }
+    result[id] =
+      data?.[id] ?? { price: null, confidence: null, publishTime: null, error: "Feed not loaded yet" };
   }
   return result;
 }

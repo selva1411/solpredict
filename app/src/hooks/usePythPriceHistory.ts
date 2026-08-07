@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 export interface PricePoint {
   price: number;
@@ -16,52 +17,40 @@ function hexToId(hex: string): string {
 
 export function usePythPriceHistory(feedIdHex: string | null) {
   const [history, setHistory] = useState<PricePoint[]>([]);
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const activeRef = useRef(true);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const id = feedIdHex ? hexToId(feedIdHex) : null;
 
+  const { data, error } = useQuery({
+    queryKey: ["pyth", "price", id ?? "none"],
+    queryFn: async (): Promise<{ price: number; publishTime: number } | null> => {
+      if (!id) return null;
+      const res = await fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids%5B%5D=${id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        parsed?: Array<{ price: { price: string; expo: number; publish_time?: number } }>;
+      };
+      const p = json.parsed?.[0]?.price;
+      if (!p) return null;
+      return {
+        price: Number(p.price) * Math.pow(10, p.expo),
+        publishTime: p.publish_time ?? Math.floor(Date.now() / 1000),
+      };
+    },
+    enabled: !!id,
+    refetchInterval: POLL_MS,
+    staleTime: 0,
+  });
+
+  // Append each successful tick to the rolling buffer. No fetch lives here —
+  // data comes from the React Query cache above.
   useEffect(() => {
-    activeRef.current = true;
-    if (!feedIdHex) return;
-    const id = hexToId(feedIdHex);
+    if (data && data.price != null) {
+      setHistory((prev) => [...prev, { price: data.price, time: Date.now() }].slice(-MAX_POINTS));
+    }
+  }, [data]);
 
-    const fetchPrice = async () => {
-      try {
-        const res = await fetch(
-          `https://hermes.pyth.network/v2/updates/price/latest?ids%5B%5D=${id}`
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        if (!activeRef.current) return;
-
-        if (json.parsed?.[0]?.price) {
-          const p = json.parsed[0].price;
-          const price = Number(p.price) * Math.pow(10, p.expo);
-          const now = Date.now();
-
-          setCurrentPrice(price);
-          setHistory((prev) => {
-            const next = [...prev, { price, time: now }];
-            return next.slice(-MAX_POINTS);
-          });
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (activeRef.current) {
-          setError(err instanceof Error ? err.message : "Fetch failed");
-        }
-      }
-    };
-
-    fetchPrice();
-    timerRef.current = setInterval(fetchPrice, POLL_MS);
-
-    return () => {
-      activeRef.current = false;
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [feedIdHex]);
-
-  return { history, currentPrice, error };
+  return {
+    history,
+    currentPrice: data?.price ?? null,
+    error: error ? (error instanceof Error ? error.message : "Fetch failed") : null,
+  };
 }

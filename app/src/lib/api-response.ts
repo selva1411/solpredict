@@ -26,3 +26,7 @@ export function serverError(err: unknown) {
   console.error("[API Error]", message);
   return NextResponse.json({ error: message }, { status: 500 });
 }
+
+export function serviceUnavailable(message = "Database not available") {
+  return NextResponse.json({ error: message }, { status: 503 });
+}

@@ -36,6 +36,11 @@ Build the Anchor program to generate target artifacts and TypeScript types:
 anchor build
 ```
 
+> **Note:** the current checked-in program includes an optional
+> `emergency_pause` account on all trading instructions (ABI change applied
+> 2026-08-05). Any deployment must use a freshly built binary + regenerated
+> IDL (`target/idl/solpredict.json` → `app/src/lib/idl/solpredict.json`).
+
 ### Step 2.3: Generate and Set Program ID
 Find the public key of the built program:
 ```bash

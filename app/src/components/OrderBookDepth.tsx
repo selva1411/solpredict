@@ -5,6 +5,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { useRealtime } from "@/hooks/useRealtime";
 import { PublicKey } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
+import { getSpotPriceYes, getSpotPriceNo } from "@/lib/amm/cpmm";
 
 interface OrderBookDepthProps {
   yesPoolLamports: number;
@@ -47,9 +48,14 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
   const yesSol = yesPoolLamports / 1e9;
   const noSol = noPoolLamports / 1e9;
   const totalSol = yesSol + noSol;
+  // CPMM reserves weight reflects the share of liquidity each side holds.
   const yesWeight = totalSol > 0 ? (yesSol / totalSol) * 100 : 50;
   const noWeight = 100 - yesWeight;
-  const yesOdds = yesWeight;
+  // Spot probability derived from the on-chain spot price of YES (price_y = q_no/q_yes).
+  const yesSpotBI = getSpotPriceYes(BigInt(yesPoolLamports), BigInt(noPoolLamports), 0);
+  const noSpotBI = getSpotPriceNo(BigInt(yesPoolLamports), BigInt(noPoolLamports), 0);
+  const yesOdds = yesSpotBI === 0n ? yesWeight
+    : Math.max(1, Math.min(99, (Number(yesSpotBI) / 1e12) * 100));
 
   useEffect(() => {
     if (!program || !marketPda) return;
@@ -148,7 +154,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
     : "—";
 
   return (
-    <div className="holo-card p-5 space-y-4 border-white/10/40 bg-[#0A0B12]">
+    <div className="holo-card p-5 space-y-4 border-white/10/40 bg-[#1A1C22]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10/30 pb-3 gap-2">
         <div className="flex items-center gap-2">
@@ -160,7 +166,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
           </span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1 bg-[#0A0B12] p-0.5 rounded border border-white/10/20 font-mono text-[10px]">
+          <div className="flex items-center space-x-1 bg-[#1A1C22] p-0.5 rounded border border-white/10/20 font-mono text-[10px]">
             {(["ALL", "YES", "NO"] as const).map(tab => (
               <button
                 key={tab}
@@ -168,7 +174,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                 className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
                   selectedSideFilter === tab
                     ? "bg-[#ffd89c] text-[#131313] font-bold"
-                    : "text-[#A5A8B8] hover:text-[#F4F5FA]"
+                    : "text-[#808495] hover:text-[#F4F4F9]"
                 }`}
               >
                 {tab}
@@ -205,9 +211,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                   <div className="text-left">
                     <span className="text-[#ef4444] font-bold text-[10px]">ASK {ask.side}</span>
                   </div>
-                  <div className="text-center text-[#F4F5FA] font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
+                  <div className="text-center text-[#F4F4F9] font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
                   <div className="text-center text-[#d6c4ac]">{remaining}</div>
-                  <div className="text-center text-[#A5A8B8] text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
+                  <div className="text-center text-[#808495] text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
                       <button
@@ -217,7 +223,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                         ⚡ Fill
                       </button>
                     ) : (
-                      <span className="text-[9px] text-[#A5A8B8]">{isUserOrder ? "Your Ask" : "Open"}</span>
+                      <span className="text-[9px] text-[#808495]">{isUserOrder ? "Your Ask" : "Open"}</span>
                     )}
                   </div>
                   <div
@@ -253,9 +259,9 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                   <div className="text-left">
                     <span className="text-[#22c55e] font-bold text-[10px]">BID {bid.side}</span>
                   </div>
-                  <div className="text-center text-[#F4F5FA] font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
+                  <div className="text-center text-[#F4F4F9] font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
                   <div className="text-center text-[#d6c4ac]">{remaining}</div>
-                  <div className="text-center text-[#A5A8B8] text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
+                  <div className="text-center text-[#808495] text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
                       <button
@@ -265,7 +271,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                         ⚡ Fill
                       </button>
                     ) : (
-                      <span className="text-[9px] text-[#A5A8B8]">{isUserOrder ? "Your Bid" : "Open"}</span>
+                      <span className="text-[9px] text-[#808495]">{isUserOrder ? "Your Bid" : "Open"}</span>
                     )}
                   </div>
                   <div
@@ -289,27 +295,27 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
           <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#ffd89c]">
             💧 CPMM Liquidity & AMM Reserves
           </span>
-          <span className="text-[10px] font-mono text-[#00E5FF] font-bold">
+          <span className="text-[10px] font-mono text-[#FFA500] font-bold">
             Total Liquidity: {totalSol.toFixed(2)} SOL
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
           <div className="bg-white/5 p-2.5 rounded border border-[#22c55e]/30 space-y-1">
-            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">YES Pool Inventory</div>
+            <div className="text-[#808495] text-[9px] uppercase font-bold">YES Pool Inventory</div>
             <div className="text-[#22c55e] font-bold text-sm">{yesSol.toFixed(3)} SOL</div>
-            <div className="text-[9px] text-[#A5A8B8]">Weight: {yesWeight.toFixed(1)}%</div>
+            <div className="text-[9px] text-[#808495]">Weight: {yesWeight.toFixed(1)}%</div>
           </div>
           <div className="bg-white/5 p-2.5 rounded border border-[#ef4444]/30 space-y-1">
-            <div className="text-[#A5A8B8] text-[9px] uppercase font-bold">NO Pool Inventory</div>
+            <div className="text-[#808495] text-[9px] uppercase font-bold">NO Pool Inventory</div>
             <div className="text-[#ef4444] font-bold text-sm">{noSol.toFixed(3)} SOL</div>
-            <div className="text-[9px] text-[#A5A8B8]">Weight: {noWeight.toFixed(1)}%</div>
+            <div className="text-[9px] text-[#808495]">Weight: {noWeight.toFixed(1)}%</div>
           </div>
         </div>
 
         <div className="flex justify-between items-center text-[10px] font-mono">
-          <span className="text-[#A5A8B8]">Implied YES Probability:</span>
-          <span className="text-[#C8FF00] font-bold">{yesOdds.toFixed(1)}%</span>
+          <span className="text-[#808495]">Implied YES Probability:</span>
+          <span className="text-[#4CAF50] font-bold">{yesOdds.toFixed(1)}%</span>
         </div>
 
         <div className="w-full h-2.5 bg-[#ef4444]/20 rounded-full overflow-hidden flex border border-[#0d0d0d]">
@@ -319,17 +325,25 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
           />
         </div>
 
-        <div className="bg-[#0A0B12] p-2.5 rounded border border-white/10 text-[9px] font-mono space-y-1.5 text-[#A5A8B8]">
-          <div className="flex justify-between text-[#F4F5FA] font-bold">
+        <div className="bg-[#1A1C22] p-2.5 rounded border border-white/10 text-[9px] font-mono space-y-1.5 text-[#808495]">
+          <div className="flex justify-between text-[#F4F4F9] font-bold">
             <span>CPMM Constant (k = YES · NO):</span>
-            <span className="text-[#00E5FF]">{(yesSol * noSol).toFixed(4)} SOL²</span>
+            <span className="text-[#FFA500]">{(yesSol * noSol).toFixed(4)} SOL²</span>
           </div>
-          <div className="flex justify-between text-[#F4F5FA] font-bold">
+          <div className="flex justify-between text-[#F4F4F9] font-bold">
             <span>Spot Price of YES (YES ÷ Total):</span>
-            <span className="text-[#C8FF00]">{(totalSol > 0 ? yesSol / totalSol : 0.5).toFixed(4)} SOL</span>
+            <span className="text-[#4CAF50]">
+              {(yesSpotBI === 0n ? 0.5 : Number(yesSpotBI) / 1e12).toFixed(4)} SOL
+            </span>
+          </div>
+          <div className="flex justify-between text-[#808495]">
+            <span className="text-[#F4F4F9] font-bold">Spot Price of NO (q_yes ÷ q_no):</span>
+            <span className="text-[#ef4444]">
+              {(noSpotBI === 0n ? 0.5 : Number(noSpotBI) / 1e12).toFixed(4)} SOL
+            </span>
           </div>
           <div>
-            k = YES · NO tracks pool balance across trades. Buying YES adds to the YES pool and raises the YES price.
+            k = YES · NO tracks pool balance across trades. Buying YES raises the YES spot price.
           </div>
         </div>
       </div>
