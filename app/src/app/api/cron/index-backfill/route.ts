@@ -8,7 +8,7 @@ import { apiHandler } from "@/lib/api-handler";
 import { logger } from "@/lib/logger";
 
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
-const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID ?? "BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig";
+const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
 
 export const GET = apiHandler(async (req: NextRequest) => {
   if (!getDb()) return serverError("Database not available");

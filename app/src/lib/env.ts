@@ -11,16 +11,61 @@ function requiredEnv(name: string, fallback = ""): string {
   return v;
 }
 
+/**
+ * Return the base origin the page is being served from, so client endpoints can
+ * be resolved at runtime. This makes ONE bundle work from localhost, a LAN IP,
+ * or a tunnel URL (ngrok) — baked-in absolute hosts like `172.25.7.63:3000`
+ * break the moment the page is opened from any other origin.
+ */
+function clientOrigin(): string {
+  if (typeof window === "undefined") return "";
+  return window.location.origin;
+}
+
+/** Is a URL host a localhost / loopback / LAN-style address (i.e. localnet)? */
+function isLocalHostUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const host = u.hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      // Private ranges (RFC 1918) — typical for a LAN/localnet validator.
+      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export const ENV = {
   get rpcUrl(): string {
-    return process.env.NEXT_PUBLIC_RPC_URL
+    const configured = process.env.NEXT_PUBLIC_RPC_URL
       ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL
       ?? "https://api.devnet.solana.com";
+
+    // On the client, route through the app's own /api/rpc rewrite (which
+    // forwards server-side to the validator) whenever the configured endpoint
+    // is a local address. Relative resolution survives host changes (LAN IP,
+    // ngrok tunnel, localhost) because the origin is taken from the page.
+    if (typeof window !== "undefined" && isLocalHostUrl(configured)) {
+      return `${clientOrigin()}/api/rpc`;
+    }
+    return configured;
   },
 
   get wsEndpoint(): string {
-    return process.env.NEXT_PUBLIC_WS_ENDPOINT
+    const configured = process.env.NEXT_PUBLIC_WS_ENDPOINT
       ?? "ws://127.0.0.1:8900";
+
+    if (typeof window !== "undefined" && isLocalHostUrl(configured)) {
+      const port = new URL(configured).port || "8900";
+      const proto = clientOrigin().startsWith("https") ? "wss" : "ws";
+      return `${proto}://${new URL(clientOrigin()).hostname}:${port}`;
+    }
+    return configured;
   },
 
   get heliusApiKey(): string {
@@ -39,7 +84,7 @@ export const ENV = {
 
   get programId(): PublicKey {
     const id = process.env.NEXT_PUBLIC_PROGRAM_ID
-      ?? "BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig";
+      ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
     return new PublicKey(id);
   },
 

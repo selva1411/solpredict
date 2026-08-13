@@ -11,6 +11,72 @@ import * as schema from './schema';
 let dbInstance: NeonHttpDatabase<typeof schema> | null = null;
 let initError: Error | null = null;
 
+/**
+ * Number of attempts + backoff for transient Neon connection failures.
+ *
+ * Neon's serverless HTTP endpoint sleeps after ~5 min of inactivity and can
+ * take several seconds to wake (observed 4–6 s total request time during a
+ * cold start). The FIRST request(s) fired at the moment it wakes can fail with
+ * `NeonDbError: Error connecting to database: TypeError: fetch failed` (a
+ * connect-phase failure — nothing was executed server-side, so a retry is safe
+ * and idempotent, even for writes). This surfaced in production-like bursts as
+ * intermittent 500s on /api/markets/cached, /api/activity/recent and the
+ * /markets directory page. A short 3×150/350/700 ms retry was NOT enough for
+ * the slowest wakes (all attempts fired before the compute came up) — the
+ * backoff below covers a ~6 s window.
+ */
+const CONNECT_RETRIES = 5;
+const CONNECT_RETRY_DELAY_MS = [200, 400, 800, 1600, 3000];
+
+function isTransientConnectError(err: unknown): boolean {
+  const msg =
+    err instanceof Error ? err.message : err && typeof err === 'object' && 'message' in err
+      ? String((err as { message: unknown }).message)
+      : String(err);
+  // Connect-phase failure (endpoint unreachable while the compute wakes). The
+  // request never reached Postgres, so retrying cannot double-execute writes.
+  return msg.includes('Error connecting to database') && msg.includes('fetch failed');
+}
+
+/**
+ * Wrap the neon tagged-template client so every query path (drizzle calls
+ * `sql.query(...)`, the keep-alive uses the template form) retries transient
+ * connect failures with a short backoff. Non-transient errors pass through.
+ */
+function withConnectRetry<T extends (...args: never[]) => unknown>(sql: T): T {
+  const retry = async <A extends unknown[]>(run: () => Promise<Awaited<unknown>>): Promise<unknown> => {
+    let attempt = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        return await run();
+      } catch (err: unknown) {
+        if (!isTransientConnectError(err) || attempt >= CONNECT_RETRIES) throw err;
+        await new Promise((r) => setTimeout(r, CONNECT_RETRY_DELAY_MS[attempt] ?? 700));
+        attempt++;
+      }
+    }
+  };
+
+  return new Proxy(sql, {
+    apply(target, thisArg, args) {
+      // Tagged-template form: sql`SELECT 1` (keep-alive path).
+      return retry(() => Reflect.apply(target, thisArg, args) as Promise<unknown>);
+    },
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (prop === 'query' && typeof value === 'function') {
+        // Drizzle calls client.query(sql, params, options) for every query.
+        return (...args: unknown[]) => retry(() => value.apply(target, args) as Promise<unknown>);
+      }
+      if (prop === 'transaction' && typeof value === 'function') {
+        return (...args: unknown[]) => retry(() => value.apply(target, args) as Promise<unknown>);
+      }
+      return value;
+    },
+  }) as T;
+}
+
 function createDb(): NeonHttpDatabase<typeof schema> {
   const url = process.env.DATABASE_URL;
 
@@ -28,9 +94,34 @@ function createDb(): NeonHttpDatabase<typeof schema> {
     throw err;
   }
 
-  const sql = neon(url);
+  const sql = withConnectRetry(neon(url));
   const instance = drizzle(sql, { schema });
-  console.log('[DB] Connected to Neon PostgreSQL');
+  console.log('[DB] Connected to Neon PostgreSQL (with connect retry)');
+
+  // Keep the Neon serverless compute warm so the first request after a period
+  // of inactivity doesn't pay a ~10-15s cold-start (observed on every page
+  // load after ~5 min idle). A trivial SELECT 1 every 60s keeps the pool warm
+  // at negligible cost. Only on the server (this module never runs client-side).
+  //
+  // Registered on globalThis so Next.js HMR reloads re-use the existing timer
+  // instead of stacking duplicate intervals that would keep pinging forever.
+  try {
+    const heartbeat = () => {
+      sql`SELECT 1`.catch(() => {
+        /* transient — retry next tick */
+      });
+    };
+    const g = globalThis as unknown as { __neonKeepAlive?: ReturnType<typeof setInterval> };
+    if (!g.__neonKeepAlive) {
+      heartbeat();
+      const interval = setInterval(heartbeat, 60_000);
+      if (typeof interval.unref === "function") interval.unref();
+      g.__neonKeepAlive = interval;
+    }
+  } catch {
+    /* non-fatal */
+  }
+
   return instance;
 }
 

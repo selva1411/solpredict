@@ -5,7 +5,7 @@ import { marketsCache } from "./src/lib/db/schema";
 import { sql } from "drizzle-orm";
 import fs from "fs";
 async function main(){
-  const P="BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig";
+  const P="AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
   const idl = JSON.parse(fs.readFileSync("./src/lib/idl/solpredict.json","utf8"));
   const conn = new Connection("http://127.0.0.1:8899", "confirmed");
   const program = new Program({...idl, address: P} as any, new AnchorProvider(conn, { publicKey: PublicKey.unique() } as any));

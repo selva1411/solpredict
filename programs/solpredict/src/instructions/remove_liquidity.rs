@@ -58,7 +58,6 @@ pub struct RemoveLiquidity<'info> {
 
     #[account(
         mut,
-        close = provider,
         seeds = [LP_SEED, market.key().as_ref(), provider.key().as_ref()],
         bump = liquidity_position.bump,
     )]
@@ -115,9 +114,27 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
             .unwrap_or(0) as u64,
     );
 
+    // Proportional token amounts to burn (same ratio as the SOL refunds).
+    let burn_yes = ((lp.yes_deposited as u128)
+        .checked_mul(lp_ratio)
+        .ok_or(SolPredictError::MathOverflow)?
+        .checked_div(PRECISION as u128))
+        .ok_or(SolPredictError::MathOverflow)? as u64;
+    let burn_no = ((lp.no_deposited as u128)
+        .checked_mul(lp_ratio)
+        .ok_or(SolPredictError::MathOverflow)?
+        .checked_div(PRECISION as u128))
+        .ok_or(SolPredictError::MathOverflow)? as u64;
+    let has_yes = lp.yes_deposited > 0;
+    let has_no = lp.no_deposited > 0;
+
     let treasury_balance = ctx.accounts.treasury.lamports();
     let total_refund = yes_refund.checked_add(no_refund).ok_or(SolPredictError::MathOverflow)?;
-    let safe_refund = total_refund.min(treasury_balance.saturating_sub(1));
+    // Keep the treasury rent-exempt (mirrors claim_refund): never drain a
+    // system account below its minimum balance or the runtime rejects the tx.
+    let rent = Rent::get()?;
+    let rent_min = rent.minimum_balance(0);
+    let safe_refund = total_refund.min(treasury_balance.saturating_sub(rent_min.min(treasury_balance)));
 
     let yes_payout = if total_refund > 0 {
         (safe_refund as u128)
@@ -167,7 +184,7 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
         )?;
     }
 
-    if lp.yes_deposited > 0 {
+    if has_yes {
         token::burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -177,15 +194,11 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
                     authority: ctx.accounts.provider.to_account_info(),
                 },
             ),
-            (lp.yes_deposited as u128)
-                .checked_mul(lp_ratio)
-                .unwrap_or(0)
-                .checked_div(PRECISION as u128)
-                .unwrap_or(0) as u64,
+            burn_yes,
         )?;
     }
 
-    if lp.no_deposited > 0 {
+    if has_no {
         token::burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -195,20 +208,38 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
                     authority: ctx.accounts.provider.to_account_info(),
                 },
             ),
-            (lp.no_deposited as u128)
-                .checked_mul(lp_ratio)
-                .unwrap_or(0)
-                .checked_div(PRECISION as u128)
-                .unwrap_or(0) as u64,
+            burn_no,
         )?;
     }
 
     market.yes_pool_lamports = market.yes_pool_lamports.saturating_sub(yes_payout);
     market.no_pool_lamports = market.no_pool_lamports.saturating_sub(no_payout);
-    market.yes_supply = market.yes_supply.saturating_sub(lp.yes_deposited);
-    market.no_supply = market.no_supply.saturating_sub(lp.no_deposited);
+    // Decrement supply by the BURNED amount (not the full deposit) so partial
+    // withdrawals stay consistent with the on-chain token supply.
+    market.yes_supply = market.yes_supply.saturating_sub(burn_yes);
+    market.no_supply = market.no_supply.saturating_sub(burn_no);
+
+    // Decrement the LP position; keep it open for partial withdrawals and only
+    // close it (returning the rent) once every LP token has been burned.
+    let position = &mut ctx.accounts.liquidity_position;
+    position.lp_tokens = position
+        .lp_tokens
+        .checked_sub(lp_tokens_to_burn)
+        .ok_or(SolPredictError::MathOverflow)?;
+    position.yes_deposited = position.yes_deposited.saturating_sub(burn_yes);
+    position.no_deposited = position.no_deposited.saturating_sub(burn_no);
+    position.total_lamports_deposited = position
+        .total_lamports_deposited
+        .saturating_sub(burn_yes.checked_add(burn_no).ok_or(SolPredictError::MathOverflow)?);
+
+    let fully_withdrawn = position.lp_tokens == 0;
 
     market.reentrancy_lock.release();
+
+    if fully_withdrawn {
+        // Return the position's rent to the provider and zero the account data.
+        anchor_lang::AccountsClose::close(position, ctx.accounts.provider.to_account_info())?;
+    }
 
     emit!(LiquidityRemoved {
         market_id,

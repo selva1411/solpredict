@@ -32,7 +32,7 @@ BEGIN
               WHEN LOWER(m.winning_outcome) = 'no' AND p.outcome_index = 1 THEN true
               ELSE false
             END
-          ) THEN p.shares - p.cost_basis
+          ) THEN p.shares * 10 - p.cost_basis
           ELSE -p.cost_basis
         END
       ) AS pnl
@@ -52,15 +52,26 @@ BEGIN
   ),
   vol AS (
     SELECT
-      COALESCE(SUM(lamports_in), 0) AS total_volume,
+      COALESCE(SUM(ABS(lamports_in)), 0) AS total_volume,
       COUNT(*) AS trade_count,
       COUNT(DISTINCT market_pubkey) AS markets_traded
     FROM trades
     WHERE trader = p_wallet
+  ),
+  unreal AS (
+    SELECT COALESCE(SUM(
+      (p.shares * 10 * COALESCE(mo.last_price_bps, 5000) / 10000.0 - p.cost_basis) / 1e9
+    ), 0) AS unrealized_pnl
+    FROM positions p
+    JOIN markets_cache m ON m.market_pubkey = p.market_pubkey
+    LEFT JOIN market_outcomes mo
+      ON mo.market_pubkey = p.market_pubkey AND mo.outcome_index = p.outcome_index
+    WHERE p.wallet = p_wallet
+      AND m.status = 'open'
   )
   INSERT INTO user_stats (
     wallet, wins, losses, win_rate_bps, realized_pnl, best_trade,
-    total_volume, trade_count, markets_traded, markets_resolved, roi_bps, updated_at
+    total_volume, trade_count, markets_traded, markets_resolved, roi_bps, unrealized_pnl, updated_at
   )
   SELECT
     p_wallet,
@@ -80,8 +91,9 @@ BEGIN
       WHEN v.total_volume = 0 THEN NULL
       ELSE (a.realized_pnl * 10000) / v.total_volume
     END,
+    u.unrealized_pnl,
     NOW()
-  FROM agg a, vol v
+  FROM agg a, vol v, unreal u
   ON CONFLICT (wallet) DO UPDATE SET
     wins = EXCLUDED.wins,
     losses = EXCLUDED.losses,
@@ -93,6 +105,7 @@ BEGIN
     markets_traded = EXCLUDED.markets_traded,
     markets_resolved = EXCLUDED.markets_resolved,
     roi_bps = EXCLUDED.roi_bps,
+    unrealized_pnl = EXCLUDED.unrealized_pnl,
     updated_at = NOW();
 
   UPDATE users u

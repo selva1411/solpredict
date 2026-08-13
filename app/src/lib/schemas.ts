@@ -27,12 +27,20 @@ export const syncTradeSchema = z.object({
   marketPubkey: publicKeySchema,
   trader: walletSchema,
   side: z.enum(["YES", "NO"]),
-  lamportsIn: z.number().min(0),
-  tokensOut: z.number().min(0),
+  // Signed values: buys are positive, sells are negative. The DB stores them
+  // as-is and the reducer uses Math.abs() for volume/stats (see reconciler.ts:
+  // `isBuy ? Math.abs(rawCost) : -Math.abs(rawCost)`).
+  lamportsIn: z.number(),
+  tokensOut: z.number(),
   pricePerToken: z.number().min(0).optional(),
   feePaidLamports: z.number().min(0).optional(),
   yesPoolSol: z.number().min(0).optional(),
   noPoolSol: z.number().min(0).optional(),
+  // Real on-chain pool/supply snapshots AFTER the trade (lamports).
+  yesPoolLamports: z.number().min(0).optional(),
+  noPoolLamports: z.number().min(0).optional(),
+  yesSupply: z.number().min(0).optional(),
+  noSupply: z.number().min(0).optional(),
   yesPct: z.number().min(0).max(100).optional(),
 });
 
@@ -42,10 +50,12 @@ export const syncMarketSchema = z.object({
   question: z.string().min(1).max(500),
   description: z.string().max(2000).optional(),
   category: z.string().max(50).optional(),
-  status: z.enum(["open", "closed", "resolved", "settled", "canceled"]).optional(),
+  status: z.enum(["open", "closed", "resolved", "settled", "canceled", "cancelled"]).optional(),
   winningOutcome: z.string().max(10).optional(),
   yesPoolSol: z.number().min(0).optional(),
   noPoolSol: z.number().min(0).optional(),
+  yesPoolLamports: z.number().min(0).optional(),
+  noPoolLamports: z.number().min(0).optional(),
   yesSupply: z.number().min(0).optional(),
   noSupply: z.number().min(0).optional(),
   endTs: z.number().min(0).optional(),

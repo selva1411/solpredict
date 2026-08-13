@@ -27,7 +27,7 @@ const RPC_URL =
     ? process.env.LOCALNET_RPC_URL ?? "http://127.0.0.1:8899"
     : NEXT_PUBLIC_RPC || "https://api.devnet.solana.com";
 const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID
-  ?? "HVshSwptqBYKWM9MpZrA1bdP7zQ6RzJXVbr5PUR7wvtr";
+  ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
 
 interface Args {
   loop: boolean;

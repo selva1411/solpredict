@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Medal, Crown, Filter } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { EmptyState, LoadingState } from "@/components/StatePanels";
+import { LabelLux } from "@/components/ui/label-lux";
+import { Rule } from "@/components/ui/rule";
 
 interface LeaderboardItem {
   rank: number;
@@ -25,32 +24,6 @@ interface LeaderboardItem {
 
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
-}
-
-function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1)
-    return (
-      <div className="w-8 h-8 rounded-lg bg-[var(--warning)]/20 border border-[var(--warning)]/40 flex items-center justify-center">
-        <Crown className="w-4 h-4 text-[var(--warning)]" />
-      </div>
-    );
-  if (rank === 2)
-    return (
-      <div className="w-8 h-8 rounded-lg bg-[var(--surface-1)] border border-[var(--color-gray-700)] flex items-center justify-center">
-        <Medal className="w-4 h-4 text-[var(--color-gray-300)]" />
-      </div>
-    );
-  if (rank === 3)
-    return (
-      <div className="w-8 h-8 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/30 flex items-center justify-center">
-        <Medal className="w-4 h-4 text-[var(--accent)]" />
-      </div>
-    );
-  return (
-    <div className="w-8 h-8 rounded-lg bg-[var(--surface-1)] border border-[var(--color-gray-800)] flex items-center justify-center text-[var(--color-gray-400)] text-xs font-mono font-bold">
-      {rank}
-    </div>
-  );
 }
 
 function LeaderboardPage() {
@@ -86,33 +59,29 @@ function LeaderboardPage() {
   const myStats = myRankIndex >= 0 ? traders[myRankIndex] : null;
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-10">
         <div>
-          <h1 className="font-display text-3xl font-bold flex items-center gap-3 text-[var(--color-gray-100)]">
-            <Trophy className="w-8 h-8 text-[var(--warning)]" />
-            Trader Leaderboard
-          </h1>
-          <p className="text-xs font-mono text-[var(--color-gray-400)]">
-            Official rankings calculated directly from indexed user_stats
+          <LabelLux className="mb-2">Leaderboard</LabelLux>
+          <h1 className="text-[44px] text-ivory">Trader Rankings</h1>
+          <p className="mt-2 font-mono text-[10px] text-ash-dim uppercase tracking-[.16em]">
+            Indexed from on-chain user_stats
           </p>
         </div>
 
-        {/* Sort Controls */}
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <Filter size={14} className="text-[var(--color-gray-400)]" />
+        {/* Sort — mono text rows, gold underline active */}
+        <div className="flex items-center gap-5 font-mono text-[10px] uppercase tracking-[.16em]">
+          <span className="text-ash-dim">Sort</span>
           {[
-            { key: "volume", label: "By Volume" },
-            { key: "profit", label: "By Profit" },
-            { key: "winRate", label: "By Win Rate" },
+            { key: "volume", label: "Volume" },
+            { key: "profit", label: "Profit" },
+            { key: "winRate", label: "Win Rate" },
           ].map((opt) => (
             <button
               key={opt.key}
               onClick={() => setSortBy(opt.key as any)}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                sortBy === opt.key
-                  ? "bg-[var(--accent)] text-[#0B0C0F]"
-                  : "bg-[var(--surface-1)] text-[var(--color-gray-400)] border border-[var(--color-gray-800)] hover:text-[var(--color-gray-100)]"
+              className={`cursor-pointer transition-colors ${
+                sortBy === opt.key ? "text-gold-lite border-b border-gold" : "text-ash hover:text-ivory"
               }`}
             >
               {opt.label}
@@ -121,30 +90,24 @@ function LeaderboardPage() {
         </div>
       </div>
 
+      <Rule className="mb-10" />
+
       {/* Connected User Badge */}
       {myStats && (
-        <div className="terminal-card p-4 flex items-center justify-between border-[var(--accent)]/40 bg-[var(--accent)]/5">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-mono uppercase text-[var(--color-gray-400)]">Your Rank</span>
-            <span className="font-mono text-xl font-bold text-[var(--accent)]">#{myRankIndex + 1}</span>
-            <span className="text-sm font-mono text-[var(--color-gray-200)]">{shortAddr(myStats.wallet)}</span>
+        <div className="surface p-4 mb-8 flex items-center justify-between border-l border-gold">
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-[.16em] text-ash-dim">Your Rank</span>
+            <span className="font-display text-[34px] text-gold-lite leading-none">#{myRankIndex + 1}</span>
+            <span className="font-mono text-[13px] text-ivory">{shortAddr(myStats.wallet)}</span>
           </div>
-          <div className="flex items-center gap-6 font-mono text-xs">
-            <div>
-              <span className="text-[var(--color-gray-400)]">Volume: </span>
-              <span className="font-bold text-[var(--color-gray-100)]">{myStats.totalWagered.toFixed(2)} SOL</span>
-            </div>
-            <div>
-              <span className="text-[var(--color-gray-400)]">Win Rate: </span>
-              <span className="font-bold text-[var(--accent)]">
-                {myStats.winRate !== null ? `${Math.round(myStats.winRate)}%` : "—"}
-              </span>
-            </div>
+          <div className="hidden sm:flex items-center gap-8 font-mono text-[12px] tnum">
+            <span className="text-ash-dim">Volume <span className="text-ivory">{myStats.totalWagered.toFixed(2)} SOL</span></span>
+            <span className="text-ash-dim">Win Rate <span className="text-gold-lite">{myStats.winRate !== null ? `${Math.round(myStats.winRate)}%` : "—"}</span></span>
           </div>
         </div>
       )}
 
-      {/* Leaderboard Table */}
+      {/* Leaderboard table */}
       {loading ? (
         <LoadingState title="Loading leaderboard..." />
       ) : error ? (
@@ -152,79 +115,51 @@ function LeaderboardPage() {
       ) : traders.length === 0 ? (
         <EmptyState title="No Leaderboard Data" description="Be the first to trade on devnet and take the lead!" />
       ) : (
-        <div className="terminal-card overflow-hidden">
-          <table className="w-full text-left font-mono text-xs">
-            <thead className="bg-[var(--surface-0)] text-[var(--color-gray-400)] border-b border-[var(--color-gray-800)] uppercase">
-              <tr>
-                <th className="p-3 w-16 text-center">Rank</th>
-                <th className="p-3">Trader</th>
-                <th className="p-3 text-right">Volume (SOL)</th>
-                <th className="p-3 text-right">Realized PnL</th>
-                <th className="p-3 text-right">Win Rate</th>
-                <th className="p-3 text-right">Markets</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-gray-800)]">
-              <AnimatePresence mode="popLayout">
-                {traders.map((t, idx) => {
-                  const isMe = myAddress === t.wallet;
-                  return (
-                    <motion.tr
-                      key={t.wallet}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className={`hover:bg-[var(--color-gray-800)]/50 transition-colors ${
-                        isMe ? "bg-[var(--accent)]/10" : ""
-                      }`}
-                    >
-                      <td className="p-3 text-center">
-                        <div className="flex justify-center">
-                          <RankBadge rank={idx + 1} />
-                        </div>
-                      </td>
-                      <td className="p-3 font-bold text-[var(--color-gray-100)]">
-                        <div className="flex items-center gap-2">
-                          <span>{t.username || shortAddr(t.wallet)}</span>
-                          {isMe && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/20 text-[var(--accent)]">
-                              YOU
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-right font-semibold text-[var(--color-gray-100)]">
-                        {t.totalWagered.toFixed(2)}
-                      </td>
-                      <td
-                        className={`p-3 text-right font-semibold ${
-                          t.totalProfit > 0
-                            ? "text-[var(--accent)]"
-                            : t.totalProfit < 0
-                            ? "text-[var(--negative)]"
-                            : "text-[var(--color-gray-400)]"
-                        }`}
-                      >
-                        {t.totalProfit > 0 ? `+${t.totalProfit.toFixed(2)}` : t.totalProfit.toFixed(2)}
-                      </td>
-                      <td className="p-3 text-right text-[var(--color-gray-200)]">
-                        {t.winRate !== null ? `${Math.round(t.winRate)}%` : "—"}
-                      </td>
-                      <td className="p-3 text-right text-[var(--color-gray-400)]">
-                        {t.marketsTraded}
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-            </tbody>
-          </table>
+        <div className="divide-y divide-hairline border-t border-hairline">
+          {traders.map((t, idx) => {
+            const isMe = myAddress === t.wallet;
+            const topThree = idx < 3;
+            const pnl = t.totalProfit;
+            return (
+              <div
+                key={t.wallet}
+                className={`grid grid-cols-12 items-center gap-4 py-5 transition-colors hover:bg-panel px-3 -mx-3 ${
+                  topThree ? "border-l border-gold pl-4 -ml-1" : ""
+                } ${isMe ? "bg-gold/5" : ""}`}
+              >
+                {/* Rank — serif, gold-deep */}
+                <span className="col-span-2 md:col-span-1 font-display text-[34px] leading-none text-gold-deep tnum">
+                  {String(idx + 1).padStart(2, "0")}
+                </span>
+                {/* Trader */}
+                <span className="col-span-6 md:col-span-4 min-w-0">
+                  <span className="block font-mono text-[13px] text-ivory truncate">
+                    {t.username || shortAddr(t.wallet)}
+                  </span>
+                  {isMe && <span className="label-lux mt-0.5 block">You</span>}
+                </span>
+                {/* Volume */}
+                <span className="col-span-2 md:col-span-2 font-mono tnum text-[13px] text-ash text-right">
+                  {t.totalWagered.toFixed(2)}
+                </span>
+                {/* PnL */}
+                <span className={`col-span-2 font-mono tnum text-[13px] text-right ${
+                  pnl > 0 ? "text-verdigris" : pnl < 0 ? "text-bordeaux" : "text-ash"
+                }`}>
+                  {pnl > 0 ? `+${pnl.toFixed(2)}` : pnl.toFixed(2)}
+                </span>
+                {/* Win Rate + Markets */}
+                <span className="col-span-2 hidden md:flex flex-col items-end font-mono text-[11px] tnum text-ash-dim">
+                  <span>{t.winRate !== null ? `${Math.round(t.winRate)}%` : "—"}</span>
+                  <span>{t.marketsTraded} markets</span>
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </main>
   );
 }
 
-const Leaderboard = dynamic(() => Promise.resolve(LeaderboardPage), { ssr: false });
-export default Leaderboard;
+export default LeaderboardPage;

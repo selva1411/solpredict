@@ -37,12 +37,12 @@ export function PriceChart({ market, yesPrice, height = 260 }: PriceChartProps) 
     <div className="holo-card p-5">
       <div className="flex items-center justify-between mb-4 relative z-10">
         <div>
-          <h3 className="font-display text-sm font-semibold">YES Price History</h3>
-          <p className="text-[10px] font-mono text-[#808495]">Pyth oracle feed · real-time</p>
+          <h3 className="font-display text-[13px] font-semibold">YES Price History</h3>
+          <p className="text-[10px] font-mono text-ash">Pyth oracle feed · real-time</p>
         </div>
         <div className="flex items-center gap-4 text-[10px] font-mono">
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#FFA500]"></span> Price
+            <span className="w-2 h-2 rounded-[2px] bg-gold"></span> Price
           </span>
         </div>
       </div>

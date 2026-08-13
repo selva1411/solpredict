@@ -71,7 +71,7 @@ const COLORS: Record<ToastType, { bg: string; border: string; icon: string }> = 
 
 const ICONS: Record<ToastType, string> = {
   success: "✓",
-  error: "✗",
+  error: "X",
   pending: "↻",
   info: "i",
 };

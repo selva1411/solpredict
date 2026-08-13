@@ -2,10 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
 import { assertDb } from "@/lib/db/client";
-import { users, userStats, follows, trades, marketsCache, positions, achievements } from "@/lib/db/schema";
-import { eq, count, sql, desc } from "drizzle-orm";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { ok, badRequest, notFound, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { getUserProfile } from "@/lib/data/users";
 
 /**
  * GET /api/user/profile/[wallet]
@@ -13,6 +14,8 @@ import { apiHandler } from "@/lib/api-handler";
  * Renders full profile data for ANY valid wallet per spec §3.9.
  * Reads materialized aggregates from `user_stats` table as source of truth.
  * Returns `winRate: null` when user has 0 settled markets so UI renders `—`.
+ * Shares its query logic with the server-rendered profile page via
+ * `getUserProfile` in lib/data/users.ts, so every surface is identical.
  */
 export const GET = apiHandler(async (_req: NextRequest, context: { params?: Promise<Record<string, string>> } = {}) => {
   const params = await context.params;
@@ -23,101 +26,10 @@ export const GET = apiHandler(async (_req: NextRequest, context: { params?: Prom
   }
 
   try {
-    const db = assertDb();
+    const result = await getUserProfile(wallet);
+    if (!result) return notFound("Wallet profile unavailable");
 
-    // 1. Fetch or create user record
-    let [user] = await db.select().from(users).where(eq(users.wallet, wallet)).limit(1);
-
-    if (!user) {
-      // Auto-create basic profile row for new/inactive wallet so every valid wallet renders
-      [user] = await db
-        .insert(users)
-        .values({
-          wallet,
-          username: `trader_${wallet.slice(0, 6)}`,
-          avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${wallet}`,
-        })
-        .onConflictDoNothing()
-        .returning();
-
-      if (!user) {
-        [user] = await db.select().from(users).where(eq(users.wallet, wallet)).limit(1);
-      }
-    }
-
-    // 2. Fetch materialized stats from user_stats table
-    const [stats] = await db.select().from(userStats).where(eq(userStats.wallet, wallet)).limit(1);
-
-    // 3. Followers / Following count
-    const [[followerRow], [followingRow]] = await Promise.all([
-      db.select({ count: count() }).from(follows).where(eq(follows.followedWallet, wallet)),
-      db.select({ count: count() }).from(follows).where(eq(follows.followerWallet, wallet)),
-    ]);
-
-    // 4. Win rate rule per spec §2.3: null if 0 settled markets
-    const marketsResolved = stats?.marketsResolved ?? 0;
-    const winRateBps = stats?.winRateBps ?? null;
-    const winRatePct = marketsResolved > 0 && winRateBps !== null ? Number((winRateBps / 100).toFixed(2)) : null;
-
-    // 5. Recent trade activity for tabs
-    const recentTrades = await db
-      .select({
-        id: trades.id,
-        signature: trades.signature,
-        marketPubkey: trades.marketPubkey,
-        side: trades.side,
-        lamportsIn: trades.lamportsIn,
-        tokensOut: trades.tokensOut,
-        pricePerToken: trades.pricePerToken,
-        blockTime: trades.blockTime,
-      })
-      .from(trades)
-      .where(eq(trades.trader, wallet))
-      .orderBy(desc(trades.blockTime))
-      .limit(10);
-
-    // 6. Achievements
-    const userAchievements = await db
-      .select()
-      .from(achievements)
-      .where(eq(achievements.wallet, wallet));
-
-    return ok({
-      ok: true,
-      profile: {
-        wallet: user.wallet,
-        username: user.username,
-        avatarUrl: user.avatarUrl ?? `https://api.dicebear.com/7.x/identicon/svg?seed=${user.wallet}`,
-        bio: user.bio ?? "",
-        twitterHandle: user.twitterHandle ?? "",
-        role: user.role ?? "user",
-        isBanned: user.isBanned ?? false,
-        createdAt: user.createdAt,
-        lastActive: user.lastActive,
-        followersCount: followerRow?.count ?? 0,
-        followingCount: followingRow?.count ?? 0,
-      },
-      stats: {
-        totalVolume: Number(stats?.totalVolume ?? 0),
-        realizedPnl: Number(stats?.realizedPnl ?? 0),
-        unrealizedPnl: Number(stats?.unrealizedPnl ?? 0),
-        winRatePct, // NULL when 0 settled markets per spec §2.3!
-        winRateBps,
-        roiBps: stats?.roiBps ?? null,
-        marketsTraded: stats?.marketsTraded ?? 0,
-        marketsResolved,
-        wins: stats?.wins ?? 0,
-        losses: stats?.losses ?? 0,
-        bestTrade: Number(stats?.bestTrade ?? 0),
-        currentStreak: stats?.currentStreak ?? 0,
-        rank: stats?.rank ?? null,
-        pasScore: 50,
-      },
-      tabs: {
-        recentTrades,
-        achievements: userAchievements,
-      },
-    });
+    return ok({ ok: true, ...result });
   } catch (err) {
     return serverError(err);
   }

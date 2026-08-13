@@ -61,3 +61,28 @@ export const POST = apiHandler(async (req: NextRequest) => {
   }
   return ok({ ok: true, action: "error", isWatched: false, error: "Database unavailable" });
 });
+
+// DELETE removes a specific watchlist entry unconditionally (used by the
+// self-heal to purge dead market pubkeys from the DB copy so they don't
+// reappear on the next wallet connect). Unlike POST it is not a toggle.
+export const DELETE = apiHandler(async (req: NextRequest) => {
+  const body = await req.json().catch(() => null);
+  if (!body) return badRequest("Invalid JSON body");
+
+  const parsed = watchlistPostSchema.safeParse(body);
+  if (!parsed.success) return badRequest("Invalid request data");
+
+  const { wallet, marketPubkey } = parsed.data;
+
+  try {
+    if (db) {
+      await db
+        .delete(watchlist)
+        .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
+      return ok({ ok: true, action: "removed", isWatched: false });
+    }
+  } catch (e) {
+    console.warn("Watchlist DELETE error:", e);
+  }
+  return ok({ ok: true, action: "error", isWatched: false, error: "Database unavailable" });
+});

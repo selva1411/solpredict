@@ -33,6 +33,12 @@ export const marketsCache = pgTable('markets_cache', {
   oracleFeedId: varchar('oracle_feed_id', { length: 66 }),
   feeCollectedLamports: bigint('fee_collected_lamports', { mode: 'number' }).default(0),
   totalPayoutPoolLamports: bigint('total_payout_pool_lamports', { mode: 'number' }).default(0),
+  // Real on-chain pool/supply snapshots (lamports). Written by the indexer and
+  // the frontend trade sync so every page shows identical, truthful numbers.
+  yesPoolLamports: bigint('yes_pool_lamports', { mode: 'number' }).default(0),
+  noPoolLamports: bigint('no_pool_lamports', { mode: 'number' }).default(0),
+  yesSupply: bigint('yes_supply', { mode: 'number' }).default(0),
+  noSupply: bigint('no_supply', { mode: 'number' }).default(0),
   feeBps: integer('fee_bps').default(200),
   liquidityParamB: decimal('liquidity_param_b', { precision: 18, scale: 9 }),
   totalVolume: decimal('total_volume', { precision: 18, scale: 9 }).default('0'),

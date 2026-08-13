@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { db } from '@/lib/db/client';
 import { marketsCache, userStats, trades, users } from '@/lib/db/schema';
 import { eq, sql, desc } from 'drizzle-orm';
@@ -12,7 +13,16 @@ export interface PlatformStats {
   totalMarkets: number;
 }
 
-export async function getPlatformStats(): Promise<PlatformStats> {
+// Short-lived in-memory cache: getPlatformStats is a global aggregate that is
+// recomputed on EVERY /api/markets/cached and /api/markets/stats call, and a
+// single home-page load triggers it multiple times (useMarkets + usePlatformStats
+// + MarketDataContext). On a remote Neon DB each aggregate scan costs hundreds
+// of ms, so cache for 5s. Trades/positions writes call revalidateTag, but the
+// 5s staleness is imperceptible for a stats banner.
+let platformStatsCache: { at: number; stats: PlatformStats } | null = null;
+const PLATFORM_STATS_TTL = 5_000;
+
+async function loadPlatformStats(): Promise<PlatformStats> {
   if (!db) {
     return {
       totalVolume: 0,
@@ -27,7 +37,8 @@ export async function getPlatformStats(): Promise<PlatformStats> {
 
   const [marketAgg, tradeAgg, traderAgg] = await Promise.all([
     db.select({
-      totalLiquidity: sql<string>`COALESCE(SUM(CAST(${marketsCache.totalVolume} AS NUMERIC)), 0)`,
+      // Liquidity is the sum of REAL pool reserves (lamports), not volume.
+      totalLiquidity: sql<string>`COALESCE(SUM(CAST(${marketsCache.yesPoolLamports} AS NUMERIC) + CAST(${marketsCache.noPoolLamports} AS NUMERIC)), 0) / 1e9`,
       openMarkets: sql<number>`COUNT(*) FILTER (WHERE ${marketsCache.status} = 'open')::int`,
       settledMarkets: sql<number>`COUNT(*) FILTER (WHERE ${marketsCache.status} = 'settled')::int`,
       totalMarkets: sql<number>`COUNT(*)::int`,
@@ -50,6 +61,39 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     settledMarkets: marketAgg[0]?.settledMarkets ?? 0,
     totalMarkets: marketAgg[0]?.totalMarkets ?? 0,
   };
+}
+
+/**
+ * Request-scoped platform stats.
+ *
+ * A single Next.js page load renders the tree in MULTIPLE passes (streaming
+ * shell + RSC payload). The 5s module TTL cache below can be invalidated by a
+ * concurrent trade sync between those passes, so one pass would render a
+ * different number than the payload — producing a React hydration mismatch
+ * ("server rendered text didn't match the client") on the stat tiles.
+ *
+ * React's `cache()` memoizes the result for the duration of the request, so
+ * every pass of the same request sees the same snapshot while the module TTL
+ * still dedupes across requests.
+ *
+ * NOTE: `cache()` only memoizes inside a React request scope. Do NOT call
+ * getPlatformStats from background jobs (cron/indexer/ws) — those run outside
+ * any request and would pin a stale snapshot. Use invalidatePlatformStats or a
+ * direct DB query there instead.
+ */
+export const getPlatformStats = cache(async function getPlatformStats(): Promise<PlatformStats> {
+  const now = Date.now();
+  if (platformStatsCache && now - platformStatsCache.at < PLATFORM_STATS_TTL) {
+    return platformStatsCache.stats;
+  }
+  const stats = await loadPlatformStats();
+  platformStatsCache = { at: now, stats };
+  return stats;
+});
+
+/** Invalidate the cached stats (called by trade/settle sync paths). */
+export function invalidatePlatformStats(): void {
+  platformStatsCache = null;
 }
 
 export async function getLeaderboard(
@@ -86,6 +130,7 @@ export async function getLeaderboard(
       losses: userStats.losses,
       winRateBps: userStats.winRateBps,
       realizedPnl: userStats.realizedPnl,
+      unrealizedPnl: userStats.unrealizedPnl,
       roiBps: userStats.roiBps,
       rank: userStats.rank,
       username: users.username,
@@ -103,6 +148,8 @@ export async function getLeaderboard(
     const losses = r.losses ?? 0;
     const settled = r.marketsResolved ?? (wins + losses);
     const winRate = settled > 0 ? (wins / settled) * 100 : null;
+    const realized = Number(r.realizedPnl ?? 0);
+    const unrealized = Number(r.unrealizedPnl ?? 0);
 
     return {
       rank: i + 1,
@@ -111,7 +158,9 @@ export async function getLeaderboard(
       avatarUrl: r.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${wallet}`,
       bio: r.bio || '',
       totalWagered: Number(r.totalVolume ?? 0),
-      totalProfit: Number(r.realizedPnl ?? 0),
+      totalProfit: realized + unrealized,
+      realizedPnl: realized,
+      unrealizedPnl: unrealized,
       winRate,
       winRateBps: r.winRateBps,
       marketsTraded: r.marketsTraded ?? 0,

@@ -3,6 +3,17 @@
  * `programs/solpredict/src/utils/amm_math.rs` (the ONLY pricing engine the
  * on-chain program actually uses for buy/sell).
  *
+ * Pricing is PROBABILITY-based to match the documented implied-probability
+ * formula `docs/program/00-design-decisions.md` §2:
+ *
+ *     probability = pool_side / (pool_yes + pool_no)
+ *
+ * The pools hold the SOL committed to each outcome. Buying `v`-value of a side
+ * credits the side pool (one-sided pool model), so the post-trade probability
+ * is `(side + cost) / (side + cost + other)`, and the cost is the shares'
+ * value priced at that post-trade probability — a constant-product curve in
+ * probability space with correct slippage and prices in [0,1].
+ *
  * Do NOT derive a price by simple pool-ratio division anywhere else — use
  * these functions so the UI matches what `buy_shares` / `sell_shares`
  * charge/refund on-chain.
@@ -16,75 +27,94 @@ export function lamportsToSol(lamports: number): number {
   return lamports / 1e9;
 }
 
+/** Floor integer square root for bigint (Newton's method). */
+export function isqrt(x: bigint): bigint {
+  if (x < 2n) return x;
+  let r = x;
+  while (r > x / r) {
+    r = (r + x / r) / 2n;
+  }
+  while (r > 0n && r * r > x) r -= 1n;
+  while ((r + 1n) * (r + 1n) <= x) r += 1n;
+  return r;
+}
+
 /**
- * Spot price of YES in fixed-point (SCALE). Returns 0 when yes pool is empty.
- * price_yes = pool_no / pool_yes, fee-adjusted. Mirrors get_spot_price_yes.
+ * Spot price of YES as a *probability* in fixed-point (SCALE).
+ * price_yes = pool_yes / (pool_yes + pool_no), fee-adjusted. Mirrors
+ * get_spot_price_yes. Returns 0 on an empty pool.
  */
 export function getSpotPriceYes(poolYes: bigint, poolNo: bigint, feeBps: number): bigint {
-  if (poolYes === 0n) return 0n;
-  const gross = (poolNo * BigInt(CPMM_SCALE)) / poolYes;
+  const total = poolYes + poolNo;
+  if (total === 0n) return 0n;
+  const gross = (poolYes * BigInt(CPMM_SCALE)) / total;
   const fee = (gross * BigInt(feeBps)) / 10000n;
   return gross - fee;
 }
 
-/** Spot price of NO, i.e. pool_yes scaled by pool_no. Same form. */
+/** Spot price of NO as a probability. Mirrors get_spot_price_no. */
 export function getSpotPriceNo(poolYes: bigint, poolNo: bigint, feeBps: number): bigint {
-  if (poolNo === 0n) return 0n;
-  const gross = (poolYes * CPMM_SCALE) / poolNo;
+  const total = poolYes + poolNo;
+  if (total === 0n) return 0n;
+  const gross = (poolNo * BigInt(CPMM_SCALE)) / total;
   const fee = (gross * BigInt(feeBps)) / 10000n;
   return gross - fee;
 }
 
 /**
- * Cost (in lamports) to buy `dyOut` lamports-worth of the traded side.
- * Mirrors get_buy_cost_in: k = yes*no; new_yes = yes - dy_out; new_no = k/new_yes.
- * Throws if dy_out >= pool.
+ * Cost (in lamports) to buy `dyOut`-value of the traded side.
+ * Mirrors get_buy_cost_in: c = [√((s−v)² + 4·v·a) − (s−v)] / 2 where s = a + b,
+ * a = the side pool, b = the opposite pool, grossed up by the fee, floored at
+ * 1 lamport. Callers swap the pool arguments for the NO side.
  */
 export function getBuyCostIn(poolA: bigint, poolB: bigint, dyOut: bigint, feeBps: number): bigint {
   if (dyOut <= 0n) throw new Error('InvalidQuantity');
-  if (dyOut >= poolA) throw new Error('InvalidQuantity');
-  const k = poolA * poolB;
-  const newA = poolA - dyOut;
-  if (newA === 0n) throw new Error('MathOverflow');
-  const newB = k / newA;
-  const dxGross = newB - poolB;
+  const s = poolA + poolB;
+  const diff = s >= dyOut ? s - dyOut : dyOut - s;
+  const disc = diff * diff + 4n * dyOut * poolA;
+  const root = isqrt(disc);
+  const cGross = (s >= dyOut ? root - diff : root + diff) / 2n;
   const divisor = 10000n - BigInt(feeBps);
-  return (dxGross * 10000n) / divisor;
+  const cWithFee = (cGross * 10000n) / divisor;
+  return cWithFee >= 1n ? cWithFee : 1n;
 }
 
 /**
- * Shares-out (in the same unit as the pool passed as `poolA`) for an input of
- * `dxIn` lamports. Mirrors get_buy_amount_out.
+ * Shares-value (in the same unit as the pool passed as `poolA`) bought for
+ * `dxIn` lamports. Exact inverse of getBuyCostIn (fee-adjusted both ways):
+ * v = c·(c + a + b) / (a + c) where c = dxIn net of fee.
  */
 export function getBuyAmountOut(poolA: bigint, poolB: bigint, dxIn: bigint, feeBps: number): bigint {
   if (dxIn <= 0n) throw new Error('InvalidQuantity');
-  const k = poolA * poolB;
   const fee = (dxIn * BigInt(feeBps)) / 10000n;
-  const dxAfterFee = dxIn - fee;
-  const newB = poolB + dxAfterFee;
-  if (newB === 0n) return 0n;
-  const newA = k / newB;
-  return poolA - newA;
+  const c = dxIn - fee;
+  const denominator = poolA + c;
+  if (denominator === 0n) return 0n;
+  return (c * (c + poolA + poolB)) / denominator;
 }
 
 /**
  * Refund (lamports) for selling `dyIn`-value of the traded side.
- * Mirrors get_sell_amount_out.
+ * Mirrors get_sell_amount_out: r = [(s + v) − √((s + v)² − 4·v·a)] / 2, capped
+ * below the side pool, fee taken from the refund.
  */
 export function getSellAmountOut(poolA: bigint, poolB: bigint, dyIn: bigint, feeBps: number): bigint {
   if (dyIn <= 0n) throw new Error('InvalidQuantity');
-  const k = poolA * poolB;
-  const newA = poolA + dyIn;
-  const newB = k / newA;
-  const dxGross = poolB - newB;
-  const fee = (dxGross * BigInt(feeBps)) / 10000n;
-  return dxGross - fee;
+  const s = poolA + poolB + dyIn;
+  const disc = s * s - 4n * dyIn * poolA;
+  const root = isqrt(disc);
+  const rGross = (s - root) / 2n;
+  // amm_math.rs caps with `pool_yes.saturating_sub(1)` — mirror the saturating
+  // semantics so an empty side pool yields 0, never a negative refund.
+  const cap = poolA > 0n ? poolA - 1n : 0n;
+  const rCapped = rGross < cap ? rGross : cap;
+  const fee = (rCapped * BigInt(feeBps)) / 10000n;
+  return rCapped - fee;
 }
 
 /**
  * Handle the two pool arguments for buy/sell so callers stay close to the
- * on-chain convention (side pool first). Buying YES: cost added flows into the
- * YES pool on-chain, so cheap.
+ * on-chain convention (side pool first).
  */
 export interface PoolState {
   poolYes: bigint;

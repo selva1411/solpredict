@@ -18,9 +18,36 @@ interface RealtimeState {
   lastEventTimestamp: number | null;
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL
-  || (typeof window !== "undefined" ? process.env.NEXT_PUBLIC_WS_PORT : "")
-  || "";
+// Resolve the realtime WS endpoint at runtime, relative to the page origin, so
+// one bundle works from localhost, a LAN IP, or a tunnel URL. The env value may
+// be baked with an absolute host (e.g. http://172.25.7.63:3001) that is only
+// reachable from one network — recompute it against window.location instead.
+function resolveWsUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_WS_URL
+    || (typeof window !== "undefined" ? process.env.NEXT_PUBLIC_WS_PORT : "")
+    || "";
+  if (typeof window === "undefined") return configured;
+  try {
+    const u = configured ? new URL(configured) : null;
+    const isLocalHost =
+      !u ||
+      ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(u.hostname) ||
+      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname);
+    // Local WS server (port 3001): use the CURRENT page host so it works from
+    // localhost, a LAN IP, or a tunnel host. Remote (devnet/mainnet) WS keeps
+    // its configured address.
+    const hostname = isLocalHost ? window.location.hostname : u!.hostname;
+    const port = u?.port || "3001";
+    const proto = isLocalHost
+      ? (window.location.protocol === "https:" ? "wss" : "ws")
+      : (u!.protocol.startsWith("wss") ? "wss" : "ws");
+    return `${proto}://${hostname}:${port}`;
+  } catch {
+    return configured;
+  }
+}
+
+const WS_URL = resolveWsUrl();
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const BASE_DELAY = 1000;

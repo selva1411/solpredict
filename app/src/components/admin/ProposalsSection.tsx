@@ -71,7 +71,7 @@ export function ProposalsSection() {
   if (loading) {
     return (
       <motion.section variants={cardVariants} initial="hidden" animate="visible" className="glass-panel p-8">
-        <div className="flex items-center justify-center gap-3 text-[#808495]">
+        <div className="flex items-center justify-center gap-3 text-ash">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-xs font-mono">Loading proposals...</span>
         </div>
@@ -82,7 +82,7 @@ export function ProposalsSection() {
   if (error) {
     return (
       <motion.section variants={cardVariants} initial="hidden" animate="visible" className="glass-panel p-8">
-        <p className="text-xs text-[#E4574A] font-mono">{error}</p>
+        <p className="text-xs text-bordeaux font-mono">{error}</p>
       </motion.section>
     );
   }
@@ -90,29 +90,29 @@ export function ProposalsSection() {
   if (proposals.length === 0) {
     return (
       <motion.section variants={cardVariants} initial="hidden" animate="visible" className="glass-panel p-8 text-center">
-        <p className="text-sm text-[#808495]">No proposals yet.</p>
+        <p className="text-[13px] text-ash">No proposals yet.</p>
       </motion.section>
     );
   }
 
   return (
     <motion.section variants={cardVariants} initial="hidden" animate="visible" className="space-y-4">
-      <h2 className="text-lg font-bold font-display uppercase tracking-wider text-[#F4F4F9]">Market Proposals</h2>
-      <div className="divide-y divide-white/5">
+      <h2 className="text-[21px] font-bold font-display uppercase tracking-wider text-ivory">Market Proposals</h2>
+      <div className="divide-y divide-hairline">
         {proposals.map((proposal) => (
           <div key={proposal.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1 min-w-0">
-              <div className="text-sm font-bold text-[#F4F4F9] truncate">{proposal.question}</div>
-              <div className="text-[10px] text-[#808495] font-mono flex flex-wrap items-center gap-2">
+              <div className="text-[13px] font-bold text-ivory truncate">{proposal.question}</div>
+              <div className="text-[10px] text-ash font-mono flex flex-wrap items-center gap-2">
                 <span>by {proposal.creator.slice(0, 8)}...{proposal.creator.slice(-4)}</span>
-                <span className="text-[#FFA500]">|</span>
+                <span className="text-gold">|</span>
                 <span>{proposal.category}</span>
                 <span
                   className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider ${
                     proposal.status === "approved"
-                      ? "bg-[#4CAF50]/10 text-[#4CAF50]"
+                      ? "bg-verdigris/10 text-verdigris"
                       : proposal.status === "rejected"
-                      ? "bg-[#E4574A]/10 text-[#E4574A]"
+                      ? "bg-bordeaux/10 text-bordeaux"
                       : "bg-amber-500/10 text-amber-400"
                   }`}
                 >
@@ -125,7 +125,7 @@ export function ProposalsSection() {
                 <button
                   disabled={actionLoading !== null}
                   onClick={() => handleAction(proposal.id, "approve")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#4CAF50]/10 text-[#4CAF50] border border-[#4CAF50]/20 hover:bg-[#4CAF50]/20 transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[2px] bg-verdigris/10 text-verdigris border border-verdigris/20 hover:bg-verdigris/20 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {actionLoading === proposal.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                   Approve
@@ -133,7 +133,7 @@ export function ProposalsSection() {
                 <button
                   disabled={actionLoading !== null}
                   onClick={() => handleAction(proposal.id, "reject")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#E4574A]/10 text-[#E4574A] border border-[#E4574A]/20 hover:bg-[#E4574A]/20 transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[2px] bg-bordeaux/10 text-bordeaux border border-bordeaux/20 hover:bg-bordeaux/20 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {actionLoading === proposal.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
                   Reject

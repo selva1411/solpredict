@@ -3,36 +3,40 @@ import { test, expect } from "@playwright/test";
 test.describe("Home page", () => {
   test("page loads and shows header", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=PREDICT-X").first()).toBeVisible();
-    await expect(page.locator("text=Predict the future")).toBeVisible();
-    await expect(page.locator("text=Win the future")).toBeVisible();
+    // Generous timeout: the dev server compiles the "/" route on first hit
+    // during a full-suite run, which can exceed the 5s default. The navigation
+    // test below uses the same 30s window for the same reason.
+    await expect(page.locator("text=SOLPREDICT").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("text=Conviction,").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("text=ENTER MARKETS").first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test("shows stats cards", async ({ page }) => {
+  test("shows stats strip", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=24h Volume").first()).toBeVisible();
-    await expect(page.locator("text=Open Markets").first()).toBeVisible();
+    await expect(page.locator("text=VOLUME").first()).toBeVisible();
+    await expect(page.locator("text=OPEN MARKETS").first()).toBeVisible();
   });
 
-  test("shows Start Trading button", async ({ page }) => {
+  test("shows the live book panel", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=Start Trading").first()).toBeVisible();
+    await expect(page.locator("text=LIVE BOOK").first()).toBeVisible();
   });
 
   test("navigates to /markets on button click", async ({ page }) => {
     await page.goto("/");
-    await page.locator("text=Start Trading").first().click();
-    await expect(page).toHaveURL(/\/markets/);
+    // Click the anchor (not the inner button text) so the <Link> navigation
+    // triggers even if the button is mid-hydration.
+    const link = page.locator('a[href="/markets"]').first();
+    await link.waitFor({ state: "visible" });
+    await link.click();
+    // Dev-server first compile of /markets RSC can take several seconds during
+    // a full-suite run — give it a generous window and re-assert on failure.
+    await expect(page).toHaveURL(/\/markets/, { timeout: 30_000 });
   });
 
-  test("shows trending section", async ({ page }) => {
+  test("shows mechanics section", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=Trending Now").first()).toBeVisible();
-  });
-
-  test("shows Why PREDICT-X section", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.locator("text=Why PREDICT-X").first()).toBeVisible();
+    await expect(page.locator("text=02 — MECHANICS").first()).toBeVisible();
   });
 });
 
@@ -42,8 +46,8 @@ test.describe("API health", () => {
     expect(resp.status()).toBe(200);
     const body = await resp.json();
     expect(body.ok).toBe(true);
-    expect(body.checks).toBeDefined();
-    expect(body.checks.db.queryWorks).toBe(true);
+    expect(body.db).toBeDefined();
+    expect(body.db.connected).toBe(true);
   });
 });
 

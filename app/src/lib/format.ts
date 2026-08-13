@@ -146,7 +146,14 @@ export function categoryName(idx: number): string {
 
 /** Category color helper */
 export function categoryColor(idx: number): string {
-  return "var(--color-gray-400)";
+  const colors = [
+    "var(--color-crypto)",
+    "var(--color-sports)",
+    "var(--color-politics)",
+    "var(--color-tech)",
+    "var(--color-other)",
+  ];
+  return colors[idx] ?? "var(--color-other)";
 }
 
 /** Status label helper */

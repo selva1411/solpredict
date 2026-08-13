@@ -1,8 +1,8 @@
 # QA Audit Results — SolPredict
 
 ## Phase 1 — Data Fetching (✅ Complete)
-- Fixed `env.ts` fallbacks: rpcUrl → `http://localhost:3000/api/rpc` (localnet), programId → `HVshSwptqBYKWM9MpZrA1bdP7zQ6RzJXVbr5PUR7wvtr`
-- Program deployed on localnet at `HVshSwptqBYKWM9MpZrA1bdP7zQ6RzJXVbr5PUR7wvtr`
+- Fixed `env.ts` fallbacks: rpcUrl → `http://localhost:3000/api/rpc` (localnet), programId → `AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG` (standardized across lib.rs, Anchor.toml, IDL, env.ts, cron routes, indexer, scripts)
+- Program deployed on localnet at `AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG`
 - Validator running at `http://127.0.0.1:8899` (Solana 4.0.2)
 - CORS proxy via next.config.ts rewrite `/api/rpc` → validator
 - Health endpoint (`GET /api/health`) returns `{ ok: true, checks: { rpcConnection: true, db: { queryWorks: true } } }`

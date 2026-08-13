@@ -59,7 +59,12 @@ export function getFriendlyErrorMessage(err: unknown): string {
     return ERROR_MAP.MarketNotSettled;
   }
 
-  if (msg.includes("Attempt to debit an account") || msg.includes("insufficient lamports") || msg.includes("0x1")) {
+  if (
+    msg.includes("Attempt to debit an account") ||
+    msg.includes("insufficient lamports") ||
+    msg.includes("insufficient funds") ||
+    msg.includes("Transaction results in an account (0) with insufficient funds")
+  ) {
     return "Insufficient SOL in connected wallet for gas fees & position. Click '🪂 Airdrop SOL' in the header!";
   }
 

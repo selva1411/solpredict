@@ -8,7 +8,6 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ENV } from "@/lib/env";
 import { AppProvider } from "@/contexts/AppContext";
-import { MarketDataProvider } from "@/contexts/MarketDataContext";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -31,14 +30,15 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint} config={{ wsEndpoint }}>
+    <ConnectionProvider
+      endpoint={endpoint}
+      config={{ wsEndpoint, commitment: "confirmed" }}
+    >
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <QueryClientProvider client={queryClient}>
             <AppProvider>
-              <MarketDataProvider>
-                {children}
-              </MarketDataProvider>
+              {children}
             </AppProvider>
           </QueryClientProvider>
         </WalletModalProvider>

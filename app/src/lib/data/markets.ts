@@ -11,7 +11,83 @@ export interface MarketListFilters {
   limit?: number;
 }
 
-export async function getMarketList(filters: MarketListFilters = {}) {
+// ---------------------------------------------------------------------------
+// Short-lived in-memory TTL cache. getMarketList is the single most-fetched
+// query in the app (home, /markets, watchlist, related-markets, admin all hit
+// it, often 2-3× within the same page render). Each call runs a multi-table
+// query against the remote Neon DB (~hundreds of ms), so we cache the result
+// for 3 seconds keyed by the exact filter set. Trade/settle sync paths call
+// invalidateMarketList() to keep post-trade numbers fresh.
+// ---------------------------------------------------------------------------
+// The row shape returned by loadMarketList (matches what /api/markets/cached
+// has always returned — the UI consumes these fields).
+type MarketRow = {
+  marketPubkey: string;
+  marketId: number;
+  creator: string | null;
+  question: string;
+  description: string | null;
+  category: string;
+  status: string;
+  winningOutcome: string | null;
+  resolutionSource: string | null;
+  oracleFeedId: string | null;
+  feeBps: number | null;
+  totalVolume: number;
+  openInterest: number;
+  rentDepositLamports: string | null;
+  rentReclaimedAt: string | null;
+  endTs: string | null;
+  resolveTs: string | null;
+  settledAt: string | null;
+  thumbnailUrl: string | null;
+  tags: string[] | null;
+  viewCount: number | null;
+  watchlistCount: number | null;
+  yesOdds: number;
+  yesPoolSol: number;
+  noPoolSol: number;
+  yesPoolLamports: number;
+  noPoolLamports: number;
+  yesSupply: number;
+  noSupply: number;
+  totalPool: number;
+  outcomes: Array<{
+    outcomeIndex: number;
+    label: string;
+    sharesOutstanding: string | null;
+    lastPriceBps: number | null;
+    priceSol: number;
+  }>;
+};
+interface MarketListResult {
+  markets: MarketRow[];
+  total: number;
+}
+// A Map keyed by canonicalized filter JSON (defaults applied so `page` vs
+// omitted produce the same key) avoids different pages thrashing a single slot.
+const marketListCache = new Map<string, { at: number; result: MarketListResult }>();
+const MARKET_LIST_TTL = 3_000;
+const MAX_CACHE_ENTRIES = 20;
+
+export function invalidateMarketList(): void {
+  marketListCache.clear();
+}
+
+/** Apply defaults so equivalent filter objects share one cache key. */
+function marketListCacheKey(filters: MarketListFilters): string {
+  return JSON.stringify({
+    category: filters.category ?? undefined,
+    status: filters.status ?? 'open',
+    search: filters.search ?? undefined,
+    sort: filters.sort ?? 'newest',
+    page: filters.page ?? 1,
+    limit: filters.limit ?? 50,
+  });
+}
+
+/** The uncached implementation — the exported getMarketList wraps it in a TTL cache. */
+async function loadMarketList(filters: MarketListFilters = {}): Promise<MarketListResult> {
   if (!db) return { markets: [], total: 0 };
 
   const {
@@ -76,6 +152,10 @@ export async function getMarketList(filters: MarketListFilters = {}) {
         tags: marketsCache.tags,
         viewCount: marketsCache.viewCount,
         watchlistCount: marketsCache.watchlistCount,
+        yesPoolLamports: marketsCache.yesPoolLamports,
+        noPoolLamports: marketsCache.noPoolLamports,
+        yesSupply: marketsCache.yesSupply,
+        noSupply: marketsCache.noSupply,
         createdAt: marketsCache.createdAt,
       })
       .from(marketsCache)
@@ -87,7 +167,9 @@ export async function getMarketList(filters: MarketListFilters = {}) {
   ]);
 
   const total = countRows[0]?.count ?? 0;
-  if (rows.length === 0) return { markets: [], total };
+  if (rows.length === 0) {
+    return { markets: [], total } as MarketListResult;
+  }
 
   // Fetch outcomes for all retrieved markets in one query
   const marketPubkeys = rows.map(r => r.marketPubkey);
@@ -115,7 +197,14 @@ export async function getMarketList(filters: MarketListFilters = {}) {
     );
     const yesOutcome = marketOutcomesList.find(o => o.outcomeIndex === 0);
     const yesPriceBps = yesOutcome?.lastPriceBps ?? 5000;
-    const yesOdds = yesPriceBps / 10000;
+
+    // Pool reserves are REAL on-chain snapshots from markets_cache. When they
+    // are known, the implied odds match the on-chain AMM (pools), not the LMSR
+    // price — so cards, detail page and order book all agree.
+    const yesPoolSol = (r.yesPoolLamports ?? 0) / 1e9;
+    const noPoolSol = (r.noPoolLamports ?? 0) / 1e9;
+    const totalPool = yesPoolSol + noPoolSol;
+    const yesOdds = totalPool > 0 ? yesPoolSol / totalPool : yesPriceBps / 10000;
 
     return {
       marketPubkey: r.marketPubkey,
@@ -141,11 +230,13 @@ export async function getMarketList(filters: MarketListFilters = {}) {
       viewCount: r.viewCount ?? 0,
       watchlistCount: r.watchlistCount ?? 0,
       yesOdds,
-      yesPoolSol: 0,
-      noPoolSol: 0,
-      yesSupply: yesOutcome?.sharesOutstanding ?? 0,
-      noSupply: marketOutcomesList.find(o => o.outcomeIndex === 1)?.sharesOutstanding ?? 0,
-      totalPool: Number(r.totalVolume ?? 0),
+      yesPoolSol,
+      noPoolSol,
+      yesPoolLamports: r.yesPoolLamports ?? 0,
+      noPoolLamports: r.noPoolLamports ?? 0,
+      yesSupply: r.yesSupply ?? 0,
+      noSupply: r.noSupply ?? 0,
+      totalPool,
       outcomes: marketOutcomesList.map(o => ({
         outcomeIndex: o.outcomeIndex,
         label: o.label,
@@ -156,7 +247,26 @@ export async function getMarketList(filters: MarketListFilters = {}) {
     };
   });
 
-  return { markets, total };
+  return { markets, total } as MarketListResult;
+}
+
+export async function getMarketList(filters: MarketListFilters = {}): Promise<MarketListResult> {
+  if (!db) return { markets: [], total: 0 };
+
+  const cacheKey = marketListCacheKey(filters);
+  const now = Date.now();
+  const hit = marketListCache.get(cacheKey);
+  if (hit && now - hit.at < MARKET_LIST_TTL) {
+    return hit.result;
+  }
+  const result = await loadMarketList(filters);
+  marketListCache.set(cacheKey, { at: now, result });
+  // Cap memory: evict oldest entry when over budget.
+  if (marketListCache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = marketListCache.keys().next().value;
+    if (oldestKey !== undefined) marketListCache.delete(oldestKey);
+  }
+  return result;
 }
 
 export async function getMarket(pubkey: string) {
@@ -180,11 +290,18 @@ export async function getMarket(pubkey: string) {
   const yesOutcome = outcomes.find(o => o.outcomeIndex === 0);
   const yesPriceBps = yesOutcome?.lastPriceBps ?? 5000;
 
+  const yesPoolSol = (m.yesPoolLamports ?? 0) / 1e9;
+  const noPoolSol = (m.noPoolLamports ?? 0) / 1e9;
+  const totalPool = yesPoolSol + noPoolSol;
+
   return {
     ...m,
     totalVolume: Number(m.totalVolume ?? 0),
     openInterest: Number(m.openInterest ?? 0),
-    yesOdds: yesPriceBps / 10000,
+    yesPoolSol,
+    noPoolSol,
+    totalPool,
+    yesOdds: totalPool > 0 ? yesPoolSol / totalPool : yesPriceBps / 10000,
     outcomes: outcomes.map(o => ({
       outcomeIndex: o.outcomeIndex,
       label: o.label,

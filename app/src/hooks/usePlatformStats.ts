@@ -16,7 +16,7 @@ interface StatsResponse {
   stats: PlatformStats;
 }
 
-export function usePlatformStats() {
+export function usePlatformStats(initialStats?: PlatformStats | null) {
   return useQuery({
     queryKey: keys.markets.stats,
     queryFn: async (): Promise<PlatformStats> => {
@@ -32,5 +32,14 @@ export function usePlatformStats() {
     },
     staleTime: 10_000,
     refetchInterval: 30_000,
+    // Server-rendered stats render immediately (no first-load flash). React
+    // Query still refetches on the interval, so numbers stay fresh.
+    initialData: initialStats ?? undefined,
+    // Mark the prefetched value as fresh from mount time. Without this, React
+    // Query treats `initialData` as dataUpdatedAt:0 → immediately stale → fires
+    // a background refetch that can resolve BEFORE hydration finishes, changing
+    // the rendered number and producing a React hydration-mismatch error on the
+    // stat tiles ("server rendered text didn't match the client").
+    initialDataUpdatedAt: () => Date.now(),
   });
 }

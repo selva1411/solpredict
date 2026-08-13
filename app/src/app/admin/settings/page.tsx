@@ -89,7 +89,7 @@ export default function AdminSettingsPage() {
         emergencyPause: emergencyPda,
         systemProgram: SystemProgram.programId,
       }));
-      await sendWithRetry(builder);
+      await sendWithRetry(program, builder);
       setPaused(pause);
       toast.success(pause ? 'Emergency pause activated on-chain' : 'Program unpaused on-chain');
     } catch (err) {
@@ -126,7 +126,7 @@ export default function AdminSettingsPage() {
     return (
       <div className="space-y-4">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-20 rounded-2xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+          <div key={i} className="h-20 rounded-[2px] bg-panel border border-hairline animate-pulse" />
         ))}
       </div>
     );
@@ -136,26 +136,26 @@ export default function AdminSettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
         <Settings className="w-5 h-5 text-amber-400" />
-        <h2 className="text-xl font-bold text-white">Platform Settings</h2>
+        <h2 className="text-[21px] font-bold text-ivory">Platform Settings</h2>
       </div>
 
-      <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
+      <div className="rounded-[2px] bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
         <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-amber-300">
           Changes take effect immediately. Fee changes apply to new trades only.
         </p>
       </div>
 
-      <div className={`rounded-2xl border p-5 ${
+      <div className={`rounded-[2px] border p-5 ${
         paused
           ? "bg-red-500/10 border-red-500/30"
-          : "bg-[#1A1C22] border-white/[0.06]"
+          : "bg-panel border-hairline"
       }`}>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Power className={`w-4 h-4 ${paused ? "text-red-400" : "text-gray-500"}`} />
-              <label className="text-sm font-semibold text-white block">On-Chain Emergency Pause</label>
+              <label className="text-[13px] font-semibold text-ivory block">On-Chain Emergency Pause</label>
               {paused && (
                 <span className="text-[10px] font-mono uppercase tracking-widest text-red-400 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5">
                   PAUSED
@@ -170,7 +170,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={() => handleEmergencyPause(true)}
               disabled={pauseLoading || paused}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-red-500/10 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50"
             >
               <Power className="w-3.5 h-3.5" />
               Pause Program
@@ -178,7 +178,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={() => handleEmergencyPause(false)}
               disabled={pauseLoading || !paused}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-xs hover:bg-green-500/20 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-green-500/10 border border-green-500/30 text-green-400 text-xs hover:bg-green-500/20 transition-colors disabled:opacity-50"
             >
               <PowerOff className="w-3.5 h-3.5" />
               Unpause
@@ -194,11 +194,11 @@ export default function AdminSettingsPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.04 }}
-            className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-5"
+            className="rounded-[2px] bg-panel border border-hairline p-5"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <label className="text-sm font-semibold text-white block mb-1">
+                <label className="text-[13px] font-semibold text-ivory block mb-1">
                   {setting.label}
                 </label>
                 {setting.description && (
@@ -208,20 +208,20 @@ export default function AdminSettingsPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => updateValue(setting.key, 'true')}
-                      className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                      className={`px-3 py-1.5 text-xs rounded-[2px] border transition-all ${
                         setting.value === 'true'
                           ? 'bg-green-500/20 border-green-500/40 text-green-400'
-                          : 'bg-white/[0.03] border-white/[0.08] text-gray-500'
+                          : 'bg-panel border-hairline text-gray-500'
                       }`}
                     >
                       true
                     </button>
                     <button
                       onClick={() => updateValue(setting.key, 'false')}
-                      className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                      className={`px-3 py-1.5 text-xs rounded-[2px] border transition-all ${
                         setting.value === 'false'
                           ? 'bg-red-500/20 border-red-500/40 text-red-400'
-                          : 'bg-white/[0.03] border-white/[0.08] text-gray-500'
+                          : 'bg-panel border-hairline text-gray-500'
                       }`}
                     >
                       false
@@ -232,14 +232,14 @@ export default function AdminSettingsPage() {
                     type={setting.type === 'number' ? 'number' : 'text'}
                     value={setting.value}
                     onChange={e => updateValue(setting.key, e.target.value)}
-                    className="input-glass text-sm"
+                    className="input-glass text-[13px]"
                   />
                 )}
               </div>
               <button
                 onClick={() => saveSetting(setting.key, setting.value)}
                 disabled={saving === setting.key}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
               >
                 {saving === setting.key ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />

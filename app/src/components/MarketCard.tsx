@@ -15,7 +15,9 @@ interface MarketCardProps {
 }
 
 function formatTimeLeft(endDate: string): string {
-  const ms = new Date(endDate).getTime() - Date.now();
+  const t = new Date(endDate).getTime();
+  if (Number.isNaN(t)) return "—";
+  const ms = t - Date.now();
   if (ms <= 0) return "Ended";
   const days = Math.floor(ms / (1000 * 60 * 60 * 24));
   const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -69,9 +71,21 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
           >
             <Star className={`w-3.5 h-3.5 ${watched ? "fill-[var(--warning)] text-[var(--warning)]" : "text-[var(--color-gray-500)]"}`} />
           </button>
-          <span className="flex items-center gap-1">
+          <span
+            className={`flex items-center gap-1 ${
+              market.status === "settled"
+                ? "text-[var(--negative)]"
+                : market.status === "cancelled"
+                  ? "text-[var(--color-gray-400)]"
+                  : ""
+            }`}
+          >
             <Clock size={11} />
-            {formatTimeLeft(market.endDate)}
+            {market.status === "settled"
+              ? "Settled"
+              : market.status === "cancelled"
+                ? "Cancelled"
+                : formatTimeLeft(market.endDate)}
           </span>
         </div>
       </div>
@@ -83,22 +97,22 @@ export const MarketCard = memo(function MarketCard({ market, index = 0, onClick,
 
       {/* Outcome Prices */}
       <div className="grid grid-cols-2 gap-2 font-mono">
-        <div className="bg-[var(--surface-0)] border border-[var(--accent)]/35 rounded-lg p-2.5 space-y-0.5 hover:border-[var(--accent)]/60 transition-colors">
+        <div className="bg-[var(--surface-0)] border border-[var(--accent)]/35 rounded-[2px] p-2.5 space-y-0.5 hover:border-[var(--accent)]/60 transition-colors">
           <div className="text-[var(--accent)] font-bold text-[11px] tracking-wider">YES</div>
-          <div className="text-[var(--color-gray-100)] text-base font-semibold">
+          <div className="text-[var(--color-gray-100)] text-[15px] font-semibold">
             {yesPct.toFixed(0)}% <span className="text-xs text-[var(--color-gray-400)]">(${market.yesPrice.toFixed(2)})</span>
           </div>
-          <div className="h-1 rounded-full bg-[var(--color-gray-800)] overflow-hidden mt-1">
-            <div className="h-full rounded-full bg-gradient-to-r from-[#FBBF24] to-[#F5A524]" style={{ width: `${Math.min(100, Math.max(2, yesPct))}%` }} />
+          <div className="h-1 rounded-[2px] bg-[var(--color-gray-800)] overflow-hidden mt-1">
+            <div className="h-full rounded-[2px] bg-gradient-to-r from-gold-lite to-gold" style={{ width: `${Math.min(100, Math.max(2, yesPct))}%` }} />
           </div>
         </div>
-        <div className="bg-[var(--surface-0)] border border-[var(--negative)]/30 rounded-lg p-2.5 space-y-0.5 hover:border-[var(--negative)]/60 transition-colors">
+        <div className="bg-[var(--surface-0)] border border-[var(--negative)]/30 rounded-[2px] p-2.5 space-y-0.5 hover:border-[var(--negative)]/60 transition-colors">
           <div className="text-[var(--negative)] font-bold text-[11px] tracking-wider">NO</div>
-          <div className="text-[var(--color-gray-100)] text-base font-semibold">
+          <div className="text-[var(--color-gray-100)] text-[15px] font-semibold">
             {(100 - yesPct).toFixed(0)}% <span className="text-xs text-[var(--color-gray-400)]">(${market.noPrice.toFixed(2)})</span>
           </div>
-          <div className="h-1 rounded-full bg-[var(--color-gray-800)] overflow-hidden mt-1">
-            <div className="h-full rounded-full bg-gradient-to-r from-[#FF5470] to-[#ff8aa0]" style={{ width: `${Math.min(100, Math.max(2, 100 - yesPct))}%` }} />
+          <div className="h-1 rounded-[2px] bg-[var(--color-gray-800)] overflow-hidden mt-1">
+            <div className="h-full rounded-[2px] bg-gradient-to-r from-bordeaux to-bordeaux" style={{ width: `${Math.min(100, Math.max(2, 100 - yesPct))}%` }} />
           </div>
         </div>
       </div>

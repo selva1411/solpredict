@@ -142,24 +142,24 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
     const isReplying = replyTo === comment.id;
 
     return (
-      <div className={depth > 0 ? "ml-5 border-l border-white/10 pl-3" : ""}>
-        <div className="p-3 rounded-lg bg-[#1A1C22] border border-white/10 space-y-1.5">
+      <div className={depth > 0 ? "ml-5 border-l border-hairline pl-3" : ""}>
+        <div className="p-3 rounded-[2px] bg-panel border border-hairline space-y-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <img
                 src={comment.authorAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${comment.authorWallet}`}
                 alt="avatar"
-                className="w-5 h-5 rounded-full bg-white/10"
+                className="w-5 h-5 rounded-[2px] bg-panel-2"
               />
-              <span className="font-bold text-[#ffd89c] text-[11px]">
+              <span className="font-bold text-gold-lite text-[11px]">
                 {comment.authorUsername || `${comment.authorWallet.slice(0, 4)}...`}
               </span>
-              <span className="text-[9px] text-[#808495]">{timeAgo}</span>
+              <span className="text-[9px] text-ash">{timeAgo}</span>
             </div>
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => handleUpvote(comment)}
-                className="flex items-center gap-1 text-[10px] text-[#808495] hover:text-[#22c55e] transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-[10px] text-ash hover:text-verdigris transition-colors cursor-pointer"
               >
                 <ThumbsUp className="w-3 h-3" />
                 <span>{comment.upvotes || 0}</span>
@@ -170,14 +170,14 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
                   setReplyTo(isReplying ? null : (comment.id as number));
                   setReplyText("");
                 }}
-                className="flex items-center gap-1 text-[10px] text-[#808495] hover:text-[#ffd89c] transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-[10px] text-ash hover:text-gold-lite transition-colors cursor-pointer"
               >
                 <MessageSquare className="w-3 h-3" />
                 <span>Reply</span>
               </button>
             </div>
           </div>
-          <p className="text-[#F4F4F9] text-[11px] font-sans leading-relaxed">{comment.content}</p>
+          <p className="text-ivory text-[11px] font-sans leading-relaxed">{comment.content}</p>
 
           {isReplying && (
             <div className="flex gap-2 pt-1">
@@ -193,12 +193,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
                   }
                 }}
                 placeholder="Write a reply..."
-                className="flex-1 bg-[#1A1C22] border border-white/10 rounded-lg px-3 py-2 text-xs text-[#F4F4F9] placeholder-[#808495]/50 focus:outline-none focus:border-[#FFA500]/60 font-mono"
+                className="flex-1 bg-panel border border-hairline rounded-[2px] px-3 py-2 text-xs text-ivory placeholder-ash/50 focus:outline-none focus:border-gold/60 font-mono"
               />
               <button
                 onClick={() => handlePostReply(comment.id as number)}
                 disabled={!replyText.trim() || submitting}
-                className="px-3 py-2 bg-[#FFA500]/20 text-[#ffd89c] font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-[#FFA500]/30 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-2 bg-gold/20 text-gold-lite font-bold text-[10px] uppercase tracking-wider rounded-[2px] hover:bg-gold/30 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Reply
               </button>
@@ -214,12 +214,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
 
   return (
     <div className="glass-panel p-6 space-y-6">
-      <div className="flex items-center justify-between border-b border-white/10 pb-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#F4F4F9] flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-[#ffd89c]" />
+      <div className="flex items-center justify-between border-b border-hairline pb-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-ivory flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-gold-lite" />
           <span>Community Discussion ({comments.length})</span>
         </h3>
-        <span className="text-[10px] font-mono text-[#808495]">Decentralized Discussion Layer</span>
+        <span className="text-[10px] font-mono text-ash">Decentralized Discussion Layer</span>
       </div>
 
       {/* Post comment input */}
@@ -231,12 +231,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
             value={newCommentText}
             disabled={!wallet?.publicKey || submitting}
             onChange={(e) => setNewCommentText(e.target.value)}
-            className="flex-1 bg-[#1A1C22] border border-white/10 rounded-lg px-4 py-2.5 text-xs text-[#F4F4F9] placeholder-[#808495]/50 focus:outline-none focus:border-[#FFA500]/60 font-mono disabled:opacity-50"
+            className="flex-1 bg-panel border border-hairline rounded-[2px] px-4 py-2.5 text-xs text-ivory placeholder-ash/50 focus:outline-none focus:border-gold/60 font-mono disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!wallet?.publicKey || !newCommentText.trim() || submitting}
-            className="px-4 py-2.5 bg-[#ffd89c] text-[#131313] font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-[#ffe3b8] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
+            className="px-4 py-2.5 bg-gold-lite text-[#131313] font-bold text-xs uppercase tracking-wider rounded-[2px] hover:bg-[#ffe3b8] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Post</span>
@@ -247,7 +247,7 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
       {/* Comments List */}
       <div className="space-y-3 font-mono text-xs max-h-80 overflow-y-auto pr-1">
         {tree.length === 0 ? (
-          <p className="text-center text-[11px] text-[#808495] py-4">No comments yet. Be the first trader to post analysis!</p>
+          <p className="text-center text-[11px] text-ash py-4">No comments yet. Be the first trader to post analysis!</p>
         ) : (
           tree.map((node, index) => (
             <CommentItem key={index} node={node} depth={0} />

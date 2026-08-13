@@ -50,7 +50,7 @@ export function HowItWorks() {
         <h2 className="text-2xl font-bold font-display bg-gradient-to-r from-amber-400 to-amber-400 bg-clip-text text-transparent">
           How It Works
         </h2>
-        <p className="text-sm text-text-muted max-w-lg mx-auto">
+        <p className="text-[13px] text-text-muted max-w-lg mx-auto">
           Three simple steps to start trading on-chain prediction contracts on Solana.
         </p>
       </div>
@@ -72,16 +72,16 @@ export function HowItWorks() {
             >
               <div className="relative mx-auto">
                 <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto"
+                  className="w-14 h-14 rounded-[2px] flex items-center justify-center mx-auto"
                   style={{ background: `${step.color}15`, border: `1px solid ${step.color}30` }}
                 >
                   <Icon className="w-6 h-6" style={{ color: step.color }} />
                 </div>
-                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-mono font-bold text-text-muted">
+                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-[2px] bg-panel-2 border border-hairline flex items-center justify-center text-[10px] font-mono font-bold text-text-muted">
                   {index + 1}
                 </div>
               </div>
-              <h3 className="text-base font-bold font-display text-text-primary">
+              <h3 className="text-[15px] font-bold font-display text-text-primary">
                 {step.title}
               </h3>
               <p className="text-xs text-text-muted leading-relaxed">

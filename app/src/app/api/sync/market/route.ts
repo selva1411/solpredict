@@ -24,6 +24,8 @@ export const POST = apiHandler(async (req: NextRequest) => {
       category: data.category ?? "Crypto",
       status: data.status ?? "open",
       winningOutcome: data.winningOutcome ?? undefined,
+      yesPoolLamports: data.yesPoolLamports ?? (data.yesPoolSol !== undefined ? Math.round(data.yesPoolSol * 1e9) : undefined),
+      noPoolLamports: data.noPoolLamports ?? (data.noPoolSol !== undefined ? Math.round(data.noPoolSol * 1e9) : undefined),
       yesSupply: data.yesSupply,
       noSupply: data.noSupply,
       endTs: data.endTs,

@@ -25,6 +25,10 @@ export const POST = apiHandler(async (req: NextRequest) => {
       tokensOut: d.tokensOut,
       pricePerToken: d.pricePerToken,
       feePaidLamports: d.feePaidLamports,
+      yesPoolLamports: d.yesPoolLamports ?? (d.yesPoolSol !== undefined ? Math.round(d.yesPoolSol * 1e9) : undefined),
+      noPoolLamports: d.noPoolLamports ?? (d.noPoolSol !== undefined ? Math.round(d.noPoolSol * 1e9) : undefined),
+      yesSupply: d.yesSupply,
+      noSupply: d.noSupply,
     });
 
     return ok({ ok: true, synced: true });

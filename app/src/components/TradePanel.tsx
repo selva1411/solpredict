@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/hooks/useProgram";
 import type { UiMarket } from "@/lib/market-adapter";
+import { getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda, getEmergencyPausePda } from "@/lib/pda";
 import { getBuyAmountOut, getSellAmountOut, getSpotPriceYes, getSpotPriceNo } from "@/lib/amm/cpmm";
 
 interface TradePanelProps {
@@ -86,11 +89,46 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
         toast.error("Connect your wallet first");
         return;
       }
-      const quantityLamports = new BN(Math.round(numAmount * 1e9));
       const sideEnum = side === "YES" ? { yes: {} } : { no: {} };
+
+      // market.id is the on-chain Market PDA for deployed markets.
+      let marketPda: PublicKey;
+      try {
+        marketPda = new PublicKey(market.id);
+      } catch {
+        throw new Error("This market is not deployed on-chain — trading is unavailable.");
+      }
+      const onChain = await program.provider.connection.getAccountInfo(marketPda).catch(() => null);
+      if (!onChain) {
+        throw new Error("This market is not deployed on-chain — trading is unavailable.");
+      }
+
+      // On-chain buy_shares takes a share count (mints quantity * BASE_UNITS_PER_SHARE
+      // tokens), not lamports. Convert the SOL amount to shares at the current price
+      // (the panel's own CPMM spot price for the selected side).
+      const currentPriceSol = currentPrice > 0 ? currentPrice : market.yesPrice;
+      const shares = Math.max(1, Math.floor(numAmount / currentPriceSol));
+      const emergencyPause = getEmergencyPausePda(program.programId);
+      const yesMintPda = getYesMintPda(marketPda, program.programId);
+      const noMintPda = getNoMintPda(marketPda, program.programId);
+      const treasuryPda = getTreasuryPda(marketPda, program.programId);
+      const userPositionPda = getUserPositionPda(marketPda, publicKey, program.programId);
+      const buyerYesAta = getAssociatedTokenAddressSync(yesMintPda, publicKey);
+      const buyerNoAta = getAssociatedTokenAddressSync(noMintPda, publicKey);
+
       const txSig = await program.methods
-        .buyShares(sideEnum, quantityLamports)
-        .accounts({ buyer: publicKey })
+        .buyShares(sideEnum, new BN(shares))
+        .accounts({
+          buyer: publicKey,
+          market: marketPda,
+          treasury: treasuryPda,
+          yesMint: yesMintPda,
+          noMint: noMintPda,
+          buyerYesAta,
+          buyerNoAta,
+          userPosition: userPositionPda,
+          emergencyPause,
+        })
         .rpc();
       toast.success(`${type === "amm" ? "AMM buy" : "Limit order"}: ${sharesOut.toFixed(2)} ${side} shares for ${numAmount.toFixed(2)} SOL`, {
         description: `TX: ${txSig.slice(0, 8)}...${txSig.slice(-6)}`,
@@ -114,10 +152,10 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
             setSide("YES");
             setLimitPrice(market.yesPrice.toFixed(2));
           }}
-          className={`py-2.5 rounded-xl font-mono font-bold text-sm transition-all ${
+          className={`py-2.5 rounded-[2px] font-mono font-bold text-[13px] transition-all ${
             side === "YES"
-              ? "bg-[#F5A524] text-[#0A0C14] shadow-[0_0_24px_-4px_#F5A524]"
-              : "bg-white/5 text-[#F5A524] border border-[#F5A524]/25 hover:bg-[#F5A524]/10"
+              ? "bg-gold text-[#0A0C14] shadow-[0_0_24px_-4px_#F5A524]"
+              : "bg-panel-2 text-gold border border-gold/25 hover:bg-gold/10"
           }`}
         >
           BUY YES · ${market.yesPrice.toFixed(2)}
@@ -127,10 +165,10 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
             setSide("NO");
             setLimitPrice(market.noPrice.toFixed(2));
           }}
-          className={`py-2.5 rounded-xl font-mono font-bold text-sm transition-all ${
+          className={`py-2.5 rounded-[2px] font-mono font-bold text-[13px] transition-all ${
             side === "NO"
-              ? "bg-[#E4574A] text-white shadow-[0_0_24px_-4px_#E4574A]"
-              : "bg-white/5 text-[#E4574A] border border-[#E4574A]/20 hover:bg-[#E4574A]/10"
+              ? "bg-bordeaux text-ivory shadow-[0_0_24px_-4px_#E4574A]"
+              : "bg-panel-2 text-bordeaux border border-bordeaux/20 hover:bg-bordeaux/10"
           }`}
         >
           BUY NO · ${market.noPrice.toFixed(2)}
@@ -138,18 +176,18 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
       </div>
 
       <Tabs defaultValue="amm" className="relative z-10">
-        <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/5 h-9">
-          <TabsTrigger value="amm" className="text-xs data-[state=active]:bg-[#F5A524] data-[state=active]:text-[#0A0C14] data-[state=active]:font-bold">
+        <TabsList className="grid w-full grid-cols-2 bg-panel-2 border border-hairline h-9">
+          <TabsTrigger value="amm" className="text-xs data-[state=active]:bg-gold data-[state=active]:text-[#0A0C14] data-[state=active]:font-bold">
             <Zap size={12} className="mr-1.5" /> Instant
           </TabsTrigger>
-          <TabsTrigger value="limit" className="text-xs data-[state=active]:bg-[#F5A524] data-[state=active]:text-[#0A0C14] data-[state=active]:font-bold">
+          <TabsTrigger value="limit" className="text-xs data-[state=active]:bg-gold data-[state=active]:text-[#0A0C14] data-[state=active]:font-bold">
             <ArrowUpDown size={12} className="mr-1.5" /> Limit
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="amm" className="mt-4 space-y-3">
           <div>
-            <label className="text-[11px] text-[#808495] font-mono uppercase tracking-wider mb-1.5 block">
+            <label className="text-[11px] text-ash font-mono uppercase tracking-wider mb-1.5 block">
               Amount (SOL)
             </label>
             <Input
@@ -157,14 +195,14 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="bg-white/5 border-white/10 text-[#F4F4F9] font-mono text-base h-12 focus:border-[#F5A524]"
+              className="bg-panel-2 border-hairline text-ivory font-mono text-[15px] h-12 focus:border-gold"
             />
             <div className="flex gap-1.5 mt-2">
               {[10, 50, 100, 500].map((q) => (
                 <button
                   key={q}
                   onClick={() => setAmount(String(q))}
-                  className="flex-1 py-1.5 text-[11px] font-mono text-[#808495] bg-white/5 rounded-md hover:bg-white/10 hover:text-[#F4F4F9] transition-colors"
+                  className="flex-1 py-1.5 text-[11px] font-mono text-ash bg-panel-2 rounded-[2px] hover:bg-ivory/5 hover:text-ivory transition-colors"
                 >
                   ${q}
                 </button>
@@ -178,26 +216,26 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2"
+                className="bg-panel-2 border border-hairline rounded-[2px] p-3 space-y-2"
               >
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#808495]">Shares out</span>
-                  <span className="text-[#F4F4F9] font-semibold">{sharesOut.toFixed(2)} {side}</span>
+                  <span className="text-ash">Shares out</span>
+                  <span className="text-ivory font-semibold">{sharesOut.toFixed(2)} {side}</span>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#808495]">Avg price</span>
-                  <span className="text-[#F4F4F9] font-semibold">${avgPrice.toFixed(3)}</span>
+                  <span className="text-ash">Avg price</span>
+                  <span className="text-ivory font-semibold">${avgPrice.toFixed(3)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#808495]">Price impact</span>
-                  <span className={priceImpact > 5 ? "text-[#E4574A]" : "text-[#4CAF50]"}>
+                  <span className="text-ash">Price impact</span>
+                  <span className={priceImpact > 5 ? "text-bordeaux" : "text-verdigris"}>
                     {priceImpact.toFixed(2)}%
                   </span>
                 </div>
-                <div className="h-px bg-white/5 my-2" />
+                <div className="h-px bg-panel-2 my-2" />
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-[#808495]">If {side} wins</span>
-                  <span className="text-[#4CAF50] font-semibold">+${potentialProfit.toFixed(2)}</span>
+                  <span className="text-ash">If {side} wins</span>
+                  <span className="text-verdigris font-semibold">+${potentialProfit.toFixed(2)}</span>
                 </div>
               </motion.div>
             )}
@@ -206,22 +244,22 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
           <Button
             onClick={() => handleSubmit("amm")}
             disabled={submitting || numAmount <= 0}
-            className={`w-full h-12 font-mono font-bold text-sm rounded-xl transition-all ${
+            className={`w-full h-12 font-mono font-bold text-[13px] rounded-[2px] transition-all ${
               side === "YES"
-                ? "bg-[#F5A524] text-[#0A0C14] hover:bg-[#F5A524]/90 shadow-[0_0_24px_-4px_#F5A524]"
-                : "bg-[#E4574A] text-white hover:bg-[#E4574A]/90 shadow-[0_0_24px_-4px_#E4574A]"
+                ? "bg-gold text-[#0A0C14] hover:bg-gold/90 shadow-[0_0_24px_-4px_#F5A524]"
+                : "bg-bordeaux text-ivory hover:bg-bordeaux/90 shadow-[0_0_24px_-4px_#E4574A]"
             }`}
           >
             {submitting ? "Submitting..." : `Buy ${side} · $${(numAmount || 0).toFixed(2)}`}
           </Button>
-          <p className="text-[10px] text-[#808495] text-center font-mono">
+          <p className="text-[10px] text-ash text-center font-mono">
             {(feeBps / 100).toFixed(2)}% fee · Settles in SOL · Pyth oracle resolution
           </p>
         </TabsContent>
 
         <TabsContent value="limit" className="mt-4 space-y-3">
           <div>
-            <label className="text-[11px] text-[#808495] font-mono uppercase tracking-wider mb-1.5 block">
+            <label className="text-[11px] text-ash font-mono uppercase tracking-wider mb-1.5 block">
               Limit Price ($ per share)
             </label>
             <Input
@@ -232,11 +270,11 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
               placeholder={currentPrice.toFixed(2)}
               value={limitPrice}
               onChange={(e) => setLimitPrice(e.target.value)}
-              className="bg-white/5 border-white/10 text-[#F4F4F9] font-mono text-base h-12 focus:border-[#F5A524]"
+              className="bg-panel-2 border-hairline text-ivory font-mono text-[15px] h-12 focus:border-gold"
             />
           </div>
           <div>
-            <label className="text-[11px] text-[#808495] font-mono uppercase tracking-wider mb-1.5 block">
+            <label className="text-[11px] text-ash font-mono uppercase tracking-wider mb-1.5 block">
               Amount (SOL)
             </label>
             <Input
@@ -244,33 +282,33 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="bg-white/5 border-white/10 text-[#F4F4F9] font-mono text-base h-12 focus:border-[#F5A524]"
+              className="bg-panel-2 border-hairline text-ivory font-mono text-[15px] h-12 focus:border-gold"
             />
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+          <div className="bg-panel-2 border border-hairline rounded-[2px] p-3 space-y-2">
             <div className="flex justify-between text-xs font-mono">
-              <span className="text-[#808495]">Shares requested</span>
-              <span className="text-[#F4F4F9] font-semibold">
+              <span className="text-ash">Shares requested</span>
+              <span className="text-ivory font-semibold">
                 {(numAmount / (parseFloat(limitPrice) || currentPrice)).toFixed(2)} {side}
               </span>
             </div>
             <div className="flex justify-between text-xs font-mono">
-              <span className="text-[#808495]">Expires in</span>
-              <span className="text-[#F4F4F9] font-semibold">7 days</span>
+              <span className="text-ash">Expires in</span>
+              <span className="text-ivory font-semibold">7 days</span>
             </div>
           </div>
           <Button
             onClick={() => handleSubmit("limit")}
             disabled={submitting || numAmount <= 0}
-            className={`w-full h-12 font-mono font-bold text-sm rounded-xl transition-all ${
+            className={`w-full h-12 font-mono font-bold text-[13px] rounded-[2px] transition-all ${
               side === "YES"
-                ? "bg-[#F5A524] text-[#0A0C14] hover:bg-[#F5A524]/90"
-                : "bg-[#E4574A] text-white hover:bg-[#E4574A]/90"
+                ? "bg-gold text-[#0A0C14] hover:bg-gold/90"
+                : "bg-bordeaux text-ivory hover:bg-bordeaux/90"
             }`}
           >
             {submitting ? "Placing..." : `Place ${side} Order @ $${parseFloat(limitPrice || "0").toFixed(2)}`}
           </Button>
-          <p className="text-[10px] text-[#808495] text-center font-mono">
+          <p className="text-[10px] text-ash text-center font-mono">
             Order enters the CLOB · Matched by keeper bot · Auto-cancel on expiry
           </p>
         </TabsContent>

@@ -79,6 +79,17 @@ export class Orderbook {
     }
   }
 
+  /**
+   * Reduce a level's total size by `quantity` WITHOUT removing the order from
+   * it — used when a resting maker is partially filled and stays on the book.
+   */
+  private decrementLevel(map: Map<string, PriceLevel>, price: anchor.BN, quantity: anchor.BN) {
+    const key = this.priceKey(price);
+    const level = map.get(key);
+    if (!level) return;
+    level.totalQuantity = level.totalQuantity.sub(quantity);
+  }
+
   private removeLevel(map: Map<string, PriceLevel>, price: anchor.BN) {
     map.delete(this.priceKey(price));
   }
@@ -93,14 +104,16 @@ export class Orderbook {
         const maker = this.orders.get(match.makerOrderId)!;
         maker.filled = maker.filled.add(match.quantity);
         maker.remaining = maker.remaining.sub(match.quantity);
+        const map = maker.side === "buy" ? this.bids : this.asks;
         if (maker.remaining.isZero()) {
+          // Fully filled: remove the maker from the level (the matched amount
+          // is its whole remaining size — NOT its original quantity).
           maker.status = "filled";
-          this.removeFromLevel(
-            maker.side === "buy" ? this.bids : this.asks,
-            maker.priceLamports,
-            maker.id,
-            maker.quantity,
-          );
+          this.removeFromLevel(map, maker.priceLamports, maker.id, match.quantity);
+        } else {
+          // Partially filled: shrink the level's size but keep the maker
+          // resting at this price.
+          this.decrementLevel(map, maker.priceLamports, match.quantity);
         }
         remaining = remaining.sub(match.quantity);
       }
@@ -155,18 +168,27 @@ export class Orderbook {
     let remaining = taker.quantity;
     for (const level of sortedLevels) {
       if (remaining.isZero()) break;
-      const makerId = level.orders[0];
-      const maker = this.orders.get(makerId)!;
-      const matchQty = anchor.BN.min(remaining, maker.remaining);
-      matches.push({
-        takerOrderId: taker.id,
-        makerOrderId: makerId,
-        side: taker.side,
-        token: taker.token,
-        priceLamports: maker.priceLamports,
-        quantity: matchQty,
-      });
-      remaining = remaining.sub(matchQty);
+      // matchOrder is pure (placeOrder applies state changes afterwards), so
+      // traverse the level by index. Exhaust EVERY resting order at the best
+      // price before crossing to the next-worst level (price-optimality).
+      let i = 0;
+      while (i < level.orders.length && !remaining.isZero()) {
+        const makerId = level.orders[i];
+        const maker = this.orders.get(makerId)!;
+        const matchQty = anchor.BN.min(remaining, maker.remaining);
+        matches.push({
+          takerOrderId: taker.id,
+          makerOrderId: makerId,
+          side: taker.side,
+          token: taker.token,
+          priceLamports: maker.priceLamports,
+          quantity: matchQty,
+        });
+        remaining = remaining.sub(matchQty);
+        // Only advance once this maker is fully consumed (a partial fill keeps
+        // matching against the same order on the next iteration).
+        if (maker.remaining.eq(matchQty)) i += 1;
+      }
     }
 
     return matches;

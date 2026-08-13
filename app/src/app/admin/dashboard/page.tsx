@@ -31,15 +31,15 @@ interface StatCardProps {
   value: string;
   sub?: string;
   icon: LucideIcon;
-  color: 'cyan' | 'purple' | 'amber' | 'green';
+  color: 'gold' | 'verdigris' | 'amber' | 'green';
   delay?: number;
 }
 
 const colorMap = {
-  cyan:   { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  glow: 'rgba(245,158,11,0.08)' },
-  purple: { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  glow: 'rgba(245,158,11,0.08)' },
-  amber:  { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  glow: 'rgba(245,158,11,0.08)' },
-  green:  { bg: 'bg-green-500/10',  border: 'border-green-500/20',  icon: 'text-green-400',  glow: 'rgba(16,185,129,0.08)' },
+  gold:     { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  wash: 'rgba(245,158,11,0.08)' },
+  verdigris:{ bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  wash: 'rgba(245,158,11,0.08)' },
+  amber:    { bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: 'text-amber-400',  wash: 'rgba(245,158,11,0.08)' },
+  green:    { bg: 'bg-green-500/10',  border: 'border-green-500/20',  icon: 'text-green-400',  wash: 'rgba(16,185,129,0.08)' },
 };
 
 function StatCard({ title, value, sub, icon: Icon, color, delay = 0 }: StatCardProps) {
@@ -49,17 +49,17 @@ function StatCard({ title, value, sub, icon: Icon, color, delay = 0 }: StatCardP
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4, ease: 'easeOut' }}
-      className={`relative overflow-hidden rounded-2xl bg-[#1A1C22] border ${c.border} p-5 group`}
+      className={`relative overflow-hidden rounded-[2px] bg-panel border ${c.border} p-5 group`}
     >
-      <div className="absolute inset-0 rounded-2xl transition-opacity duration-500 opacity-0 group-hover:opacity-100"
-           style={{ background: `radial-gradient(circle at 70% 30%, ${c.glow} 0%, transparent 60%)` }} />
+      <div className="absolute inset-0 rounded-[2px] transition-opacity duration-500 opacity-0 group-hover:opacity-100"
+           style={{ background: `radial-gradient(circle at 70% 30%, ${c.wash} 0%, transparent 60%)` }} />
       <div className="relative flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-2">{title}</p>
-          <p className="text-2xl font-bold text-white font-mono">{value}</p>
+          <p className="text-2xl font-bold text-ivory font-mono">{value}</p>
           {sub && <p className="text-xs text-gray-600 mt-1">{sub}</p>}
         </div>
-        <div className={`p-2.5 rounded-xl ${c.bg} flex-shrink-0`}>
+        <div className={`p-2.5 rounded-[2px] ${c.bg} flex-shrink-0`}>
           <Icon className={`w-5 h-5 ${c.icon}`} />
         </div>
       </div>
@@ -73,9 +73,9 @@ function RecentTable({ title, children }: { title: string; children: React.React
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4, duration: 0.4 }}
-      className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-5"
+      className="rounded-[2px] bg-panel border border-hairline p-5"
     >
-      <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+      <h3 className="text-[13px] font-semibold text-ivory mb-4 flex items-center gap-2">
         <BarChart3 className="w-4 h-4 text-amber-400" />
         {title}
       </h3>
@@ -110,12 +110,12 @@ export default function AdminDashboardPage() {
       <div className="space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 rounded-2xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+            <div key={i} className="h-32 rounded-[2px] bg-panel border border-hairline animate-pulse" />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-64 rounded-2xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+            <div key={i} className="h-64 rounded-[2px] bg-panel border border-hairline animate-pulse" />
           ))}
         </div>
       </div>
@@ -124,9 +124,9 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-6 text-center">
-        <p className="text-red-400 text-sm mb-3">Failed to load dashboard: {error}</p>
-        <button onClick={fetchData} className="text-xs px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">
+      <div className="rounded-[2px] bg-red-500/10 border border-red-500/20 p-6 text-center">
+        <p className="text-red-400 text-[13px] mb-3">Failed to load dashboard: {error}</p>
+        <button onClick={fetchData} className="text-xs px-4 py-2 rounded-[2px] bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors">
           Retry
         </button>
       </div>
@@ -141,7 +141,7 @@ export default function AdminDashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Dashboard Overview</h2>
+          <h2 className="text-[21px] font-bold text-ivory">Dashboard Overview</h2>
           {lastUpdated && (
             <p className="text-xs text-gray-600 mt-1">
               Updated {lastUpdated.toLocaleTimeString()}
@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
         </div>
         <button
           onClick={fetchData}
-          className="flex items-center gap-2 text-xs px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-gray-400 hover:text-white hover:bg-white/[0.07] transition-all"
+          className="flex items-center gap-2 text-xs px-3 py-2 rounded-[2px] bg-panel border border-hairline text-gray-400 hover:text-ivory hover:bg-ivory/5 transition-all"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
@@ -164,7 +164,7 @@ export default function AdminDashboardPage() {
           value={String(stats?.markets.total ?? 0)}
           sub={`${stats?.markets.open ?? 0} open · ${stats?.markets.resolved ?? 0} resolved`}
           icon={TrendingUp}
-          color="cyan"
+          color="gold"
           delay={0}
         />
         <StatCard
@@ -172,7 +172,7 @@ export default function AdminDashboardPage() {
           value={`${(stats?.trades.volume24h ?? 0).toFixed(2)} SOL`}
           sub={`${stats?.trades.total ?? 0} total trades`}
           icon={DollarSign}
-          color="purple"
+          color="verdigris"
           delay={0.05}
         />
         <StatCard
@@ -194,31 +194,31 @@ export default function AdminDashboardPage() {
 
       {/* Secondary stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-4 flex items-center gap-4">
-          <div className="p-2.5 rounded-xl bg-blue-500/10">
+        <div className="rounded-[2px] bg-panel border border-hairline p-4 flex items-center gap-4">
+          <div className="p-2.5 rounded-[2px] bg-blue-500/10">
             <MessageSquare className="w-5 h-5 text-blue-400" />
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Comments</p>
-            <p className="text-xl font-bold text-white font-mono">{stats?.comments.total ?? 0}</p>
+            <p className="text-[21px] font-bold text-ivory font-mono">{stats?.comments.total ?? 0}</p>
           </div>
         </div>
-        <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-4 flex items-center gap-4">
-          <div className="p-2.5 rounded-xl bg-green-500/10">
+        <div className="rounded-[2px] bg-panel border border-hairline p-4 flex items-center gap-4">
+          <div className="p-2.5 rounded-[2px] bg-green-500/10">
             <CheckCircle2 className="w-5 h-5 text-green-400" />
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Open Markets</p>
-            <p className="text-xl font-bold text-white font-mono">{stats?.markets.open ?? 0}</p>
+            <p className="text-[21px] font-bold text-ivory font-mono">{stats?.markets.open ?? 0}</p>
           </div>
         </div>
-        <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-4 flex items-center gap-4">
-          <div className="p-2.5 rounded-xl bg-yellow-500/10">
+        <div className="rounded-[2px] bg-panel border border-hairline p-4 flex items-center gap-4">
+          <div className="p-2.5 rounded-[2px] bg-yellow-500/10">
             <Clock className="w-5 h-5 text-yellow-400" />
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Resolved</p>
-            <p className="text-xl font-bold text-white font-mono">{stats?.markets.resolved ?? 0}</p>
+            <p className="text-[21px] font-bold text-ivory font-mono">{stats?.markets.resolved ?? 0}</p>
           </div>
         </div>
       </div>
@@ -235,13 +235,13 @@ export default function AdminDashboardPage() {
           ) : (
             <div className="space-y-2">
               {recent.markets.map((m) => (
-                <div key={m.marketPubkey} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/[0.03] transition-colors">
-                  <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                <div key={m.marketPubkey} className="flex items-start gap-3 p-3 rounded-[2px] hover:bg-panel transition-colors">
+                  <span className={`mt-0.5 w-2 h-2 rounded-[2px] flex-shrink-0 ${
                     m.status === 'open' ? 'bg-green-400' :
                     m.status === 'settled' ? 'bg-amber-400' : 'bg-gray-600'
                   }`} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-white truncate">{m.question}</p>
+                    <p className="text-xs text-ivory truncate">{m.question}</p>
                     <p className="text-[10px] text-gray-600 mt-0.5">{m.category} · {m.status}</p>
                   </div>
                 </div>
@@ -257,13 +257,13 @@ export default function AdminDashboardPage() {
           ) : (
             <div className="space-y-2">
               {recent.topTraders.map((t, i) => (
-                <div key={t.wallet} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+                <div key={t.wallet} className="flex items-center gap-3 p-2.5 rounded-[2px] hover:bg-panel transition-colors">
                   <span className="text-xs text-gray-600 font-mono w-5 text-right">{i + 1}</span>
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
+                  <div className="w-7 h-7 rounded-[2px] bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-[10px] font-bold text-ivory flex-shrink-0">
                     {t.wallet.slice(0, 2)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-white font-mono truncate">
+                    <p className="text-xs text-ivory font-mono truncate">
                       {t.username || `${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}`}
                     </p>
                   </div>

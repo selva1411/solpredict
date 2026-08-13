@@ -36,11 +36,11 @@ export function RelatedMarkets({ category, excludePubkey }: RelatedMarketsProps)
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold uppercase tracking-wider font-display text-[#FFA500] flex items-center gap-2">
+        <h3 className="text-[13px] font-bold uppercase tracking-wider font-display text-gold flex items-center gap-2">
           <Link2 className="w-4 h-4" />
           <span>Related Markets</span>
         </h3>
-        <span className="text-[10px] font-mono text-[#808495]">{category} · you might also like</span>
+        <span className="text-[10px] font-mono text-ash">{category} · you might also like</span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {markets.map((m, i) => (

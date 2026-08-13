@@ -16,7 +16,8 @@ export function useUserRole() {
     let cancelled = false;
 
     async function determineRole() {
-      const adminEnvWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET || "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS";
+      const adminEnvWallets = (process.env.NEXT_PUBLIC_ADMIN_WALLET || "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS")
+        .split(",").map((w) => w.trim()).filter(Boolean);
 
       // Development (localnet): mirror the server-side `requireAdmin` dev
       // bypass so the admin panel is reachable without importing a specific
@@ -43,14 +44,14 @@ export function useUserRole() {
 
         setConfigExists(true);
         const onChainAdmin = configAcc.admin.toBase58();
-        const isMatch = onChainAdmin === walletKey || walletKey === adminEnvWallet;
+        const isMatch = onChainAdmin === walletKey || adminEnvWallets.includes(walletKey);
 
         setRole(isMatch ? "admin" : "user");
       } catch {
         if (cancelled) return;
         // Bootstrap: config PDA not initialized yet, allow the documented admin wallet.
         setConfigExists(false);
-        const isMatch = walletKey === adminEnvWallet;
+        const isMatch = adminEnvWallets.includes(walletKey);
         setRole(isMatch ? "admin" : "user");
       } finally {
         if (!cancelled) setIsLoading(false);

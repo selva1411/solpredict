@@ -71,7 +71,7 @@ export function DisputesSection() {
   if (loading) {
     return (
       <motion.section variants={cardVariants} initial="hidden" animate="visible" className="glass-panel p-8">
-        <div className="flex items-center justify-center gap-3 text-[#808495]">
+        <div className="flex items-center justify-center gap-3 text-ash">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-xs font-mono">Loading disputes...</span>
         </div>
@@ -84,56 +84,56 @@ export function DisputesSection() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-[#FFB454]">
           <Scale className="w-5 h-5" />
-          <h2 className="text-lg font-bold font-display uppercase tracking-wider text-[#F4F4F9]">
+          <h2 className="text-[21px] font-bold font-display uppercase tracking-wider text-ivory">
             Disputes ({disputes.length})
           </h2>
         </div>
         <button
           onClick={fetchDisputes}
-          className="inline-flex items-center gap-2 text-xs text-[#808495] hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 text-xs text-ash hover:text-ivory transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
         </button>
       </div>
 
-      {error && <p className="text-xs text-[#E4574A] font-mono">{error}</p>}
+      {error && <p className="text-xs text-bordeaux font-mono">{error}</p>}
 
       {disputes.length === 0 ? (
         <div className="glass-panel p-8 text-center">
-          <p className="text-sm text-[#808495]">No disputes filed yet.</p>
+          <p className="text-[13px] text-ash">No disputes filed yet.</p>
         </div>
       ) : (
         <div className="glass-panel overflow-hidden">
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-hairline">
             {disputes.map((d) => (
               <div key={d.id} className="p-4 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#F4F4F9]">#{d.id}</span>
+                    <span className="text-xs font-bold text-ivory">#{d.id}</span>
                     <span
                       className={`text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded ${
                         d.status === "pending"
                           ? "bg-amber-500/10 text-[#FFB454] border border-amber-500/20"
                           : d.status === "resolved"
                           ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-red-500/10 text-[#E4574A] border border-red-500/20"
+                          : "bg-red-500/10 text-bordeaux border border-red-500/20"
                       }`}
                     >
                       {d.status}
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#808495]">
+                  <span className="text-[10px] font-mono text-ash">
                     {d.createdAt ? new Date(d.createdAt).toLocaleString() : "—"}
                   </span>
                 </div>
-                <p className="text-xs text-[#FFA500] font-mono break-all">{d.marketQuestion || d.marketPubkey}</p>
-                <p className="text-xs text-[#F4F4F9]">
-                  <span className="text-[#808495]">Disputer:</span>{" "}
+                <p className="text-xs text-gold font-mono break-all">{d.marketQuestion || d.marketPubkey}</p>
+                <p className="text-xs text-ivory">
+                  <span className="text-ash">Disputer:</span>{" "}
                   <span className="font-mono">{d.disputer.slice(0, 6)}...{d.disputer.slice(-4)}</span>
                 </p>
-                <p className="text-xs text-[#808495]">Reason: {d.reason}</p>
-                {d.evidence && <p className="text-[10px] text-[#808495] italic">Evidence: {d.evidence}</p>}
+                <p className="text-xs text-ash">Reason: {d.reason}</p>
+                {d.evidence && <p className="text-[10px] text-ash italic">Evidence: {d.evidence}</p>}
                 {d.resolution && (
                   <p className="text-[10px] text-emerald-400 font-mono">
                     Resolution: {d.resolution} — by {d.resolvedBy}
@@ -144,14 +144,14 @@ export function DisputesSection() {
                     <button
                       onClick={() => resolveDispute(d.id, "resolved")}
                       disabled={resolvingId === d.id}
-                      className="text-[10px] py-1 px-3 rounded-md border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                      className="text-[10px] py-1 px-3 rounded-[2px] border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
                     >
                       Resolve
                     </button>
                     <button
                       onClick={() => resolveDispute(d.id, "rejected")}
                       disabled={resolvingId === d.id}
-                      className="text-[10px] py-1 px-3 rounded-md border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      className="text-[10px] py-1 px-3 rounded-[2px] border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                     >
                       Reject
                     </button>

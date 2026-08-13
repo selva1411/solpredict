@@ -12,9 +12,9 @@ export default function DualFillGauge({ yesPrice, noPrice }: DualFillGaugeProps)
   return (
     <div className="w-full space-y-1.5 select-none font-mono">
       {/* Probability Bar */}
-      <div className="relative h-6 w-full bg-[var(--surface-0)] border border-[var(--color-gray-800)] rounded-lg overflow-hidden flex">
+      <div className="relative h-6 w-full bg-[var(--surface-0)] border border-[var(--color-gray-800)] rounded-[2px] overflow-hidden flex">
         <div
-          className="h-full bg-[var(--accent)] transition-all duration-500 ease-out flex items-center justify-start px-2 font-bold text-xs text-[#0B0C0F]"
+          className="h-full bg-[var(--accent)] transition-all duration-500 ease-out flex items-center justify-start px-2 font-bold text-xs text-void"
           style={{ width: `${yesPct}%` }}
         >
           {yesPct >= 15 && `${yesPct}%`}

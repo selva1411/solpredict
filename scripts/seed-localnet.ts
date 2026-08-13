@@ -9,7 +9,7 @@
  *   npx tsx scripts/seed-localnet.ts
  *
  * Requires: a running `solana-test-validator` with the program deployed at
- * `BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig`.
+ * `AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG`.
  */
 import * as anchor from "@coral-xyz/anchor";
 import {
@@ -29,7 +29,7 @@ const IDL = JSON.parse(
 );
 
 const RPC = process.env.LOCALNET_RPC_URL ?? "http://127.0.0.1:8899";
-const PROGRAM_ID = new PublicKey("BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig");
+const PROGRAM_ID = new PublicKey("AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

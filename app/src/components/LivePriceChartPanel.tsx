@@ -139,7 +139,7 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
   return (
     <div className="glass-panel p-6 sm:p-8 space-y-4">
       <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
-        <TrendingUp className="w-4 h-4 text-[#FFA500]" />
+        <TrendingUp className="w-4 h-4 text-gold" />
         <span>Live Price Chart</span>
       </h3>
 
@@ -148,17 +148,17 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
         <div className="flex items-center gap-2">
           {priceStatus === "live" && (
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ffd89c] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ffd89c]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-[2px] bg-gold-lite opacity-75" />
+              <span className="relative inline-flex rounded-[2px] h-2 w-2 bg-gold-lite" />
             </span>
           )}
           {priceStatus === "loading" && (
-            <span className="h-2 w-2 rounded-full bg-[#808495] animate-pulse" />
+            <span className="h-2 w-2 rounded-[2px] bg-ash animate-pulse" />
           )}
           {priceStatus === "error" && (
-            <span className="h-2 w-2 rounded-full bg-[#ffb4ab]" />
+            <span className="h-2 w-2 rounded-[2px] bg-bordeaux" />
           )}
-          <span className="text-xs font-mono text-[#808495]">
+          <span className="text-xs font-mono text-ash">
             {priceStatus === "loading" && "Fetching price..."}
             {priceStatus === "live" && `LIVE · SOL/USD · every ${POLL_MS / 1000}s`}
             {priceStatus === "error" && "Price feed unavailable"}
@@ -166,10 +166,10 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
         </div>
         {currentPrice > 0 && (
           <div className="ml-auto flex items-center gap-2">
-            <span className={`text-lg font-bold font-mono ${currentPrice >= prevPrice ? "text-[#a1d494]" : "text-[#ffb4ab]"}`}>
+            <span className={`text-[21px] font-bold font-mono ${currentPrice >= prevPrice ? "text-verdigris" : "text-bordeaux"}`}>
               ${currentPrice.toFixed(4)}
             </span>
-            <span className={`text-xs font-mono ${currentPrice >= prevPrice ? "text-[#a1d494]" : "text-[#ffb4ab]"}`}>
+            <span className={`text-xs font-mono ${currentPrice >= prevPrice ? "text-verdigris" : "text-bordeaux"}`}>
               {currentPrice >= prevPrice ? "▲" : "▼"} {Math.abs(currentPrice - prevPrice).toFixed(4)}
             </span>
           </div>
@@ -177,8 +177,8 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
       </div>
 
       {priceStatus === "error" ? (
-        <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-sm text-[#808495]">
-          ⚠ Could not connect to price feed.
+        <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-[13px] text-ash">
+          Could not connect to price feed.
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={280}>

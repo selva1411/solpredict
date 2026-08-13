@@ -22,7 +22,7 @@ export function ProbabilityGauge({ yesProbability }: Props) {
           @keyframes twinkle { 0%,100% { opacity: 0; } 50% { opacity: 0.8; } }
           @keyframes comet { 0% { opacity: 0; transform: translate(0,0); } 20% { opacity: 0.7; } 80% { opacity: 0.7; } 100% { opacity: 0; transform: translate(20px,-20px); } }
           @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-          @keyframes ringGlow { 0%,100% { filter: drop-shadow(0 0 6px currentColor); } 50% { filter: drop-shadow(0 0 18px currentColor); } }
+          @keyframes ringPulse { 0%,100% { filter: drop-shadow(0 0 6px currentColor); } 50% { filter: drop-shadow(0 0 18px currentColor); } }
           .spin-slow { animation: swirl 20s linear infinite; }
           .pulse-cosmic { animation: pulse-bg 4s ease-in-out infinite; }
           .float-text { animation: float 3s ease-in-out infinite; }
@@ -30,7 +30,7 @@ export function ProbabilityGauge({ yesProbability }: Props) {
           .twinkle-2 { animation: twinkle 4s ease-in-out 1.5s infinite; }
           .twinkle-3 { animation: twinkle 5s ease-in-out 3s infinite; }
           .twinkle-4 { animation: twinkle 3.5s ease-in-out 2s infinite; }
-          .glow-ring { animation: ringGlow 2.5s ease-in-out infinite; color: ${arcColor}; }
+          .pulse-ring { animation: ringPulse 2.5s ease-in-out infinite; color: ${arcColor}; }
           .comet { animation: comet 6s ease-in-out infinite; }
           .comet2 { animation: comet 8s ease-in-out 3s infinite; }
         `}
@@ -52,7 +52,7 @@ export function ProbabilityGauge({ yesProbability }: Props) {
             <stop offset="100%" stopColor="#050510" stopOpacity="0.95" />
           </radialGradient>
 
-          <radialGradient id="nebulaGlow" cx="50%" cy="50%" r="50%">
+          <radialGradient id="nebulaWash" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor={arcColor} stopOpacity="0.12" />
             <stop offset="50%" stopColor={arcColor} stopOpacity="0.04" />
             <stop offset="100%" stopColor={arcColor} stopOpacity="0" />
@@ -64,18 +64,18 @@ export function ProbabilityGauge({ yesProbability }: Props) {
             <stop offset="100%" stopColor="#a1d494" />
           </linearGradient>
 
-          <filter id="glow">
+          <filter id="soft">
             <feGaussianBlur stdDeviation="4" result="b" />
             <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
-          <filter id="glowStrong">
+          <filter id="softStrong">
             <feGaussianBlur stdDeviation="8" result="b" />
             <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
 
         {/* Nebula background */}
-        <circle cx="95" cy="95" r="110" fill="url(#nebulaGlow)" />
+        <circle cx="95" cy="95" r="110" fill="url(#nebulaWash)" />
 
         {/* Pulsing cosmic ring */}
         <circle cx="95" cy="95" r="80" fill="none" stroke={arcColor} strokeWidth="2" className="pulse-cosmic" opacity="0.12" />
@@ -87,13 +87,13 @@ export function ProbabilityGauge({ yesProbability }: Props) {
           strokeDashoffset={circumference * 0.05}
         />
 
-        {/* Active arc thick glow */}
+        {/* Active arc thick */}
         <circle
           cx="95" cy="95" r="72" fill="none" stroke={arcColor} strokeWidth="16"
           strokeLinecap="round"
           strokeDasharray={circumference} strokeDashoffset={offset}
           transform="rotate(-90, 95, 95)"
-          opacity="0.15" filter="url(#glowStrong)"
+          opacity="0.15" filter="url(#softStrong)"
           className="transition-all duration-700 ease-out"
         />
 
@@ -103,8 +103,8 @@ export function ProbabilityGauge({ yesProbability }: Props) {
           strokeLinecap="round"
           strokeDasharray={circumference} strokeDashoffset={offset}
           transform="rotate(-90, 95, 95)"
-          filter="url(#glow)"
-          className="transition-all duration-700 ease-out glow-ring"
+          filter="url(#soft)"
+          className="transition-all duration-700 ease-out pulse-ring"
         />
 
         {/* Stardust particles along arc */}
@@ -126,7 +126,7 @@ export function ProbabilityGauge({ yesProbability }: Props) {
           cx={95 + 72 * Math.cos((yes / 100) * 2 * Math.PI - Math.PI / 2)}
           cy={95 + 72 * Math.sin((yes / 100) * 2 * Math.PI - Math.PI / 2)}
           r="6" fill="#131313" stroke={arcColor} strokeWidth="3"
-          filter="url(#glow)" className="transition-all duration-700 ease-out"
+          filter="url(#soft)" className="transition-all duration-700 ease-out"
         />
 
         {/* Inner nebula center */}
@@ -164,9 +164,9 @@ export function ProbabilityGauge({ yesProbability }: Props) {
           fill="#d6c4ac" fontSize="7" fontFamily="monospace" opacity="0.3" letterSpacing="2"
         >PROBABILITY</text>
 
-        {/* Bottom glow bar */}
+        {/* Bottom wash bar */}
         <rect x="60" y="162" width="70" height="3" rx="1.5" fill="#1c1c1c" />
-        <rect x="60" y="162" width={`${(yes / 100) * 70}`} height="3" rx="1.5" fill={arcColor} filter="url(#glow)" className="transition-all duration-700 ease-out" />
+        <rect x="60" y="162" width={`${(yes / 100) * 70}`} height="3" rx="1.5" fill={arcColor} filter="url(#soft)" className="transition-all duration-700 ease-out" />
 
         {/* Tick marks */}
         {Array.from({ length: 16 }).map((_, i) => {

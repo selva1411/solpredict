@@ -25,7 +25,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Localnet
 - Validator: `http://127.0.0.1:8899` (Solana 4.0.2)
-- Program: `BUQ2gf7NDyoTc1AVRcDN6eZnuX8nG4e77chmPkCByP8v` (pubkey of `target/deploy/solpredict-keypair.json`)
+- Program: `AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG` (pubkey of `target/deploy/solpredict-keypair.json`)
 - RPC proxy: `http://localhost:3000/api/rpc` → validator
 - CLI keypair: `2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS` (admin, 500M+ SOL) — also the on-chain `config.admin` (seed uses it as the admin signer; import it into a wallet to drive the admin UI)
 - Dev mode: `useUserRole` and the server `requireAdmin` both grant admin in `development`, so the Admin panel is reachable without a specific wallet; production resolves role from on-chain config ownership
@@ -34,5 +34,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Validator reset recipe: `kill <pid>`, `rm -rf /tmp/opencode/sol-ledger`, start `solana-test-validator --ledger /tmp/opencode/sol-ledger --reset --quiet`, then `anchor deploy` and `npx tsx scripts/seed-localnet.ts`
 
 ## Env
-- `.env.local` → `NEXT_PUBLIC_CLUSTER=localnet`, `RPC_URL=http://localhost:3000/api/rpc`, `PROGRAM_ID=BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig`
+- `.env.local` → `NEXT_PUBLIC_CLUSTER=localnet`, `RPC_URL=http://localhost:3000/api/rpc`, `PROGRAM_ID=AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG`
 - `DATABASE_URL` points to Neon (pooled)

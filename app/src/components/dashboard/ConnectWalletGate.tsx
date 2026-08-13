@@ -50,32 +50,32 @@ export function ConnectWalletGate({
         animate={{ opacity: 1, y: 0, rotateX: 0 }}
         transition={{ duration: 0.55, ease: "easeOut" }}
         style={{ perspective: 1200 }}
-        className="holo-card py-10 text-center space-y-6 max-w-xl mx-auto w-full px-6 bg-[#1A1C22] holo-card-3d border-white/10"
+        className="holo-card py-10 text-center space-y-6 max-w-xl mx-auto w-full px-6 bg-panel holo-card-3d border-hairline"
       >
-        <div className="relative h-44 w-full overflow-hidden rounded border border-white/10/40 bg-[#1A1C22]">
+        <div className="relative h-44 w-full overflow-hidden rounded border border-hairline/40 bg-panel">
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <GateScene />
           </div>
-          <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3 py-1.5 font-mono text-[9px] uppercase tracking-widest text-[#808495]">
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3 py-1.5 font-mono text-[9px] uppercase tracking-widest text-ash">
             <span>GENESIS BOARD</span>
-            <span className="text-[#4CAF50]">● CALIBRATED</span>
+            <span className="text-verdigris">● CALIBRATED</span>
           </div>
-          <div className="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-[#0C0D12]/70 to-transparent pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-void/70 to-transparent pointer-events-none" />
         </div>
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mx-auto w-14 h-14 bg-[#1A1C22] border border-white/10/40 rounded flex items-center justify-center text-[#FFA500] shadow-[0_0_20px_rgba(255,165,0,0.15)]"
+          className="mx-auto w-14 h-14 bg-panel border border-hairline/40 rounded flex items-center justify-center text-gold shadow-[0_0_20px_rgba(255,165,0,0.15)]"
         >
           <Icon className="w-7 h-7" />
         </motion.div>
 
         <div className="space-y-3">
-          <h2 className="text-2xl font-bold font-display text-[#F4F4F9] uppercase tracking-wide">{title}</h2>
-          <p className="text-[#d6c4ac] text-sm max-w-sm mx-auto leading-relaxed">{description}</p>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-[#FFA500]/70 pt-2 font-bold">
+          <h2 className="text-2xl font-bold font-display text-ivory uppercase tracking-wide">{title}</h2>
+          <p className="text-[#d6c4ac] text-[13px] max-w-sm mx-auto leading-relaxed">{description}</p>
+          <p className="text-[10px] font-mono uppercase tracking-widest text-gold/70 pt-2 font-bold">
             Connect wallet above — routing is automatic by authority role
           </p>
         </div>

@@ -19,19 +19,19 @@ export default function ProbabilityOrb3D({ yesProb, size = 120 }: ProbabilityOrb
       {/* Semicircle Gauge Frame */}
       <div 
         style={{ width: size, height: size / 2 }} 
-        className="relative overflow-hidden rounded-t-full border-t border-l border-r border-[#9e8e78]/40 bg-[#0d0d0d]"
+        className="relative overflow-hidden rounded-[2px] border-t border-l border-r border-gold-deep/40 bg-void"
       >
         {/* Split Outcome Color Semicircle */}
         <div className="absolute inset-0 flex">
           {/* YES segment (Verdant Green) */}
           <div 
             style={{ transform: `rotate(${yesProb - 100}deg)`, transformOrigin: "bottom right" }} 
-            className="w-1/2 h-full bg-[#a1d494] transition-transform duration-500 ease-out"
+            className="w-1/2 h-full bg-verdigris transition-transform duration-500 ease-out"
           />
           {/* NO segment (Rust Red) */}
           <div 
             style={{ transform: `rotate(${yesProb}deg)`, transformOrigin: "bottom left" }} 
-            className="w-1/2 h-full bg-[#ffb4ab] transition-transform duration-500 ease-out ml-auto"
+            className="w-1/2 h-full bg-bordeaux transition-transform duration-500 ease-out ml-auto"
           />
         </div>
 
@@ -43,17 +43,17 @@ export default function ProbabilityOrb3D({ yesProb, size = 120 }: ProbabilityOrb
             bottom: 0, 
             left: 16 
           }} 
-          className="absolute rounded-t-full bg-[#131313] border-t border-l border-r border-[#9e8e78]/40 flex items-end justify-center pb-1"
+          className="absolute rounded-[2px] bg-[#131313] border-t border-l border-r border-gold-deep/40 flex items-end justify-center pb-1"
         >
           {/* Numeric Readout */}
-          <span className="text-xs font-mono font-bold text-[#ffd89c] tracking-wider">
+          <span className="text-xs font-mono font-bold text-gold-lite tracking-wider">
             {yesProb}% YES
           </span>
         </div>
       </div>
 
       {/* Mechanical Needle Hub */}
-      <div className="absolute bottom-0 w-4 h-4 rounded-full bg-[#ffd89c] border-2 border-[#0d0d0d] z-10 flex items-center justify-center">
+      <div className="absolute bottom-0 w-4 h-4 rounded-[2px] bg-gold-lite border-2 border-void z-10 flex items-center justify-center">
         {/* Pointer Needle */}
         <div 
           style={{ 
@@ -62,7 +62,7 @@ export default function ProbabilityOrb3D({ yesProb, size = 120 }: ProbabilityOrb
             height: size / 2 - 10,
             bottom: 6
           }} 
-          className="absolute w-1 bg-[#ffd89c] transition-transform duration-500 ease-out rounded-t shadow-lg"
+          className="absolute w-1 bg-gold-lite transition-transform duration-500 ease-out rounded-t shadow-lg"
         />
       </div>
 

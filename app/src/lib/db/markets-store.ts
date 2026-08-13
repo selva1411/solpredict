@@ -23,6 +23,14 @@ export interface MarketCacheEntry {
   volume24h?: number;
   traders?: number;
   liquidity?: number;
+  // Real on-chain pool/supply snapshots (lamports) mirrored by the indexer and
+  // the frontend trade sync. Shared by every page so numbers agree.
+  yesPoolLamports?: number;
+  noPoolLamports?: number;
+  yesSupply?: number;
+  noSupply?: number;
+  yesPoolSol?: number;
+  noPoolSol?: number;
 }
 
 export async function getAllMarkets(options?: {
@@ -115,6 +123,12 @@ export async function getAllMarkets(options?: {
         liquidity: vol,
         volume24h: tStats?.volume24h ?? 0,
         traders: tStats?.traders ?? 0,
+        yesPoolLamports: r.yesPoolLamports ?? 0,
+        noPoolLamports: r.noPoolLamports ?? 0,
+        yesSupply: r.yesSupply ?? 0,
+        noSupply: r.noSupply ?? 0,
+        yesPoolSol: (r.yesPoolLamports ?? 0) / 1e9,
+        noPoolSol: (r.noPoolLamports ?? 0) / 1e9,
       };
     });
   } catch (e) {
@@ -239,8 +253,10 @@ export async function getMarketPriceHistory(marketPubkey: string, limit = 120): 
 export async function updateMarketPools(marketPubkey: string, yesPoolSol: number, noPoolSol: number) {
   if (!db) return;
   try {
+    // Write REAL pool reserves (lamports). Never conflate with totalVolume.
     await db.update(marketsCache).set({
-      totalVolume: (yesPoolSol + noPoolSol).toString(),
+      yesPoolLamports: Math.round(yesPoolSol * 1e9),
+      noPoolLamports: Math.round(noPoolSol * 1e9),
       updatedAt: new Date(),
     }).where(eq(marketsCache.marketPubkey, marketPubkey));
   } catch {}

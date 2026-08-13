@@ -58,4 +58,17 @@ describe("syncTradeSchema", () => {
     const msg = `${result.data!.side === "YES" ? "Bought" : "Sold"} ${result.data!.side} shares`;
     expect(msg).toBe("Sold NO shares");
   });
+
+  it("accepts a SELL (negative lamportsIn/tokensOut)", () => {
+    const result = syncTradeSchema.safeParse({
+      marketPubkey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      trader: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      side: "YES",
+      lamportsIn: -123456789,
+      tokensOut: -40000000,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data!.lamportsIn).toBe(-123456789);
+    expect(result.data!.tokensOut).toBe(-40000000);
+  });
 });

@@ -7,19 +7,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
+import { AirdropSolButton } from "@/components/AirdropSolButton";
 import { useProgram } from "@/hooks/useProgram";
 import { useAppState } from "@/contexts/AppContext";
 import { keys } from "@/lib/api/keys";
-import { TrendingUp, Trophy, Settings, Star, Activity, Wallet, Zap, Bell, BookOpen } from "lucide-react";
+import { Settings, Star, Wallet, Activity } from "lucide-react";
 
 import { Logo3D } from "@/components/Logo3D";
 import { MobileNav } from "@/components/MobileNav";
 
 const NAV_ITEMS = [
-  { href: "/markets", label: "Markets", icon: TrendingUp },
-  { href: "/dashboard", label: "Dashboard", icon: Activity },
-  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
-  { href: "/docs/help", label: "Help", icon: BookOpen },
+  { href: "/markets", label: "Markets" },
+  { href: "/portfolio", label: "Portfolio" },
+  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/activity", label: "Activity" },
+  { href: "/watchlist", label: "Watchlist" },
 ];
 
 function NotificationBell() {
@@ -47,10 +50,14 @@ function NotificationBell() {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className="relative p-2 rounded-lg hover:bg-[var(--color-gray-800)] transition-colors cursor-pointer">
-        <Bell className="w-4 h-4 text-[var(--color-gray-400)] hover:text-[var(--color-gray-100)]" />
+      <button onClick={() => setOpen(!open)} className="relative p-2 rounded-[2px] hover:bg-ivory/5 transition-colors cursor-pointer">
+        <span className="block w-3.5 h-3.5" aria-hidden />
+        <svg className="absolute inset-2.5 w-3.5 h-3.5 text-ash" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+          <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+        </svg>
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[var(--negative)] text-white text-[8px] font-bold flex items-center justify-center rounded-full">
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 bg-bordeaux text-ivory text-[8px] font-bold flex items-center justify-center rounded-[2px]">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -58,19 +65,19 @@ function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-[var(--surface-1)] border border-[var(--color-gray-800)] rounded-xl shadow-2xl z-50 overflow-hidden">
-            <div className="p-3 border-b border-[var(--color-gray-800)] flex items-center justify-between">
-              <span className="text-xs font-bold text-[var(--color-gray-100)] uppercase tracking-wider">Notifications</span>
-              <span className="text-[10px] text-[var(--color-gray-400)]">{notifications.length} total</span>
+          <div className="absolute right-0 top-full mt-2 w-80 surface z-50 overflow-hidden">
+            <div className="p-3 border-b border-hairline flex items-center justify-between">
+              <span className="label-lux">Notifications</span>
+              <span className="text-[10px] text-ash-dim">{notifications.length} total</span>
             </div>
             <div className="max-h-64 overflow-y-auto">
               {notifications.length === 0 ? (
-                <div className="p-6 text-center text-[10px] text-[var(--color-gray-400)] font-mono">No notifications yet</div>
+                <div className="p-6 text-center text-[10px] text-ash-dim font-mono">No notifications yet</div>
               ) : (
                 notifications.slice(0, 20).map((n) => (
-                  <div key={n.id} className={`px-3 py-2.5 border-b border-[var(--color-gray-800)] last:border-0 ${!n.read ? 'bg-[var(--accent)]/10' : ''}`}>
-                    <div className="text-[11px] text-[var(--color-gray-100)] font-medium">{n.message}</div>
-                    <div className="text-[9px] text-[var(--color-gray-400)] font-mono mt-0.5">{new Date(n.createdAt).toLocaleString()}</div>
+                  <div key={n.id} className={`px-3 py-2.5 border-b border-hairline last:border-0 ${!n.read ? "bg-gold/5" : ""}`}>
+                    <div className="text-[11px] text-ivory font-medium">{n.message}</div>
+                    <div className="text-[9px] text-ash-dim font-mono mt-0.5">{new Date(n.createdAt).toLocaleString()}</div>
                   </div>
                 ))
               )}
@@ -94,97 +101,74 @@ export function Navigation() {
 
   return (
     <>
-      <header className="sticky top-4 z-50 w-full px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto bg-[#1A1C22]/70 backdrop-blur-[60px] border border-white/5 rounded-2xl px-5 h-14 flex items-center justify-between shadow-lg">
-          <div className="flex items-center gap-4">
+      {/* Desktop header — one row, 64px, bottom hairline, NOT sticky-blurred */}
+      <header className="w-full border-b border-hairline bg-void">
+        <div className="mx-auto w-full max-w-[1240px] px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="w-7 h-7 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <div className="w-6 h-6 flex items-center justify-center">
                 <Logo3D />
               </div>
-              <span className="text-base font-bold text-[#F4F4F9] group-hover:text-[#FFA500] transition-colors">
-                PREDICT-X
+              <span className="font-display text-[19px] tracking-[-0.02em] text-ivory group-hover:text-gold-lite transition-colors">
+                SOLPREDICT
               </span>
             </Link>
-            <nav className="hidden lg:flex items-center gap-1 pl-4 border-l border-white/5">
+            <nav className="hidden lg:flex items-center gap-6">
               {NAV_ITEMS.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
-                  className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg ${
+                  className={`relative font-mono text-[11px] uppercase tracking-[.16em] transition-colors ${
                     isActive(href)
-                      ? "text-[#FFA500] bg-[#FFA500]/10 border border-[#FFA500]/20"
-                      : "text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5"
+                      ? "text-gold-lite after:absolute after:left-0 after:-bottom-[6px] after:h-px after:w-full after:bg-gold after:content-['']"
+                      : "text-ash hover:text-ivory"
                   }`}
                 >
                   {label}
+                  {href === "/watchlist" && watchlistCount > 0 && (
+                    <span className="ml-1.5 text-gold-deep font-bold">{watchlistCount}</span>
+                  )}
                 </Link>
               ))}
               {role === "admin" && (
                 <Link
                   href="/admin"
-                  className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 border ${
+                  className={`relative flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[.16em] transition-colors ${
                     isActive("/admin")
-                      ? "bg-[#FFA500]/20 text-[#FFA500] border-[#FFA500]/50"
-                      : "text-[#FFA500] border-[#FFA500]/20 hover:bg-[#FFA500]/10"
+                      ? "text-gold-lite after:absolute after:left-0 after:-bottom-[6px] after:h-px after:w-full after:bg-gold after:content-['']"
+                      : "text-gold hover:text-gold-lite"
                   }`}
                 >
                   <Settings className="w-3 h-3" />
                   Admin
                 </Link>
               )}
-              {publicKey && (
-                <Link
-                  href="/portfolio"
-                  className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg ${
-                    isActive("/portfolio")
-                      ? "text-[#FFA500] bg-[#FFA500]/10 border border-[#FFA500]/20"
-                      : "text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5"
-                  }`}
-                >
-                  Portfolio
-                </Link>
-              )}
               <Link
-                href="/activity"
-                className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg ${
-                  isActive("/activity")
-                    ? "text-[#FFA500] bg-[#FFA500]/10 border border-[#FFA500]/20"
-                    : "text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5"
+                href="/docs/help"
+                className={`relative font-mono text-[11px] uppercase tracking-[.16em] transition-colors ${
+                  isActive("/docs/help")
+                    ? "text-gold-lite after:absolute after:left-0 after:-bottom-[6px] after:h-px after:w-full after:bg-gold after:content-['']"
+                    : "text-ash hover:text-ivory"
                 }`}
               >
-                Activity
-              </Link>
-              <Link
-                href="/watchlist"
-                className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg flex items-center gap-1 ${
-                  isActive("/watchlist")
-                    ? "text-[#FFA500] bg-[#FFA500]/10 border border-[#FFA500]/20"
-                    : "text-[#808495] hover:text-[#F4F4F9] hover:bg-white/5"
-                }`}
-              >
-                <Star className="w-3 h-3 text-[#FFA500]" />
-                Watchlist
-                {watchlistCount > 0 && (
-                  <span className="bg-[#FFA500] text-white text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full">
-                    {watchlistCount}
-                  </span>
-                )}
+                Help
               </Link>
             </nav>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1 rounded-lg">
-              <span className="relative flex w-2 h-2">
-                <span className="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping bg-[#4CAF50]"></span>
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-[#4CAF50]"></span>
+            <span className="hidden sm:inline-flex items-center gap-1.5 font-mono text-[10px] text-ash-dim uppercase tracking-[.16em]">
+              <span className="relative flex w-1.5 h-1.5">
+                <span className="absolute inline-flex w-full h-full rounded-[2px] opacity-75 animate-ping bg-verdigris"></span>
+                <span className="relative inline-flex w-1.5 h-1.5 rounded-[2px] bg-verdigris"></span>
               </span>
-              <span className="text-[10px] font-mono text-[#808495] uppercase">Online</span>
-            </div>
+              Live
+            </span>
 
             <NotificationBell />
 
-            <div className="hidden sm:block">
+            <div className="hidden sm:flex items-center gap-2">
+              <AirdropSolButton />
               <ClientWalletButton />
             </div>
             <MobileNav />
@@ -192,51 +176,39 @@ export function Navigation() {
         </div>
       </header>
 
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1A1C22]/80 backdrop-blur-[40px] border-t border-white/5 h-16 flex items-center justify-around px-4">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+      {/* Mobile bottom nav — hairline top, mono, no pills */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-void border-t border-hairline h-16 flex items-center justify-around px-4">
+        {NAV_ITEMS.slice(0, 3).map(({ href, label }) => (
           <Link
             key={href}
             href={href}
-            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              isActive(href) ? "text-[#FFA500]" : "text-[#808495] hover:text-[#F4F4F9]"
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              isActive(href) ? "text-gold-lite" : "text-ash hover:text-ivory"
             }`}
           >
-            <Icon className="w-5 h-5" />
-            <span className="text-[8px] uppercase font-semibold tracking-wider">{label}</span>
-            {isActive(href) && <span className="w-5 h-0.5 bg-[#FFA500] rounded-full" />}
+            <span className="font-mono text-[9px] uppercase tracking-[.14em]">{label}</span>
+            {isActive(href) && <span className="w-4 h-px bg-gold" />}
           </Link>
         ))}
         {publicKey && (
           <Link
             href="/portfolio"
-            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              isActive("/portfolio") ? "text-[#FFA500]" : "text-[#808495] hover:text-[#F4F4F9]"
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              isActive("/portfolio") ? "text-gold-lite" : "text-ash hover:text-ivory"
             }`}
           >
-            <Wallet className="w-5 h-5" />
-            <span className="text-[8px] uppercase font-semibold tracking-wider">Portfolio</span>
-            {isActive("/portfolio") && <span className="w-5 h-0.5 bg-[#FFA500] rounded-full" />}
+            <Wallet className="w-4 h-4" />
+            <span className="font-mono text-[9px] uppercase tracking-[.14em]">Portfolio</span>
           </Link>
         )}
         <Link
           href="/activity"
-          className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            isActive("/activity") ? "text-[#FFA500]" : "text-[#808495] hover:text-[#F4F4F9]"
+          className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+            isActive("/activity") ? "text-gold-lite" : "text-ash hover:text-ivory"
           }`}
         >
-          <Activity className="w-5 h-5" />
-          <span className="text-[8px] uppercase font-semibold tracking-wider">Activity</span>
-          {isActive("/activity") && <span className="w-5 h-0.5 bg-[#FFA500] rounded-full" />}
-        </Link>
-        <Link
-          href="/watchlist"
-          className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            isActive("/watchlist") ? "text-[#FFA500]" : "text-[#808495] hover:text-[#F4F4F9]"
-          }`}
-        >
-          <Star className="w-5 h-5" />
-          <span className="text-[8px] uppercase font-semibold tracking-wider">Watchlist</span>
-          {isActive("/watchlist") && <span className="w-5 h-0.5 bg-[#FFA500] rounded-full" />}
+          <Activity className="w-4 h-4" />
+          <span className="font-mono text-[9px] uppercase tracking-[.14em]">Activity</span>
         </Link>
         <div className="block sm:hidden">
           <ClientWalletButton />

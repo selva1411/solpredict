@@ -123,9 +123,10 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
     let dy_out = (quantity as u128) * (market.share_price_lamports as u128);
     let fee_bps = market.fee_bps;
 
-    let cost_u128 = if dy_out == 0 {
-        0
-    } else if pool_yes == 0 || pool_no == 0 || (side == Side::Yes && dy_out >= pool_yes) || (side == Side::No && dy_out >= pool_no) {
+    // Probability-based CPMM (amm_math). Empty-side pools keep the documented
+    // Flat Linear Minting (baseline cost = quantity × share_price) — the curve
+    // takes over once BOTH sides carry value.
+    let cost_u128 = if dy_out == 0 || pool_yes == 0 || pool_no == 0 {
         payout_math::calculate_cost(quantity, market.share_price_lamports)? as u128
     } else {
         match side {

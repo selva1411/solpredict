@@ -18,6 +18,8 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { logger } from "@/lib/logger";
 import { revalidateTag } from "@/lib/cache-control";
+import { invalidatePlatformStats } from "@/lib/data/platform";
+import { invalidateMarketList } from "@/lib/data/markets";
 
 // ---------------------------------------------------------------------------
 // Event types — one per on-chain event
@@ -59,6 +61,12 @@ export interface TradeEvent {
   feePaidLamports?: number;
   blockTime?: number;
   slot?: number;
+  // Real on-chain snapshot AFTER the trade (lamports/supply). Written so the
+  // DB cache reflects the same pools the detail page reads from chain.
+  yesPoolLamports?: number;
+  noPoolLamports?: number;
+  yesSupply?: number;
+  noSupply?: number;
   yesPoolSol?: number;
   noPoolSol?: number;
   yesPct?: number;
@@ -103,6 +111,9 @@ export interface LiquidityEvent {
   noLamports: number;
   lpTokensMinted?: number;
   lpTokensBurned?: number;
+  /** Resulting on-chain pool reserves after the deposit/withdraw (lamports). */
+  yesPoolLamports?: number;
+  noPoolLamports?: number;
 }
 
 export interface OrderEvent {
@@ -198,6 +209,21 @@ export function normalizeOutcome(outcome?: string): string | undefined {
 
 import { probabilityYesBps, DEFAULT_B } from "@/lib/amm/lmsr";
 
+/**
+ * Effective per-token price (SOL per share) for a trade.
+ *
+ * lamportsIn/tokensOut are signed (negative for sells). When pricePerToken is
+ * not supplied (the frontend sync path), fall back to |lamportsIn|/|tokensOut|
+ * so the computed avgPriceBps is correct for BOTH buys and sells.
+ */
+export function effectiveTradePrice(
+  ev: Pick<TradeEvent, "pricePerToken" | "lamportsIn" | "tokensOut">
+): number {
+  if (ev.pricePerToken !== undefined && ev.pricePerToken > 0) return ev.pricePerToken;
+  if (ev.lamportsIn === 0 || ev.tokensOut === 0) return 0;
+  return Math.abs(ev.lamportsIn) / 1e9 / Math.abs(ev.tokensOut);
+}
+
 // ---------------------------------------------------------------------------
 // Event handlers — each idempotent
 // ---------------------------------------------------------------------------
@@ -208,7 +234,6 @@ export async function applyMarketEvent(ev: MarketEvent): Promise<void> {
   try {
     const status = normalizeStatus(ev.status) ?? "open";
     const outcome = normalizeOutcome(ev.winningOutcome);
-    const totalVolume = (((ev.yesPoolLamports ?? 0) + (ev.noPoolLamports ?? 0)) / 1e9).toString();
 
     await db.insert(marketsCache).values({
       marketPubkey: ev.marketPubkey,
@@ -223,7 +248,14 @@ export async function applyMarketEvent(ev: MarketEvent): Promise<void> {
       feeCollectedLamports: ev.feeCollectedLamports ?? 0,
       totalPayoutPoolLamports: ev.totalPayoutPoolLamports ?? 0,
       feeBps: ev.feeBps,
-      totalVolume,
+      // Pools/supply are REAL on-chain snapshots (undefined values are skipped
+      // by drizzle, so absent fields never clobber existing rows).
+      yesPoolLamports: ev.yesPoolLamports,
+      noPoolLamports: ev.noPoolLamports,
+      yesSupply: ev.yesSupply,
+      noSupply: ev.noSupply,
+      // Volume is trade activity only — never seeded from pool size.
+      totalVolume: "0",
       settledAt: ev.settledAt ? new Date(ev.settledAt * 1000) : undefined,
       endTs: ev.endTs ? new Date(ev.endTs * 1000) : new Date(Date.now() + 3600000),
       resolveTs: ev.resolveTs ? new Date(ev.resolveTs * 1000) : new Date(Date.now() + 7200000),
@@ -241,18 +273,31 @@ export async function applyMarketEvent(ev: MarketEvent): Promise<void> {
         feeCollectedLamports: ev.feeCollectedLamports,
         totalPayoutPoolLamports: ev.totalPayoutPoolLamports,
         feeBps: ev.feeBps,
-        totalVolume,
+        yesPoolLamports: ev.yesPoolLamports,
+        noPoolLamports: ev.noPoolLamports,
+        yesSupply: ev.yesSupply,
+        noSupply: ev.noSupply,
         settledAt: ev.settledAt ? new Date(ev.settledAt * 1000) : undefined,
         updatedAt: new Date(),
       },
     });
 
-    // Compute prices via LMSR on every market update
-    const yesPriceBps = probabilityYesBps(
-      DEFAULT_B,
-      BigInt(ev.yesSupply ?? 0),
-      BigInt(ev.noSupply ?? 0)
-    );
+    // Mark price: pool-ratio when real pool reserves are present (matches the
+    // detail page's AMM view and the trade/LP paths), else LMSR from supply.
+    let yesPriceBps: number;
+    if (
+      typeof ev.yesPoolLamports === "number" &&
+      typeof ev.noPoolLamports === "number"
+    ) {
+      const pTotal = Number(ev.yesPoolLamports) + Number(ev.noPoolLamports);
+      yesPriceBps = pTotal > 0 ? Math.round((Number(ev.yesPoolLamports) / pTotal) * 10000) : 5000;
+    } else {
+      yesPriceBps = probabilityYesBps(
+        DEFAULT_B,
+        BigInt(ev.yesSupply ?? 0),
+        BigInt(ev.noSupply ?? 0)
+      );
+    }
 
     await db.insert(marketOutcomes).values({
       marketPubkey: ev.marketPubkey,
@@ -283,6 +328,7 @@ export async function applyMarketEvent(ev: MarketEvent): Promise<void> {
     });
 
     revalidateTag("markets");
+    invalidateMarketList();
   } catch (e) {
     logger.warn("applyMarketEvent failed:", e);
   }
@@ -292,9 +338,13 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
   const db = getDb();
   if (!db) return;
   try {
-    const price = ev.pricePerToken ?? (ev.lamportsIn > 0 && ev.tokensOut > 0 ? ev.lamportsIn / 1e9 / ev.tokensOut : 0);
+    const price = effectiveTradePrice(ev);
 
-    await db.insert(trades).values({
+    // Idempotency guard: insert the trade row ONCE per signature. If the row
+    // already exists (replay / repeated reconcile pass), skip ALL downstream
+    // accumulation — otherwise positions, volume and user stats get inflated
+    // every time a duplicate event is processed.
+    const inserted = await db.insert(trades).values({
       signature: ev.signature,
       marketPubkey: ev.marketPubkey,
       outcomeIndex: ev.outcomeIndex ?? (ev.side === "YES" ? 0 : 1),
@@ -309,7 +359,13 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
       feePaidLamports: ev.feePaidLamports ?? 0,
       blockTime: ev.blockTime ? new Date(ev.blockTime * 1000) : new Date(),
       slot: ev.slot ?? 0,
-    }).onConflictDoNothing();
+    }).onConflictDoNothing().returning({ signature: trades.signature });
+
+    if (inserted.length === 0) {
+      // Duplicate event — already fully applied on a previous pass. Do not
+      // re-accumulate positions/volume (would double-count).
+      return;
+    }
 
     // Ensure user record exists
     const solVolume = Math.abs(ev.lamportsIn || 0) / 1e9;
@@ -340,11 +396,17 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
       },
     });
 
-    // Update market volume
-    await db.update(marketsCache).set({
+    // Update market volume + pool/supply snapshots. Pool values are REAL
+    // on-chain reads passed by the caller; only present keys are written.
+    const marketSet: Record<string, unknown> = {
       totalVolume: sql`COALESCE(CAST(${marketsCache.totalVolume} AS NUMERIC), 0) + ${solVolume}`,
       updatedAt: new Date(),
-    }).where(eq(marketsCache.marketPubkey, ev.marketPubkey));
+    };
+    if (typeof ev.yesPoolLamports === "number") marketSet.yesPoolLamports = ev.yesPoolLamports;
+    if (typeof ev.noPoolLamports === "number") marketSet.noPoolLamports = ev.noPoolLamports;
+    if (typeof ev.yesSupply === "number") marketSet.yesSupply = ev.yesSupply;
+    if (typeof ev.noSupply === "number") marketSet.noSupply = ev.noSupply;
+    await db.update(marketsCache).set(marketSet as any).where(eq(marketsCache.marketPubkey, ev.marketPubkey));
 
     // Price history snapshot
     const priceBpsVal = Math.round(price * 10000);
@@ -356,7 +418,41 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
       volume: solVolume.toString(),
     });
 
+    // Refresh the market_outcomes mark prices from the REAL post-trade pool
+    // reserves (mirrors the AMM view the detail page shows). This table was
+    // previously only written on market creation, so positions/leaderboard
+    // consumers read frozen listing prices forever. Only written when real
+    // pool snapshots are supplied (the frontend sync path always does).
+    if (typeof ev.yesPoolLamports === "number" && typeof ev.noPoolLamports === "number") {
+      const pYes = ev.yesPoolLamports;
+      const pNo = ev.noPoolLamports;
+      const pTotal = pYes + pNo;
+      const yesPriceBps = pTotal > 0 ? Math.round((pYes / pTotal) * 10000) : 5000;
+      await db.insert(marketOutcomes).values({
+        marketPubkey: ev.marketPubkey,
+        outcomeIndex: 0,
+        label: "YES",
+        sharesOutstanding: ev.yesSupply ?? 0,
+        lastPriceBps: yesPriceBps,
+      }).onConflictDoUpdate({
+        target: [marketOutcomes.marketPubkey, marketOutcomes.outcomeIndex],
+        set: { sharesOutstanding: ev.yesSupply ?? 0, lastPriceBps: yesPriceBps },
+      });
+      await db.insert(marketOutcomes).values({
+        marketPubkey: ev.marketPubkey,
+        outcomeIndex: 1,
+        label: "NO",
+        sharesOutstanding: ev.noSupply ?? 0,
+        lastPriceBps: 10000 - yesPriceBps,
+      }).onConflictDoUpdate({
+        target: [marketOutcomes.marketPubkey, marketOutcomes.outcomeIndex],
+        set: { sharesOutstanding: ev.noSupply ?? 0, lastPriceBps: 10000 - yesPriceBps },
+      });
+    }
+
     revalidateTag("markets");
+    invalidateMarketList();
+    invalidatePlatformStats();
   } catch (e) {
     logger.warn("applyTradeEvent failed:", e);
   }
@@ -396,6 +492,7 @@ export async function applySettleEvent(ev: SettleEvent): Promise<void> {
       }
     } catch { /* notification failures are non-critical */ }
     revalidateTag("markets");
+    invalidateMarketList();
   } catch (e) {
     logger.warn("applySettleEvent failed:", e);
   }
@@ -436,7 +533,60 @@ export async function applyLiquidityEvent(ev: LiquidityEvent): Promise<void> {
       set: { lastActive: new Date() },
     });
 
+    // Mirror the resulting pool reserves on the market row so list pages show
+    // the same numbers as the detail page immediately after an LP deposit.
+    let yesLp = ev.yesPoolLamports;
+    let noLp = ev.noPoolLamports;
+    if (typeof yesLp !== "number" || typeof noLp !== "number") {
+      const row = await db
+        .select({ yes: marketsCache.yesPoolLamports, no: marketsCache.noPoolLamports })
+        .from(marketsCache)
+        .where(eq(marketsCache.marketPubkey, ev.marketPubkey))
+        .limit(1);
+      yesLp = typeof ev.yesPoolLamports === "number" ? ev.yesPoolLamports : Number(row[0]?.yes ?? 0) + ev.yesLamports;
+      noLp = typeof ev.noPoolLamports === "number" ? ev.noPoolLamports : Number(row[0]?.no ?? 0) + ev.noLamports;
+    }
+    await db.update(marketsCache).set({
+      yesPoolLamports: Math.round(yesLp),
+      noPoolLamports: Math.round(noLp),
+      updatedAt: new Date(),
+    }).where(eq(marketsCache.marketPubkey, ev.marketPubkey));
+
+    // Refresh the market_outcomes mark prices from the resulting pool reserves
+    // so positions/leaderboard consumers revalue exactly like the detail page.
+    // Carry the real supply through (never clobber it with 0).
+    const supplyRow = await db
+      .select({ yes: marketsCache.yesSupply, no: marketsCache.noSupply })
+      .from(marketsCache)
+      .where(eq(marketsCache.marketPubkey, ev.marketPubkey))
+      .limit(1);
+    const yesSupplyVal = Number(supplyRow[0]?.yes ?? 0);
+    const noSupplyVal = Number(supplyRow[0]?.no ?? 0);
+    const pTotal = Number(yesLp) + Number(noLp);
+    const yesPriceBps = pTotal > 0 ? Math.round((Number(yesLp) / pTotal) * 10000) : 5000;
+    await db.insert(marketOutcomes).values({
+      marketPubkey: ev.marketPubkey,
+      outcomeIndex: 0,
+      label: "YES",
+      sharesOutstanding: yesSupplyVal,
+      lastPriceBps: yesPriceBps,
+    }).onConflictDoUpdate({
+      target: [marketOutcomes.marketPubkey, marketOutcomes.outcomeIndex],
+      set: { sharesOutstanding: yesSupplyVal, lastPriceBps: yesPriceBps },
+    });
+    await db.insert(marketOutcomes).values({
+      marketPubkey: ev.marketPubkey,
+      outcomeIndex: 1,
+      label: "NO",
+      sharesOutstanding: noSupplyVal,
+      lastPriceBps: 10000 - yesPriceBps,
+    }).onConflictDoUpdate({
+      target: [marketOutcomes.marketPubkey, marketOutcomes.outcomeIndex],
+      set: { sharesOutstanding: noSupplyVal, lastPriceBps: 10000 - yesPriceBps },
+    });
+
     revalidateTag("markets");
+    invalidateMarketList();
   } catch (e) {
     logger.warn("applyLiquidityEvent failed:", e);
   }

@@ -193,7 +193,7 @@ describe("SOLPredict Integration Suite", () => {
         );
         expect.fail("Should have failed with InvalidEndTime");
       } catch (err: any) {
-        expect(err.message).to.include("InvalidEndTime");
+        expect(err.message).to.match(/EndTimeTooSoon|InvalidEndTime/);
       }
     });
   });
@@ -241,6 +241,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: buyerYesAta,
           buyerNoAta: buyerNoAta,
           userPosition: positionPda,
+        emergencyPause: null,
         } as any)
         .signers([buyer1])
         .rpc();
@@ -274,6 +275,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: buyerYesAta,
           buyerNoAta: buyerNoAta,
           userPosition: positionPda,
+        emergencyPause: null,
         } as any)
         .signers([buyer2])
         .rpc();
@@ -304,7 +306,8 @@ describe("SOLPredict Integration Suite", () => {
             buyerYesAta: buyerYesAta,
             buyerNoAta: buyerNoAta,
             userPosition: positionPda,
-          } as any)
+            emergencyPause: null,
+            } as any)
           .signers([buyer1])
           .rpc();
         expect.fail("Should have failed with InvalidQuantity");
@@ -332,7 +335,7 @@ describe("SOLPredict Integration Suite", () => {
       const slot = await connection.getSlot();
       const blockTime = await connection.getBlockTime(slot);
       const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-      resolveTsVal = now + 10;
+      resolveTsVal = now + 65;
       
       const result = await bootstrapMarket(
         configPda,
@@ -343,8 +346,8 @@ describe("SOLPredict Integration Suite", () => {
         new anchor.BN(200_00000), // Target price $200.00 (5 decimals)
         -5, // Exponent -5 (matching 5 decimals)
         0, // GreaterThan comparison
-        new anchor.BN(now + 10), // endTs (expires in 10 seconds)
-        new anchor.BN(now + 10)  // resolveTs
+        new anchor.BN(now + 65), // endTs (expires in 65 seconds)
+        new anchor.BN(now + 65)  // resolveTs
       );
       marketPda = result.marketPda;
       yesMintPda = result.yesMintPda;
@@ -370,6 +373,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: buyerYesAta,
           buyerNoAta: buyerNoAta,
           userPosition: positionPda,
+        emergencyPause: null,
         } as any)
         .signers([buyer1])
         .rpc();
@@ -389,6 +393,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: buyerYesAta2,
           buyerNoAta: buyerNoAta2,
           userPosition: positionPda2,
+        emergencyPause: null,
         } as any)
         .signers([buyer2])
         .rpc();
@@ -576,7 +581,7 @@ describe("SOLPredict Integration Suite", () => {
       const slot = await connection.getSlot();
       const blockTime = await connection.getBlockTime(slot);
       const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-      const manualResolveTsVal = now + 10;
+      const manualResolveTsVal = now + 65;
 
       const sportsFeedId = Array(32).fill(0);
       const result = await bootstrapMarket(
@@ -614,6 +619,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: buyer1YesAta,
           buyerNoAta: buyer1NoAta,
           userPosition: positionPda1,
+        emergencyPause: null,
         } as any)
         .signers([buyer1])
         .rpc();
@@ -629,6 +635,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: buyer2YesAta,
           buyerNoAta: buyer2NoAta,
           userPosition: positionPda2,
+        emergencyPause: null,
         } as any)
         .signers([buyer2])
         .rpc();
@@ -655,7 +662,7 @@ describe("SOLPredict Integration Suite", () => {
       const slot = await connection.getSlot();
       const blockTime = await connection.getBlockTime(slot);
       const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-      const manualResolveTsVal = now + 10;
+      const manualResolveTsVal = now + 65;
 
       const sportsFeedId = Array(32).fill(0);
       const result = await bootstrapMarket(
@@ -713,7 +720,7 @@ describe("SOLPredict Integration Suite", () => {
       const slot = await connection.getSlot();
       const blockTime = await connection.getBlockTime(slot);
       const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-      const resolveTs = now + 10;
+      const resolveTs = now + 65;
       
       const nonZeroFeed = Array(32).fill(0);
       nonZeroFeed[0] = 12;
@@ -741,7 +748,7 @@ describe("SOLPredict Integration Suite", () => {
       const slot = await connection.getSlot();
       const blockTime = await connection.getBlockTime(slot);
       const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-      const resolveTs = now + 10;
+      const resolveTs = now + 65;
 
       const techFeed = Array(32).fill(0);
       techFeed[0] = 88;
@@ -769,18 +776,23 @@ describe("SOLPredict Integration Suite", () => {
 
       await program.methods
         .buyShares({ yes: {} } as any, new anchor.BN(5))
-        .accounts({ buyer: buyer1.publicKey, market: techMarketPda, treasury: result.treasuryPda, yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1 } as any)
+        .accounts({ buyer: buyer1.publicKey, market: techMarketPda, treasury: result.treasuryPda, yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1, emergencyPause: null } as any)
         .signers([buyer1])
         .rpc();
 
       await ensureTimePassed(resolveTs);
+
+      // Re-read the clock AFTER the wait so the price update is not stale.
+      const settleSlot = await connection.getSlot();
+      const settleTime = await connection.getBlockTime(settleSlot);
+      const freshNow = settleTime ? settleTime : Math.floor(Date.now() / 1000);
 
       const mockPayer = Keypair.generate();
       await fundAccount(mockPayer.publicKey, 1);
       const mockPda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
 
       await program.methods
-        .mockCreatePriceUpdate(techFeed, new anchor.BN(160_00), new anchor.BN(1), -2, new anchor.BN(now))
+        .mockCreatePriceUpdate(techFeed, new anchor.BN(160_00), new anchor.BN(1), -2, new anchor.BN(freshNow))
         .accounts({ payer: mockPayer.publicKey, priceUpdate: mockPda } as any)
         .signers([mockPayer])
         .rpc();
@@ -818,7 +830,7 @@ describe("SOLPredict Integration Suite", () => {
         let slot = await connection.getSlot();
         let blockTime = await connection.getBlockTime(slot);
         const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
-        resolveTsVal = now + 6;
+        resolveTsVal = now + 65;
 
         const result = await bootstrapMarket(
           configPda, // Reuse existing configPda
@@ -829,8 +841,8 @@ describe("SOLPredict Integration Suite", () => {
           new anchor.BN(150_00), // Target $150 (2 decimals)
           -2,
           0,
-          new anchor.BN(now + 5), // endTs
-          new anchor.BN(now + 6)  // resolveTs
+          new anchor.BN(now + 65), // endTs
+          new anchor.BN(now + 65)  // resolveTs
         );
         marketPda = result.marketPda;
         yesMintPda = result.yesMintPda;
@@ -855,7 +867,8 @@ describe("SOLPredict Integration Suite", () => {
             buyerYesAta: buyerYesAta1,
             buyerNoAta: buyerNoAta1,
             userPosition: positionPda1,
-          } as any)
+            emergencyPause: null,
+            } as any)
           .signers([buyer1])
           .rpc();
 
@@ -875,7 +888,8 @@ describe("SOLPredict Integration Suite", () => {
             buyerYesAta: buyerYesAta2,
             buyerNoAta: buyerNoAta2,
             userPosition: positionPda2,
-          } as any)
+            emergencyPause: null,
+            } as any)
           .signers([buyer2])
           .rpc();
 
@@ -954,10 +968,16 @@ describe("SOLPredict Integration Suite", () => {
         .rpc();
 
       const afterBalance = await connection.getBalance(claimer.publicKey);
-      const positionAccount = await program.account.userPosition.fetch(positionPda);
 
-      expect(positionAccount.claimed).to.be.true;
-      
+      // claim_refund closes the user position (close = claimer), so fetching it
+      // should now fail with "account does not exist".
+      try {
+        await program.account.userPosition.fetch(positionPda);
+        expect.fail("Position should be closed after claim_refund");
+      } catch (err: any) {
+        // Expected - account no longer exists
+      }
+
       // Refund should be exact original spent (30 shares * 0.01 SOL = 300_000_000 lamports)
       // Balance difference = refund - tx fee, so it should be very close to 0.3 SOL
       expect(afterBalance - beforeBalance).to.be.greaterThan(299_000_000);
@@ -1036,6 +1056,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta: recipientYesAta,
           buyerNoAta: recipientNoAta,
           userPosition: recipientPositionPda,
+        emergencyPause: null,
         } as any)
         .signers([recipient])
         .rpc();
@@ -1052,6 +1073,7 @@ describe("SOLPredict Integration Suite", () => {
           buyerYesAta,
           buyerNoAta,
           userPosition: buyerPositionPda,
+        emergencyPause: null,
         } as any)
         .signers([buyer])
         .rpc();
@@ -1070,7 +1092,7 @@ describe("SOLPredict Integration Suite", () => {
 
       // 4. Admin cancels the market
       await program.methods
-        .cancelMarket()
+        .cancelMarket("Test market cancelled")
         .accounts({
           admin: admin.publicKey,
           config: configPda,
@@ -1135,7 +1157,7 @@ describe("SOLPredict Integration Suite", () => {
       const pos1 = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
       await program.methods
         .buyShares({ yes: {} } as any, new anchor.BN(100))
-        .accounts({ buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1 } as any)
+        .accounts({ buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1, emergencyPause: null } as any)
         .signers([buyer1])
         .rpc();
 
@@ -1144,7 +1166,7 @@ describe("SOLPredict Integration Suite", () => {
       const pos2 = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
       await program.methods
         .buyShares({ no: {} } as any, new anchor.BN(50))
-        .accounts({ buyer: buyer2.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b2YesAta, buyerNoAta: b2NoAta, userPosition: pos2 } as any)
+        .accounts({ buyer: buyer2.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b2YesAta, buyerNoAta: b2NoAta, userPosition: pos2, emergencyPause: null } as any)
         .signers([buyer2])
         .rpc();
     });
@@ -1166,6 +1188,7 @@ describe("SOLPredict Integration Suite", () => {
           sellerYesAta: yesAta,
           sellerNoAta: noAta,
           userPosition: pos,
+        emergencyPause: null,
         } as any)
         .signers([buyer1])
         .rpc();
@@ -1194,6 +1217,7 @@ describe("SOLPredict Integration Suite", () => {
           sellerYesAta: yesAta,
           sellerNoAta: noAta,
           userPosition: pos,
+        emergencyPause: null,
         } as any)
         .signers([buyer2])
         .rpc();
@@ -1219,7 +1243,8 @@ describe("SOLPredict Integration Suite", () => {
             sellerYesAta: yesAta,
             sellerNoAta: noAta,
             userPosition: pos,
-          } as any)
+            emergencyPause: null,
+            } as any)
           .signers([buyer1])
           .rpc();
         expect.fail("Should have failed with InvalidQuantity");
@@ -1355,6 +1380,7 @@ describe("SOLPredict Integration Suite", () => {
           providerYesAta: providerYesAta,
           providerNoAta: providerNoAta,
           liquidityPosition: lpPda,
+        emergencyPause: null,
         } as any)
         .signers([lpProvider])
         .rpc();
@@ -1369,15 +1395,16 @@ describe("SOLPredict Integration Suite", () => {
       expect(beforeBalance - afterBalance).to.be.greaterThan(80_000_000);
     });
 
-    it("Provider removes liquidity", async () => {
+    it("Provider partially removes liquidity and keeps the rest", async () => {
       const providerYesAta = getAssociatedTokenAddressSync(yesMintPda, lpProvider.publicKey);
       const providerNoAta = getAssociatedTokenAddressSync(noMintPda, lpProvider.publicKey);
       const lpPda = getLpPda(marketPda, lpProvider.publicKey, program.programId);
 
       const beforeBalance = await connection.getBalance(lpProvider.publicKey);
 
+      // Burn 30M of the 80M LP tokens (ratio 0.375).
       await program.methods
-        .removeLiquidity(new anchor.BN(80_000_000))
+        .removeLiquidity(new anchor.BN(30_000_000))
         .accounts({
           provider: lpProvider.publicKey,
           market: marketPda,
@@ -1387,6 +1414,49 @@ describe("SOLPredict Integration Suite", () => {
           providerYesAta: providerYesAta,
           providerNoAta: providerNoAta,
           liquidityPosition: lpPda,
+          emergencyPause: null,
+        } as any)
+        .signers([lpProvider])
+        .rpc();
+
+      // Position stays OPEN with the remaining 50M LP tokens.
+      const lpAccount = await program.account.liquidityPosition.fetch(lpPda);
+      expect(lpAccount.lpTokens.toNumber()).to.equal(50_000_000);
+      expect(lpAccount.yesDeposited.toNumber()).to.equal(31_250_000); // 50M * 50/80
+      expect(lpAccount.noDeposited.toNumber()).to.equal(18_750_000); // 30M * 50/80
+      expect(lpAccount.totalLamportsDeposited.toNumber()).to.equal(50_000_000);
+
+      // Market supply and pools shrink by the burned proportion, not the full deposit.
+      const marketAccount = await program.account.market.fetch(marketPda);
+      expect(marketAccount.yesSupply.toNumber()).to.equal(31_250_000);
+      expect(marketAccount.noSupply.toNumber()).to.equal(18_750_000);
+      expect(marketAccount.yesPoolLamports.toNumber()).to.equal(31_250_000);
+      expect(marketAccount.noPoolLamports.toNumber()).to.equal(18_750_000);
+
+      const afterBalance = await connection.getBalance(lpProvider.publicKey);
+      // Provider received ~30M lamports back (minus fees) on the partial burn.
+      expect(afterBalance - beforeBalance).to.be.greaterThan(29_000_000);
+    });
+
+    it("Provider removes the remaining liquidity (position closed, rent returned)", async () => {
+      const providerYesAta = getAssociatedTokenAddressSync(yesMintPda, lpProvider.publicKey);
+      const providerNoAta = getAssociatedTokenAddressSync(noMintPda, lpProvider.publicKey);
+      const lpPda = getLpPda(marketPda, lpProvider.publicKey, program.programId);
+
+      const beforeBalance = await connection.getBalance(lpProvider.publicKey);
+
+      await program.methods
+        .removeLiquidity(new anchor.BN(50_000_000))
+        .accounts({
+          provider: lpProvider.publicKey,
+          market: marketPda,
+          treasury: treasuryPda,
+          yesMint: yesMintPda,
+          noMint: noMintPda,
+          providerYesAta: providerYesAta,
+          providerNoAta: providerNoAta,
+          liquidityPosition: lpPda,
+          emergencyPause: null,
         } as any)
         .signers([lpProvider])
         .rpc();
@@ -1411,6 +1481,23 @@ describe("SOLPredict Integration Suite", () => {
       const noAta = getAssociatedTokenAddressSync(noMintPda, secondLp.publicKey);
       const lpPda = getLpPda(marketPda, secondLp.publicKey, program.programId);
 
+      // Give secondLp a tiny LP position first so the position PDA and ATAs exist.
+      await program.methods
+        .addLiquidity(new anchor.BN(100), new anchor.BN(100))
+        .accounts({
+          provider: secondLp.publicKey,
+          market: marketPda,
+          treasury: treasuryPda,
+          yesMint: yesMintPda,
+          noMint: noMintPda,
+          providerYesAta: yesAta,
+          providerNoAta: noAta,
+          liquidityPosition: lpPda,
+          emergencyPause: null,
+        } as any)
+        .signers([secondLp])
+        .rpc();
+
       try {
         await program.methods
           .removeLiquidity(new anchor.BN(1000))
@@ -1423,7 +1510,8 @@ describe("SOLPredict Integration Suite", () => {
             providerYesAta: yesAta,
             providerNoAta: noAta,
             liquidityPosition: lpPda,
-          } as any)
+            emergencyPause: null,
+            } as any)
           .signers([secondLp])
           .rpc();
         expect.fail("Should have failed with NoLpTokens");
@@ -1463,7 +1551,7 @@ describe("SOLPredict Integration Suite", () => {
       const pos1 = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
       await program.methods
         .buyShares({ yes: {} } as any, new anchor.BN(10))
-        .accounts({ buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1 } as any)
+        .accounts({ buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1, emergencyPause: null } as any)
         .signers([buyer1])
         .rpc();
     });
@@ -1507,7 +1595,7 @@ describe("SOLPredict Integration Suite", () => {
             buyerNoAta: getAssociatedTokenAddressSync(noMintPda, buyer1.publicKey),
             userPosition: pos1,
             emergencyPause: pausePda,
-          } as any)
+            } as any)
           .signers([buyer1])
           .rpc();
         expect.fail("Should have failed with EmergencyPaused");
@@ -1585,16 +1673,21 @@ describe("SOLPredict Integration Suite", () => {
 
   describe("Phase 11: batch_settle", () => {
     it("Batch settle 2 markets manually", async () => {
-      const m1 = await bootstrapMarket(configPda, "Batch settle 1?", "BS1", 1, Array(32).fill(0), new anchor.BN(0), 0, 0, new anchor.BN(Math.floor(Date.now() / 1000) + 5), new anchor.BN(Math.floor(Date.now() / 1000) + 5));
-      const m2 = await bootstrapMarket(configPda, "Batch settle 2?", "BS2", 1, Array(32).fill(0), new anchor.BN(0), 0, 0, new anchor.BN(Math.floor(Date.now() / 1000) + 5), new anchor.BN(Math.floor(Date.now() / 1000) + 5));
+      const batchSlot = await connection.getSlot();
+      const batchTime = await connection.getBlockTime(batchSlot);
+      const batchNow = batchTime ? batchTime : Math.floor(Date.now() / 1000);
+      const batchTarget = batchNow + 120;
 
-      await ensureTimePassed(Math.floor(Date.now() / 1000) + 5);
+      const m1 = await bootstrapMarket(configPda, "Batch settle 1?", "BS1", 1, Array(32).fill(0), new anchor.BN(0), 0, 0, new anchor.BN(batchTarget), new anchor.BN(batchTarget));
+      const m2 = await bootstrapMarket(configPda, "Batch settle 2?", "BS2", 1, Array(32).fill(0), new anchor.BN(0), 0, 0, new anchor.BN(batchTarget), new anchor.BN(batchTarget));
+
+      await ensureTimePassed(batchTarget);
 
       const m1Info = await connection.getAccountInfo(m1.marketPda);
       const m2Info = await connection.getAccountInfo(m2.marketPda);
 
       await program.methods
-        .batchSettle([1, 1])
+        .batchSettle(Buffer.from([1, 1]))
         .accounts({
           admin: admin.publicKey,
           config: configPda,
@@ -1616,13 +1709,16 @@ describe("SOLPredict Integration Suite", () => {
     });
 
     it("Batch settle fails if outcomes length mismatches remaining_accounts", async () => {
-      await ensureTimePassed(Math.floor(Date.now() / 1000) + 5);
-      
-      const m = await bootstrapMarket(configPda, "Batch fail?", "BSF", 1, Array(32).fill(0), new anchor.BN(0), 0, 0, new anchor.BN(Math.floor(Date.now() / 1000) + 5), new anchor.BN(Math.floor(Date.now() / 1000) + 5));
+      const failSlot = await connection.getSlot();
+      const failTime = await connection.getBlockTime(failSlot);
+      const failNow = failTime ? failTime : Math.floor(Date.now() / 1000);
+      const failTarget = failNow + 120;
+
+      const m = await bootstrapMarket(configPda, "Batch fail?", "BSF", 1, Array(32).fill(0), new anchor.BN(0), 0, 0, new anchor.BN(failTarget), new anchor.BN(failTarget));
 
       try {
         await program.methods
-          .batchSettle([1, 2])
+          .batchSettle(Buffer.from([1, 2]))
           .accounts({ admin: admin.publicKey, config: configPda } as any)
           .remainingAccounts([
             { pubkey: m.marketPda, isWritable: true, isSigner: false },
@@ -1664,7 +1760,8 @@ describe("SOLPredict Integration Suite", () => {
           -8,
           0,
           new anchor.BN(Math.floor(Date.now() / 1000) + 7200),
-          new anchor.BN(Math.floor(Date.now() / 1000) + 7200)
+          new anchor.BN(Math.floor(Date.now() / 1000) + 7200),
+          new anchor.BN(10_000_000)
         )
         .accounts({
           proposer: proposer.publicKey,
@@ -1678,7 +1775,7 @@ describe("SOLPredict Integration Suite", () => {
 
       const proposalAccount = await program.account.marketProposal.fetch(proposalPda);
       expect(proposalAccount.question).to.equal("Proposal: Will SOL hit $300?");
-      expect(proposalAccount.approved).to.be.false;
+      expect(proposalAccount.status).to.deep.equal({ pending: {} });
       expect(proposalAccount.bondLamports.toNumber()).to.equal(100_000_000); // 0.1 SOL
 
       const afterBalance = await connection.getBalance(proposer.publicKey);
@@ -1687,18 +1784,19 @@ describe("SOLPredict Integration Suite", () => {
 
     it("Approve the proposal and create a market", async () => {
       await program.methods
-        .approveMarket(proposalId)
+        .approveMarket()
         .accounts({
           admin: admin.publicKey,
           config: configPda,
           proposal: proposalPda,
           proposalVault: proposalVaultPda,
+          proposer: proposer.publicKey,
         } as any)
         .signers([admin])
         .rpc();
 
       const proposalAccount = await program.account.marketProposal.fetch(proposalPda);
-      expect(proposalAccount.approved).to.be.true;
+      expect(proposalAccount.status).to.deep.equal({ approved: {} });
 
       const marketPda = getMarketPda(proposalId, program.programId);
       const marketAccount = await program.account.market.fetch(marketPda);
@@ -1709,18 +1807,19 @@ describe("SOLPredict Integration Suite", () => {
     it("Approve fails on already-approved proposal", async () => {
       try {
         await program.methods
-          .approveMarket(proposalId)
+          .approveMarket()
           .accounts({
             admin: admin.publicKey,
             config: configPda,
             proposal: proposalPda,
             proposalVault: proposalVaultPda,
+            proposer: proposer.publicKey,
           } as any)
           .signers([admin])
           .rpc();
-        expect.fail("Should have failed with ProposalAlreadyApproved");
+        expect.fail("Should have failed with ProposalNotPending");
       } catch (err: any) {
-        expect(err.message).to.include("ProposalAlreadyApproved");
+        expect(err.message).to.include("ProposalNotPending");
       }
     });
 
@@ -1736,13 +1835,18 @@ describe("SOLPredict Integration Suite", () => {
       const newProposer = Keypair.generate();
       await fundAccount(newProposer.publicKey, 10);
 
+      const p12Slot = await connection.getSlot();
+      const p12Time = await connection.getBlockTime(p12Slot);
+      const p12Now = p12Time ? p12Time : Math.floor(Date.now() / 1000);
+
       await program.methods
         .proposeMarket(
           "Another proposal?",
           "Desc",
           0, Array(32).fill(0), new anchor.BN(100), 0, 0,
-          new anchor.BN(Math.floor(Date.now() / 1000) + 3600),
-          new anchor.BN(Math.floor(Date.now() / 1000) + 3600)
+          new anchor.BN(p12Now + 3700),
+          new anchor.BN(p12Now + 3700),
+          new anchor.BN(10_000_000)
         )
         .accounts({
           proposer: newProposer.publicKey,
@@ -1756,12 +1860,13 @@ describe("SOLPredict Integration Suite", () => {
 
       try {
         await program.methods
-          .approveMarket(newProposalId)
+          .approveMarket()
           .accounts({
             admin: fakeAdmin.publicKey,
             config: configPda,
             proposal: newProposalPda,
             proposalVault: newProposalVault,
+            proposer: newProposer.publicKey,
           } as any)
           .signers([fakeAdmin])
           .rpc();
@@ -1809,6 +1914,7 @@ describe("SOLPredict Integration Suite", () => {
           buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda,
           yesMint: yesMintPda, noMint: noMintPda,
           buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1,
+        emergencyPause: null,
         } as any)
         .signers([buyer1])
         .rpc();
@@ -1836,6 +1942,7 @@ describe("SOLPredict Integration Suite", () => {
           buyer: buyer2.publicKey, market: marketPda, treasury: treasuryPda,
           yesMint: yesMintPda, noMint: noMintPda,
           buyerYesAta: b2YesAta, buyerNoAta: b2NoAta, userPosition: pos2,
+        emergencyPause: null,
         } as any)
         .signers([buyer2])
         .rpc();
@@ -1849,6 +1956,7 @@ describe("SOLPredict Integration Suite", () => {
           seller: buyer2.publicKey, market: marketPda, treasury: treasuryPda,
           yesMint: yesMintPda, noMint: noMintPda,
           sellerYesAta: b2YesAta, sellerNoAta: b2NoAta, userPosition: pos2,
+        emergencyPause: null,
         } as any)
         .signers([buyer2])
         .rpc();

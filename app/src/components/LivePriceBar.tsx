@@ -45,8 +45,8 @@ export function LivePriceBar({
 
   if (!isOracleCat) {
     return (
-      <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-[#FFA500]/10 border border-[#FFA500]/30 text-[#FFA500] inline-flex items-center gap-1">
-        ⚖️ Manually resolved
+      <span className="px-2 py-0.5 text-[9px] font-bold font-mono rounded bg-gold/10 border border-gold/30 text-gold inline-flex items-center gap-1">
+        Manually resolved
       </span>
     );
   }
@@ -64,7 +64,7 @@ export function LivePriceBar({
   if (liveLoading) {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[#d6c4ac] animate-pulse">
-        <span className="w-3 h-3 rounded-full border border-[#d6c4ac]/40 border-t-transparent animate-spin" />
+        <span className="w-3 h-3 rounded-[2px] border border-[#d6c4ac]/40 border-t-transparent animate-spin" />
         Loading price...
       </span>
     );
@@ -72,7 +72,7 @@ export function LivePriceBar({
 
   if (liveError || livePrice === null) {
     return (
-      <span className="text-[10px] font-mono text-[#ffb4ab]">
+      <span className="text-[10px] font-mono text-bordeaux">
         {entry ? `${entry.symbol}: —` : "Feed unavailable"}
       </span>
     );
@@ -87,9 +87,9 @@ export function LivePriceBar({
   if (compact) {
     return (
       <span className="inline-flex items-center gap-1.5 text-[10px] font-mono">
-        <span className="text-[#FFA500] font-bold">{entry?.symbol ?? feedIdHex.slice(0, 8)}</span>
-        <span className="text-[#F4F4F9]">{formatPrice(livePrice)}</span>
-        <span className={yesWinning ? "text-[#a1d494]" : "text-[#ffb4ab]"}>
+        <span className="text-gold font-bold">{entry?.symbol ?? feedIdHex.slice(0, 8)}</span>
+        <span className="text-ivory">{formatPrice(livePrice)}</span>
+        <span className={yesWinning ? "text-verdigris" : "text-bordeaux"}>
           {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct).toFixed(1)}%
         </span>
       </span>
@@ -103,19 +103,19 @@ export function LivePriceBar({
       <div className="flex items-center justify-between text-[11px]">
         <div className="flex items-center gap-2">
           <span className="text-[#d6c4ac] text-[10px] uppercase tracking-wider font-display font-bold">Live Price</span>
-          <span className="text-[#FFA500] font-bold">{entry?.symbol ?? "Feed"}</span>
-          <span className="text-[#F4F4F9] text-sm font-bold">{formatPrice(livePrice)}</span>
+          <span className="text-gold font-bold">{entry?.symbol ?? "Feed"}</span>
+          <span className="text-ivory text-[13px] font-bold">{formatPrice(livePrice)}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-[#d6c4ac]">
             Target: {formatTarget(targetPrice, targetExpo)}
           </span>
-          <span className={`text-xs font-bold px-2 py-0.5 rounded ${yesWinning ? "bg-[#a1d494]/20 text-[#a1d494]" : "bg-[#ffb4ab]/20 text-[#ffb4ab]"}`}>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded ${yesWinning ? "bg-verdigris/20 text-verdigris" : "bg-bordeaux/20 text-bordeaux"}`}>
             {comparison === 0 ? ">" : "<"} Target — {yesWinning ? "YES" : "NO"} winning
           </span>
         </div>
       </div>
-      <div className="w-full h-2 bg-[#1A1C22] rounded overflow-hidden border border-white/10 relative">
+      <div className="w-full h-2 bg-panel rounded overflow-hidden border border-hairline relative">
         <div
           className="h-full rounded transition-[width] duration-500 ease-out"
           style={{
@@ -126,7 +126,7 @@ export function LivePriceBar({
           }}
         />
         <div
-          className="absolute top-0 w-0.5 h-full bg-[#ffd89c] z-10"
+          className="absolute top-0 w-0.5 h-full bg-gold-lite z-10"
           style={{ left: "50%" }}
           title="Target price"
         />

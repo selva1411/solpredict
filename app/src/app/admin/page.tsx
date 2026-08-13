@@ -432,6 +432,7 @@ function AdminPage() {
 
       const configPda = getConfigPda(program.programId);
       await sendWithRetry(
+        program,
         program.methods
           .initializeConfig(feeBps)
           .accounts(txAccounts({
@@ -466,6 +467,7 @@ function AdminPage() {
       setTransferringAdmin(true);
       const configPda = getConfigPda(program.programId);
       await sendWithRetry(
+        program,
         program.methods
           .updateAdmin(newAdmin)
           .accounts(txAccounts({
@@ -545,10 +547,10 @@ function AdminPage() {
           rent: SYSVAR_RENT_PUBKEY,
         }));
 
-      await sendWithRetry(createBuilder);
+      await sendWithRetry(program, createBuilder);
       toast.success(`Market ID #${nextMarketId} deployed successfully!`);
       
-      // Sync newly created market to Neon DB
+      // Sync newly created market to the database
       try {
         await fetch("/api/sync/market", {
           method: "POST",
@@ -643,7 +645,7 @@ function AdminPage() {
           priceUpdate: mockPriceUpdatePda,
         }));
 
-      await sendWithRetry(priceUpdateBuilder);
+      await sendWithRetry(program, priceUpdateBuilder);
 
       const settleBuilder = program.methods
         .settleMarket()
@@ -653,7 +655,7 @@ function AdminPage() {
           priceUpdate: mockPriceUpdatePda,
         }));
 
-      await sendWithRetry(settleBuilder);
+      await sendWithRetry(program, settleBuilder);
 
       toast.success(`Market resolved successfully on-chain!`);
       await syncMarketStatusToDb(market, "settled", winSide);
@@ -696,7 +698,7 @@ function AdminPage() {
           priceUpdate: getMockPriceUpdatePda(wallet.publicKey, program.programId),
         }));
 
-      await sendWithRetry(priceUpdateBuilder);
+      await sendWithRetry(program, priceUpdateBuilder);
       toast.success(`Oracle price warped to ${warpPrice} for market #${market.account.marketId.toString()}`);
     } catch (err: unknown) {
       console.error(err);
@@ -731,7 +733,7 @@ function AdminPage() {
           market: marketPda,
         }));
 
-      await sendWithRetry(cancelBuilder);
+      await sendWithRetry(program, cancelBuilder);
 
       toast.success("Market cancelled on-chain. Traders may claim full refunds.");
       if (targetMarket) {
@@ -771,7 +773,7 @@ function AdminPage() {
           market: market.publicKey,
         }));
 
-      await sendWithRetry(manualSettleBuilder);
+      await sendWithRetry(program, manualSettleBuilder);
 
       toast.success(`Market manually resolved successfully on-chain!`);
       await syncMarketStatusToDb(market, "settled", winSide);
@@ -842,7 +844,7 @@ function AdminPage() {
           systemProgram: SystemProgram.programId,
         }));
 
-      await sendWithRetry(withdrawBuilder);
+      await sendWithRetry(program, withdrawBuilder);
 
       toast.success("Platform protocol fees successfully withdrawn on-chain!");
       fetchConfigAndMarkets();
@@ -864,7 +866,7 @@ function AdminPage() {
         emergencyPause: emergencyPda,
         systemProgram: SystemProgram.programId,
       }));
-      await sendWithRetry(builder);
+      await sendWithRetry(program, builder);
       setPaused(pause);
       toast.success(pause ? "Emergency pause activated on-chain" : "Program unpaused on-chain");
     } catch (err: unknown) {
@@ -950,7 +952,7 @@ function AdminPage() {
   if (configLoading) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-10 bg-white/5 border border-[rgba(165,168,184,0.5)]/30 rounded w-1/3" />
+        <div className="h-10 bg-panel-2 border border-hairline/30 rounded w-1/3" />
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-6">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-28 holo-card skeleton-shimmer bg-[var(--surface-1)]" />
@@ -963,29 +965,29 @@ function AdminPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       {settleModal.isOpen && settleModal.market && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0a0a]/80 backdrop-blur-sm">
-          <div className="holo-card max-w-md w-full p-6 space-y-6 bg-[var(--surface-1)] border-[rgba(165,168,184,0.5)] border relative shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void/80 ">
+          <div className="holo-card max-w-md w-full p-6 space-y-6 bg-[var(--surface-1)] border-hairline border relative shadow-2xl">
             <div className="absolute top-3 left-4 flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-[#ffd89c] animate-pulse" />
-              <span className="text-[9px] font-mono tracking-widest text-[#F5A524]">SETTLEMENT CONFIRMATION</span>
+              <span className="w-2 h-2 rounded-[2px] bg-gold-lite animate-pulse" />
+              <span className="text-[9px] font-mono tracking-widest text-gold">SETTLEMENT CONFIRMATION</span>
             </div>
 
             <div className="pt-4 space-y-3 font-mono text-xs">
               <div className="space-y-1">
-                <div className="text-[10px] text-[#808495] uppercase">Question:</div>
-                <div className="text-sm font-bold text-[#F4F4F9]">{settleModal.market.account.question}</div>
+                <div className="text-[10px] text-ash uppercase">Question:</div>
+                <div className="text-[13px] font-bold text-ivory">{settleModal.market.account.question}</div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-[rgba(165,168,184,0.5)]/20 py-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-hairline/20 py-3">
                 <div className="space-y-0.5">
-                  <div className="text-[10px] text-[#808495] uppercase">Target Price:</div>
-                  <div className="text-sm font-bold text-[#F5A524]">
+                  <div className="text-[10px] text-ash uppercase">Target Price:</div>
+                  <div className="text-[13px] font-bold text-gold">
                     ${(settleModal.market.account.targetPrice.toNumber() / Math.pow(10, Math.abs(settleModal.market.account.targetExpo))).toFixed(2)}
                   </div>
                 </div>
                 <div className="space-y-0.5">
-                  <div className="text-[10px] text-[#808495] uppercase">Condition:</div>
-                  <div className="text-sm font-bold text-[#F5A524]">
+                  <div className="text-[10px] text-ash uppercase">Condition:</div>
+                  <div className="text-[13px] font-bold text-gold">
                     {settleModal.market.account.comparison === 0 ? "Greater Than" : "Less Than"}
                   </div>
                 </div>
@@ -993,16 +995,16 @@ function AdminPage() {
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-[#808495] uppercase">Settlement Price ($):</span>
+                  <span className="text-[10px] text-ash uppercase">Settlement Price ($):</span>
                   {settleModal.isFetchingPrice && (
-                    <span className="text-[9px] text-[#F5A524] animate-pulse">FETCHING REAL-TIME PYTH...</span>
+                    <span className="text-[9px] text-gold animate-pulse">FETCHING REAL-TIME PYTH...</span>
                   )}
                 </div>
                 <input
                   type="text"
                   value={settleModal.settlePrice ? `$${settleModal.settlePrice}` : ""}
                   readOnly
-                  className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 py-2 px-3 text-sm font-mono border-[rgba(165,168,184,0.5)] bg-[#0d0d0d]/50 text-[#F5A524] cursor-not-allowed opacity-80"
+                  className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 py-2 px-3 text-[13px] font-mono border-hairline bg-void/50 text-gold cursor-not-allowed opacity-80"
                   placeholder="Auto-fetched from Pyth oracle"
                 />
               </div>
@@ -1017,11 +1019,11 @@ function AdminPage() {
                 const yesWins = isGreater ? enteredPrice > target : enteredPrice < target;
 
                 return (
-                  <div className="bg-[#0d0d0d] border border-[rgba(165,168,184,0.5)]/20 p-3 rounded text-center">
-                    <div className="text-[9px] text-[#808495] uppercase">Projected Outcome:</div>
+                  <div className="bg-void border border-hairline/20 p-3 rounded text-center">
+                    <div className="text-[9px] text-ash uppercase">Projected Outcome:</div>
                     <div className="mt-1 text-md font-bold tracking-widest font-mono">
-                      At <span className="text-[#F5A524]">${enteredPrice.toFixed(2)}</span>, outcome will be{" "}
-                      <span className={yesWins ? "text-[#4CAF50]" : "text-[#E4574A]"}>
+                      At <span className="text-gold">${enteredPrice.toFixed(2)}</span>, outcome will be{" "}
+                      <span className={yesWins ? "text-verdigris" : "text-bordeaux"}>
                         {yesWins ? "YES" : "NO"}
                       </span>
                     </div>
@@ -1034,7 +1036,7 @@ function AdminPage() {
               <button
                 type="button"
                 onClick={() => setSettleModal({ isOpen: false, market: null, settlePrice: "", isFetchingPrice: false, livePrice: null })}
-                className="flex-1 btn-glow text-xs py-2 uppercase border border-[rgba(165,168,184,0.5)]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#808495]"
+                className="flex-1 btn-royale text-xs py-2 uppercase border border-hairline/30 hover:border-gold-lite cursor-pointer bg-transparent text-ash"
               >
                 Cancel
               </button>
@@ -1050,7 +1052,7 @@ function AdminPage() {
                     await handleMockSettle(m, price);
                   }
                 }}
-                className="flex-1 btn-glow text-xs py-2 uppercase cursor-pointer disabled:opacity-50"
+                className="flex-1 btn-royale text-xs py-2 uppercase cursor-pointer disabled:opacity-50"
               >
                 {settlingId ? "Settling..." : "Confirm Settlement"}
               </button>
@@ -1060,57 +1062,57 @@ function AdminPage() {
       )}
 
       {manualSettleModal.isOpen && manualSettleModal.market && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0a0a]/80 backdrop-blur-sm">
-          <div className="holo-card max-w-md w-full p-6 space-y-6 bg-[var(--surface-1)] border-[rgba(165,168,184,0.5)] border relative shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void/80 ">
+          <div className="holo-card max-w-md w-full p-6 space-y-6 bg-[var(--surface-1)] border-hairline border relative shadow-2xl">
             <div className="absolute top-3 left-4 flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-[#ffd89c] animate-pulse" />
-              <span className="text-[9px] font-mono tracking-widest text-[#F5A524] bg-[#ffd89c]/10 px-1.5 py-0.5 rounded border border-[#ffd89c]/20 font-bold">MANUAL SETTLEMENT</span>
+              <span className="w-2 h-2 rounded-[2px] bg-gold-lite animate-pulse" />
+              <span className="text-[9px] font-mono tracking-widest text-gold bg-gold-lite/10 px-1.5 py-0.5 rounded border border-gold-lite/20 font-bold">MANUAL SETTLEMENT</span>
             </div>
 
             {!manualSettleModal.showSecondaryConfirm ? (
               // Stage 1: Choose outcome
               <div className="space-y-6 pt-4">
                 <div className="space-y-1 text-left">
-                  <div className="text-[10px] text-[#808495] font-mono uppercase">Question:</div>
-                  <div className="text-sm font-bold text-[#F4F4F9] font-display">{manualSettleModal.market.account.question}</div>
+                  <div className="text-[10px] text-ash font-mono uppercase">Question:</div>
+                  <div className="text-[13px] font-bold text-ivory font-display">{manualSettleModal.market.account.question}</div>
                 </div>
 
                 {manualSettleModal.market.account.description && (
-                  <div className="space-y-1 bg-[#0d0d0d] p-3 border border-[rgba(165,168,184,0.5)]/15 rounded text-left">
-                    <div className="text-[10px] text-[#808495] font-mono uppercase">Winning Condition:</div>
-                    <div className="text-[11px] text-[#808495] leading-relaxed font-mono">{manualSettleModal.market.account.description}</div>
+                  <div className="space-y-1 bg-void p-3 border border-hairline/15 rounded text-left">
+                    <div className="text-[10px] text-ash font-mono uppercase">Winning Condition:</div>
+                    <div className="text-[11px] text-ash leading-relaxed font-mono">{manualSettleModal.market.account.description}</div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4 text-center font-mono text-xs border-y border-[rgba(165,168,184,0.5)]/20 py-3 bg-[#0d0d0d]/30">
+                <div className="grid grid-cols-2 gap-4 text-center font-mono text-xs border-y border-hairline/20 py-3 bg-void/30">
                   <div className="space-y-0.5">
-                    <div className="text-[10px] text-[#808495] uppercase">YES Pool:</div>
-                    <div className="text-sm font-bold text-[#4CAF50]">
+                    <div className="text-[10px] text-ash uppercase">YES Pool:</div>
+                    <div className="text-[13px] font-bold text-verdigris">
                       {(lamportsToSol(manualSettleModal.market.account.yesPoolLamports)).toFixed(2)} SOL
                     </div>
                   </div>
                   <div className="space-y-0.5">
-                    <div className="text-[10px] text-[#808495] uppercase">NO Pool:</div>
-                    <div className="text-sm font-bold text-[#E4574A]">
+                    <div className="text-[10px] text-ash uppercase">NO Pool:</div>
+                    <div className="text-[13px] font-bold text-bordeaux">
                       {(lamportsToSol(manualSettleModal.market.account.noPoolLamports)).toFixed(2)} SOL
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <div className="text-[10px] text-[#808495] font-mono uppercase text-center">Select Winner:</div>
+                  <div className="text-[10px] text-ash font-mono uppercase text-center">Select Winner:</div>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       type="button"
                       onClick={() => setManualSettleModal(prev => ({ ...prev, outcome: 1, showSecondaryConfirm: true }))}
-                      className="py-3 font-mono font-bold uppercase rounded border border-[#4CAF50]/30 bg-[#4CAF50]/10 hover:bg-[#4CAF50]/20 text-[#4CAF50] cursor-pointer transition-colors text-center"
+                      className="py-3 font-mono font-bold uppercase rounded border border-verdigris/30 bg-verdigris/10 hover:bg-verdigris/20 text-verdigris cursor-pointer transition-colors text-center"
                     >
                       [ YES WON ]
                     </button>
                     <button
                       type="button"
                       onClick={() => setManualSettleModal(prev => ({ ...prev, outcome: 2, showSecondaryConfirm: true }))}
-                      className="py-3 font-mono font-bold uppercase rounded border border-[#E4574A]/30 bg-[#E4574A]/10 hover:bg-[#E4574A]/20 text-[#E4574A] cursor-pointer transition-colors text-center"
+                      className="py-3 font-mono font-bold uppercase rounded border border-bordeaux/30 bg-bordeaux/10 hover:bg-bordeaux/20 text-bordeaux cursor-pointer transition-colors text-center"
                     >
                       [ NO WON ]
                     </button>
@@ -1120,7 +1122,7 @@ function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setManualSettleModal({ isOpen: false, market: null, outcome: null, showSecondaryConfirm: false })}
-                  className="w-full btn-glow text-xs py-2 uppercase border border-[rgba(165,168,184,0.5)]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#808495]"
+                  className="w-full btn-royale text-xs py-2 uppercase border border-hairline/30 hover:border-gold-lite cursor-pointer bg-transparent text-ash"
                 >
                   Cancel
                 </button>
@@ -1128,30 +1130,30 @@ function AdminPage() {
             ) : (
               // Stage 2: Confirm selection
               <div className="space-y-6 pt-4 font-mono text-xs text-center">
-                <div className="text-sm font-bold text-[#E4574A] uppercase tracking-wider flex items-center justify-center gap-2">
+                <div className="text-[13px] font-bold text-bordeaux uppercase tracking-wider flex items-center justify-center gap-2">
                   <AlertTriangle className="w-5 h-5 animate-pulse" /> EXTREME WARNING
                 </div>
 
-                <div className="space-y-4 text-[#808495] leading-relaxed text-[11px] bg-[#0d0d0d] p-4 border border-[#E4574A]/30 rounded text-left">
+                <div className="space-y-4 text-ash leading-relaxed text-[11px] bg-void p-4 border border-bordeaux/30 rounded text-left">
                   <p>
                     You are about to settle this market with{" "}
-                    <span className={manualSettleModal.outcome === 1 ? "text-[#4CAF50] font-bold" : "text-[#E4574A] font-bold"}>
+                    <span className={manualSettleModal.outcome === 1 ? "text-verdigris font-bold" : "text-bordeaux font-bold"}>
                       {manualSettleModal.outcome === 1 ? "YES" : "NO"}
                     </span>{" "}
                     as the winner.
                   </p>
                   <p>
                     This action is **irreversible** and will distribute{" "}
-                    <span className="text-[#F5A524] font-bold">
+                    <span className="text-gold font-bold">
                       {getPayoutPoolSol(manualSettleModal.market, manualSettleModal.outcome! || 1).toFixed(3)} SOL
                     </span>{" "}
                     to all{" "}
-                    <span className={manualSettleModal.outcome === 1 ? "text-[#4CAF50] font-bold" : "text-[#E4574A] font-bold"}>
+                    <span className={manualSettleModal.outcome === 1 ? "text-verdigris font-bold" : "text-bordeaux font-bold"}>
                       {manualSettleModal.outcome === 1 ? "YES" : "NO"}
                     </span>{" "}
                     share holders.
                   </p>
-                  <p className="text-[10px] text-[#808495]">
+                  <p className="text-[10px] text-ash">
                     Protocol fee collected: {lamportsToSol(
                       bnToNum(manualSettleModal.market.account.yesPoolLamports) +
                       bnToNum(manualSettleModal.market.account.noPoolLamports) -
@@ -1164,7 +1166,7 @@ function AdminPage() {
                   <button
                     type="button"
                     onClick={() => setManualSettleModal(prev => ({ ...prev, showSecondaryConfirm: false, outcome: null }))}
-                    className="flex-1 btn-glow text-xs py-2 uppercase border border-[rgba(165,168,184,0.5)]/30 hover:border-[#ffd89c] cursor-pointer bg-transparent text-[#808495]"
+                    className="flex-1 btn-royale text-xs py-2 uppercase border border-hairline/30 hover:border-gold-lite cursor-pointer bg-transparent text-ash"
                   >
                     Go Back
                   </button>
@@ -1179,7 +1181,7 @@ function AdminPage() {
                         await handleManualSettle(m, outcome);
                       }
                     }}
-                    className="flex-1 btn-glow text-xs py-2 bg-[#E4574A] hover:bg-[#ffc9c2] text-[#131313] uppercase cursor-pointer disabled:opacity-50 font-bold"
+                    className="flex-1 btn-royale text-xs py-2 bg-bordeaux hover:bg-[#ffc9c2] text-[#131313] uppercase cursor-pointer disabled:opacity-50 font-bold"
                   >
                     {settlingId ? "Settling..." : "Confirm"}
                   </button>
@@ -1219,21 +1221,21 @@ function AdminPage() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          className="p-4 sm:p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2 font-mono text-xs shadow-lg"
+          className="p-4 sm:p-5 rounded-[2px] bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2 font-mono text-xs shadow-lg"
         >
-          <div className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
+          <div className="flex items-center space-x-2 text-amber-400 font-bold text-[13px]">
             <AlertTriangle className="w-5 h-5 shrink-0 animate-pulse text-amber-400" />
             <span>ADMIN KEY MISMATCH</span>
           </div>
           <p className="text-amber-200/90 leading-relaxed font-sans text-xs">
-            Your connected browser wallet <code className="bg-black/50 px-1.5 py-0.5 rounded text-white font-mono">{wallet.publicKey.toBase58()}</code> is not the on-chain Administrator authority.
+            Your connected browser wallet <code className="bg-black/50 px-1.5 py-0.5 rounded text-ivory font-mono">{wallet.publicKey.toBase58()}</code> is not the on-chain Administrator authority.
             The on-chain Config PDA was initialized by key <code className="bg-black/50 px-1.5 py-0.5 rounded text-amber-300 font-mono">{config.admin.toBase58()}</code>.
           </p>
           <div className="text-[11px] text-amber-300/80 pt-1 font-sans">
-            💡 <strong>To execute admin actions (Create Market, Settle, Cancel, Withdraw Fees):</strong>
+            <strong>To execute admin actions (Create Market, Settle, Cancel, Withdraw Fees):</strong>
             <ul className="list-disc list-inside mt-1 space-y-0.5">
-              <li>Connect your wallet using authority key <code className="font-mono bg-black/50 px-1.5 py-0.5 text-white rounded">{config.admin.toBase58()}</code> (or import <code className="font-mono bg-black/50 px-1.5 py-0.5 text-white rounded">~/.config/solana/id.json</code> into Phantom/Solflare).</li>
-              <li>Or run <code className="font-mono bg-black/50 px-1.5 py-0.5 text-white rounded">npm run reset</code> in terminal to reset localnet, then click <strong>Initialize Config PDA</strong> with your active browser wallet.</li>
+              <li>Connect your wallet using authority key <code className="font-mono bg-black/50 px-1.5 py-0.5 text-ivory rounded">{config.admin.toBase58()}</code> (or import <code className="font-mono bg-black/50 px-1.5 py-0.5 text-ivory rounded">~/.config/solana/id.json</code> into Phantom/Solflare).</li>
+              <li>Or run <code className="font-mono bg-black/50 px-1.5 py-0.5 text-ivory rounded">npm run reset</code> in terminal to reset localnet, then click <strong>Initialize Config PDA</strong> with your active browser wallet.</li>
             </ul>
           </div>
         </motion.div>
@@ -1247,24 +1249,24 @@ function AdminPage() {
           animate="visible"
           className="glass-panel p-8 space-y-6"
         >
-          <div className="flex items-center space-x-3 text-[#F5A524]">
+          <div className="flex items-center space-x-3 text-gold">
             <AlertTriangle className="w-6 h-6 animate-pulse" />
-            <h2 className="text-lg font-bold font-display uppercase tracking-wider">Config PDA Not Found</h2>
+            <h2 className="text-[21px] font-bold font-display uppercase tracking-wider">Config PDA Not Found</h2>
           </div>
-          <p className="text-xs text-[#808495] leading-relaxed">
+          <p className="text-xs text-ash leading-relaxed">
             The platform-wide config singleton must be initialized once before markets can be created. The key initialized here will serve as the master Administrator authority.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end max-w-md">
             <div className="space-y-2">
-              <label className="text-xs font-mono text-[#808495] font-bold">Fee Basis Points (100 = 1%)</label>
+              <label className="text-xs font-mono text-ash font-bold">Fee Basis Points (100 = 1%)</label>
               <input
                 type="number"
                 value={feeBps}
                 onChange={(e) => setFeeBps(Number(e.target.value))}
-                className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-sm py-2 px-3 border-[rgba(165,168,184,0.5)]"
+                className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-[13px] py-2 px-3 border-hairline"
               />
             </div>
-            <button onClick={handleInitializeConfig} className="btn-glow py-2 text-xs w-full sm:w-auto">
+            <button onClick={handleInitializeConfig} className="btn-royale py-2 text-xs w-full sm:w-auto">
               Initialize Config PDA
             </button>
           </div>
@@ -1287,15 +1289,15 @@ function AdminPage() {
       {config && (
         <>
         {/* Admin Tab Navigation */}
-        <div className="flex gap-1 mb-8 border-b border-white/5 pb-1 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1 mb-8 border-b border-hairline pb-1 overflow-x-auto no-scrollbar">
           {SECTIONS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveAdminSection(tab)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-all border-b-2 -mb-[1px] whitespace-nowrap ${
+              className={`px-4 py-2 text-[13px] font-medium capitalize transition-all border-b-2 -mb-[1px] whitespace-nowrap ${
                 activeAdminSection === tab
-                  ? "text-[#F5A524] border-[#F5A524]"
-                  : "text-[#808495] border-transparent hover:text-[#F4F4F9]"
+                  ? "text-gold border-gold"
+                  : "text-ash border-transparent hover:text-ivory"
               }`}
             >
               {tab === "overview" && "Overview"}
@@ -1322,20 +1324,20 @@ function AdminPage() {
             count={needsActionMarkets.length}
             variant="alert"
           >
-            <div className="divide-y divide-[rgba(165,168,184,0.5)]/20">
+            <div className="divide-y divide-hairline/20">
               {needsActionMarkets.map((m) => {
                 const marketKey = m.publicKey.toBase58();
                 const isOracle = isOracleSettleable(m.account.oracleFeedId);
                 return (
                   <div key={marketKey} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     <div className="space-y-1 min-w-0">
-                      <div className="text-sm font-bold text-[#F4F4F9] truncate">{m.account.question}</div>
-                      <div className="text-[10px] text-[#808495] font-mono flex flex-wrap items-center gap-2">
+                      <div className="text-[13px] font-bold text-ivory truncate">{m.account.question}</div>
+                      <div className="text-[10px] text-ash font-mono flex flex-wrap items-center gap-2">
                         <span>{getCategoryString(m.account.category)}</span>
                         {isOracle ? (
-                          <span className="text-[#F5A524] font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE</span>
+                          <span className="text-gold font-bold inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> ORACLE</span>
                         ) : (
-                          <span className="text-[#F5A524] font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUAL</span>
+                          <span className="text-gold font-bold inline-flex items-center gap-0.5"><Gavel className="w-3 h-3" /> MANUAL</span>
                         )}
                       </div>
                     </div>
@@ -1343,7 +1345,7 @@ function AdminPage() {
                       <button
                         disabled={settlingId !== null}
                         onClick={() => handleSettleButtonClick(m)}
-                        className="btn-glow text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50"
+                        className="btn-royale text-xs py-1.5 px-4 cursor-pointer disabled:opacity-50"
                       >
                         {settlingId === marketKey ? "Settling..." : "Settle"}
                       </button>
@@ -1359,7 +1361,7 @@ function AdminPage() {
         <DashboardSection title="Audit Trail Actions" icon={History} delay={0.15}>
           <div className="glass-panel overflow-hidden hover-lift">
             {activityLoading ? (
-              <div className="p-12 text-center text-[#808495] text-xs font-mono animate-pulse">
+              <div className="p-12 text-center text-ash text-xs font-mono animate-pulse">
                 Fetching action logs...
               </div>
             ) : adminActivity.length === 0 ? (
@@ -1371,31 +1373,31 @@ function AdminPage() {
               <div className="overflow-x-auto scrollbar-thin">
                 <table className="w-full text-left border-collapse min-w-[500px]">
                   <thead>
-                    <tr className="border-b border-[rgba(165,168,184,0.5)]/30 text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#0d0d0d]">
+                    <tr className="border-b border-hairline/30 text-[10px] font-mono uppercase tracking-widest text-ash bg-void">
                       <th className="py-3 sm:py-4 px-3 sm:px-6">Timestamp</th>
                       <th className="py-3 sm:py-4 px-3 sm:px-6">Category</th>
                       <th className="py-3 sm:py-4 px-3 sm:px-6">Market</th>
                       <th className="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Detail</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[rgba(165,168,184,0.5)]/10 font-mono text-xs">
+                  <tbody className="divide-y divide-hairline/10 font-mono text-xs">
                     {adminActivity.map((item, idx) => {
                       let tagClass = "";
                       if (item.type === "CREATE") tagClass = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
-                      else if (item.type === "SETTLE") tagClass = "bg-[#4CAF50]/10 text-[#4CAF50] border border-[#4CAF50]/20";
-                      else if (item.type === "CANCEL") tagClass = "bg-[#E4574A]/10 text-[#E4574A] border border-[#E4574A]/20";
-                      else tagClass = "bg-[#ffd89c]/10 text-[#F5A524] border border-[#ffd89c]/20";
+                      else if (item.type === "SETTLE") tagClass = "bg-verdigris/10 text-verdigris border border-verdigris/20";
+                      else if (item.type === "CANCEL") tagClass = "bg-bordeaux/10 text-bordeaux border border-bordeaux/20";
+                      else tagClass = "bg-gold-lite/10 text-gold border border-gold-lite/20";
 
                       return (
-                        <tr key={idx} className="table-row-3d hover:bg-white/5 transition-colors">
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#808495]">{item.timeStr}</td>
+                        <tr key={idx} className="table-row-3d hover:bg-ivory/5 transition-colors">
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-ash">{item.timeStr}</td>
                           <td className="py-3 sm:py-4 px-3 sm:px-6">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${tagClass}`}>
                               {item.type}
                             </span>
                           </td>
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#F4F4F9] max-w-[140px] sm:max-w-sm truncate font-bold">{item.question}</td>
-                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#808495] hidden sm:table-cell">{item.details}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-ivory max-w-[140px] sm:max-w-sm truncate font-bold">{item.question}</td>
+                          <td className="py-3 sm:py-4 px-3 sm:px-6 text-ash hidden sm:table-cell">{item.details}</td>
                         </tr>
                       );
                     })}
@@ -1414,44 +1416,44 @@ function AdminPage() {
           
           {/* Create Market Form */}
           <div className="space-y-4 sm:space-y-6">
-            <div className="flex items-center space-x-2 text-[#F5A524]">
+            <div className="flex items-center space-x-2 text-gold">
               <Plus className="w-5 h-5" />
-              <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
+              <h2 className="text-[15px] sm:text-[21px] font-bold font-display uppercase tracking-wider font-bold">Create Contract</h2>
             </div>
 
             <div className="glass-panel p-4 sm:p-6 space-y-4 hover-lift">
                 <form onSubmit={handleCreateMarket} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#808495]">Question Text</label>
+                    <label className="text-xs font-bold text-ash">Question Text</label>
                     <input
                       type="text"
                       required
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       placeholder="Will SOL exceed $280 by tomorrow?"
-                      className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs border-[rgba(165,168,184,0.5)]"
+                      className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs border-hairline"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#808495]">Rules & Description</label>
+                    <label className="text-xs font-bold text-ash">Rules & Description</label>
                     <textarea
                       required
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Settle using Pyth feed SOL/USD. Price must match condition..."
                       rows={3}
-                      className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs border-[rgba(165,168,184,0.5)]"
+                      className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs border-hairline"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-[#808495]">Category</label>
+                      <label className="text-xs font-bold text-ash">Category</label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(Number(e.target.value))}
-                        className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs bg-[#0d0d0d] border-[rgba(165,168,184,0.5)]"
+                        className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs bg-void border-hairline"
                       >
                         {CATEGORIES.map((cat, i) => (
                           <option key={i} value={i}>{cat}</option>
@@ -1461,11 +1463,11 @@ function AdminPage() {
 
                     {isOracleCategory(category) && (
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#808495]">Comparison</label>
+                        <label className="text-xs font-bold text-ash">Comparison</label>
                         <select
                           value={comparison}
                           onChange={(e) => setComparison(Number(e.target.value))}
-                          className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs bg-[#0d0d0d] border-[rgba(165,168,184,0.5)]"
+                          className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs bg-void border-hairline"
                         >
                           <option value={0}>Greater Than</option>
                           <option value={1}>Less Than</option>
@@ -1477,7 +1479,7 @@ function AdminPage() {
                   {isOracleCategory(category) ? (
                     <>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#808495]">Asset (auto-fills feed ID & target)</label>
+                        <label className="text-xs font-bold text-ash">Asset (auto-fills feed ID & target)</label>
                         <select
                           value={selectedAssetKey}
                           onChange={(e) => {
@@ -1490,7 +1492,7 @@ function AdminPage() {
                               // Set a reasonable default target price (15% above current as guess)
                             }
                           }}
-                          className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs bg-[#0d0d0d] border-[rgba(165,168,184,0.5)]"
+                          className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs bg-void border-hairline"
                         >
                           <option value="">-- Select asset --</option>
                           {Object.entries(PYTH_FEED_REGISTRY).map(([key, entry]) => (
@@ -1501,64 +1503,64 @@ function AdminPage() {
                         </select>
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#808495]">Oracle Feed ID (Hex)</label>
+                        <label className="text-xs font-bold text-ash">Oracle Feed ID (Hex)</label>
                         <input
                           type="text"
                           required
                           value={oracleFeedIdHex}
                           onChange={(e) => setOracleFeedIdHex(e.target.value)}
                           placeholder="0xef0d8b6fda..."
-                          className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs border-[rgba(165,168,184,0.5)] font-mono text-[#F5A524]"
+                          className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs border-hairline font-mono text-gold"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-[#808495]">Target Price ($)</label>
+                          <label className="text-xs font-bold text-ash">Target Price ($)</label>
                           <input
                             type="number"
                             step="0.01"
                             required
                             value={targetPriceVal}
                             onChange={(e) => setTargetPriceVal(Number(e.target.value))}
-                            className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs border-[rgba(165,168,184,0.5)]"
+                            className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs border-hairline"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-[#808495]">Duration (Secs)</label>
+                          <label className="text-xs font-bold text-ash">Duration (Secs)</label>
                           <input
                             type="number"
                             required
                             min={30}
                             value={durationSecs}
                             onChange={(e) => setDurationSecs(Number(e.target.value))}
-                            className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs border-[rgba(165,168,184,0.5)]"
+                            className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs border-hairline"
                           />
-                          <p className="text-[10px] text-[#808495]">Minimum: 30s (program requires end &ge;60s out)</p>
+                          <p className="text-[10px] text-ash">Minimum: 30s (program requires end &ge;60s out)</p>
                         </div>
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className="space-y-1.5 bg-[#ffd89c]/5 border border-[#ffd89c]/20 p-3 rounded font-mono text-[10px] text-[#F5A524] leading-normal text-left">
+                      <div className="space-y-1.5 bg-gold-lite/5 border border-gold-lite/20 p-3 rounded font-mono text-[10px] text-gold leading-normal text-left">
                         This market will be manually settled by the admin. Use the Description field
                         to clearly explain what the YES and NO outcomes mean (e.g. 'YES if the Giants
                         win, NO if they lose or the game is cancelled').
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-[#808495]">Duration (Secs)</label>
+                        <label className="text-xs font-bold text-ash">Duration (Secs)</label>
                         <input
                           type="number"
                           required
                           min={30}
                           value={durationSecs}
                           onChange={(e) => setDurationSecs(Number(e.target.value))}
-                          className="w-full bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#F5A524] focus:ring-1 focus:ring-[#F5A524]/30 text-xs border-[rgba(165,168,184,0.5)]"
+                          className="w-full bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 text-xs border-hairline"
                         />
-                        <p className="text-[10px] text-[#808495]">Minimum: 30s (program requires end &ge;60s out)</p>
+                        <p className="text-[10px] text-ash">Minimum: 30s (program requires end &ge;60s out)</p>
                       </div>
                       <div className="grid grid-cols-2 gap-3 pt-1">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-[#4CAF50]">YES Pool Seed (SOL)</label>
+                          <label className="text-xs font-bold text-verdigris">YES Pool Seed (SOL)</label>
                           <input
                             type="number"
                             step="0.5"
@@ -1566,11 +1568,11 @@ function AdminPage() {
                             required
                             value={initialYesPoolSol}
                             onChange={(e) => setInitialYesPoolSol(Math.max(0.1, Number(e.target.value)))}
-                            className="w-full bg-[var(--surface-1)] border border-[#4CAF50]/40 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#4CAF50] text-xs font-mono"
+                            className="w-full bg-[var(--surface-1)] border border-verdigris/40 rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-verdigris text-xs font-mono"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-[#E4574A]">NO Pool Seed (SOL)</label>
+                          <label className="text-xs font-bold text-bordeaux">NO Pool Seed (SOL)</label>
                           <input
                             type="number"
                             step="0.5"
@@ -1578,11 +1580,11 @@ function AdminPage() {
                             required
                             value={initialNoPoolSol}
                             onChange={(e) => setInitialNoPoolSol(Math.max(0.1, Number(e.target.value)))}
-                            className="w-full bg-[var(--surface-1)] border border-[#E4574A]/40 rounded-lg px-3 py-2 text-[#F4F4F9] focus:outline-none focus:border-[#E4574A] text-xs font-mono"
+                            className="w-full bg-[var(--surface-1)] border border-bordeaux/40 rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-bordeaux text-xs font-mono"
                           />
                         </div>
                       </div>
-                      <div className="text-[10px] font-mono text-[#F5A524] flex justify-between px-1">
+                      <div className="text-[10px] font-mono text-gold flex justify-between px-1">
                         <span>Total Seed: {(initialYesPoolSol + initialNoPoolSol).toFixed(1)} SOL</span>
                         <span>Starting Odds: {((initialYesPoolSol / Math.max(0.1, initialYesPoolSol + initialNoPoolSol)) * 100).toFixed(0)}% YES / {((initialNoPoolSol / Math.max(0.1, initialYesPoolSol + initialNoPoolSol)) * 100).toFixed(0)}% NO</span>
                       </div>
@@ -1598,9 +1600,9 @@ function AdminPage() {
 
             {/* Manage Markets Table */}
             <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-              <div className="flex items-center space-x-2 text-[#F5A524]">
+              <div className="flex items-center space-x-2 text-gold">
                 <Settings className="w-5 h-5" />
-                <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider font-bold">Manage Board</h2>
+                <h2 className="text-[15px] sm:text-[21px] font-bold font-display uppercase tracking-wider font-bold">Manage Board</h2>
               </div>
 
               <div className="glass-panel overflow-hidden hover-lift">
@@ -1613,7 +1615,7 @@ function AdminPage() {
                   <div className="overflow-x-auto scrollbar-thin">
                     <table className="w-full text-left border-collapse min-w-[600px]">
                       <thead>
-                        <tr className="border-b border-[rgba(165,168,184,0.5)]/30 text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#0d0d0d]">
+                        <tr className="border-b border-hairline/30 text-[10px] font-mono uppercase tracking-widest text-ash bg-void">
                           <th className="py-3 sm:py-4 px-3 sm:px-6">ID</th>
                           <th className="py-3 sm:py-4 px-3 sm:px-6">Question</th>
                           <th className="py-3 sm:py-4 px-3 sm:px-6">Status</th>
@@ -1621,7 +1623,7 @@ function AdminPage() {
                           <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[rgba(165,168,184,0.5)]/10 font-mono text-xs">
+                      <tbody className="divide-y divide-hairline/10 font-mono text-xs">
                         {markets.map((m) => {
                           const status = getMarketStatusString(m.account.status, m.account.endTs);
                           const marketKey = m.publicKey.toBase58();
@@ -1630,9 +1632,9 @@ function AdminPage() {
                           const volume = yesPool + noPool;
 
                           return (
-                            <tr key={marketKey} className="table-row-3d hover:bg-white/5 transition-colors">
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#808495]">#{m.account.marketId.toString()}</td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-[#F4F4F9] max-w-[140px] sm:max-w-xs truncate font-bold">{m.account.question}</td>
+                            <tr key={marketKey} className="table-row-3d hover:bg-ivory/5 transition-colors">
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-ash">#{m.account.marketId.toString()}</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-ivory max-w-[140px] sm:max-w-xs truncate font-bold">{m.account.question}</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6">
                                 {(() => {
                                   const now = Math.floor(Date.now() / 1000);
@@ -1641,14 +1643,14 @@ function AdminPage() {
                                   if ((status === "Open" || status === "Ended") && isPast) {
                                     if (feedIdNonZero) {
                                       return (
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F5A524]/15 text-[#F5A524] border border-[#F5A524]/20 inline-flex items-center gap-1">
-                                          <Zap className="w-3 h-3 text-[#F5A524]" /> ORACLE SETTLE
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gold/15 text-gold border border-gold/20 inline-flex items-center gap-1">
+                                          <Zap className="w-3 h-3 text-gold" /> ORACLE SETTLE
                                         </span>
                                       );
                                     } else {
                                       return (
-                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ffd89c]/15 text-[#F5A524] border border-[#ffd89c]/20 inline-flex items-center gap-1">
-                                          <Gavel className="w-3 h-3 text-[#F5A524]" /> MANUAL SETTLE
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gold-lite/15 text-gold border border-gold-lite/20 inline-flex items-center gap-1">
+                                          <Gavel className="w-3 h-3 text-gold" /> MANUAL SETTLE
                                         </span>
                                       );
                                     }
@@ -1656,19 +1658,19 @@ function AdminPage() {
                                   return (
                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                       status === "Open" 
-                                        ? "bg-[#4CAF50]/15 text-[#4CAF50] border border-[#4CAF50]/20" 
+                                        ? "bg-verdigris/15 text-verdigris border border-verdigris/20" 
                                         : status === "Ended"
-                                        ? "bg-[#f97316]/15 text-[#f97316] border border-[#f97316]/20"
+                                        ? "bg-gold/15 text-gold border border-gold/20"
                                         : status === "Settled" 
-                                        ? "bg-white/5 text-[#808495] border border-white/10" 
-                                        : "bg-[#E4574A]/15 text-[#E4574A] border border-[#E4574A]/20"
+                                        ? "bg-panel-2 text-ash border border-hairline" 
+                                        : "bg-bordeaux/15 text-bordeaux border border-bordeaux/20"
                                     }`}>
                                       {status}
                                     </span>
                                   );
                                 })()}
                               </td>
-                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-[#F4F4F9]">{volume.toFixed(2)} SOL</td>
+                              <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-ivory">{volume.toFixed(2)} SOL</td>
                               <td className="py-3 sm:py-4 px-3 sm:px-6 text-center">
                                 {(status === "Open" || status === "Ended") && (
                                   <div className="flex items-center justify-center gap-2">
@@ -1676,7 +1678,7 @@ function AdminPage() {
                                       <button
                                         disabled={warpingId !== null}
                                         onClick={() => handleWarpPrice(m)}
-                                        className="px-2.5 py-1 bg-[#F5A524]/20 hover:bg-[#F5A524]/30 border border-[#F5A524]/40 rounded text-[9px] text-[#C4B5FD] cursor-pointer font-bold"
+                                        className="px-2.5 py-1 bg-gold/20 hover:bg-gold/30 border border-gold/40 rounded text-[9px] text-gold-lite cursor-pointer font-bold"
                                         title="Write a simulated oracle price update for this market"
                                       >
                                         Warp
@@ -1685,13 +1687,13 @@ function AdminPage() {
                                     <button
                                       disabled={settlingId !== null}
                                       onClick={() => handleSettleButtonClick(m)}
-                                      className="px-2.5 py-1 bg-[#4CAF50] hover:bg-[#b7e4ac] text-[#131313] border border-[rgba(165,168,184,0.5)] rounded text-[9px] cursor-pointer font-bold"
+                                      className="px-2.5 py-1 bg-verdigris hover:bg-[#b7e4ac] text-[#131313] border border-hairline rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Settle
                                     </button>
                                     <button
                                       onClick={() => setCancelModal({ isOpen: true, marketPda: m.publicKey })}
-                                      className="px-2.5 py-1 bg-[#E4574A] hover:bg-[#ffc9c2] text-[#131313] border border-[rgba(165,168,184,0.5)] rounded text-[9px] cursor-pointer font-bold"
+                                      className="px-2.5 py-1 bg-bordeaux hover:bg-[#ffc9c2] text-[#131313] border border-hairline rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Cancel
                                     </button>
@@ -1700,11 +1702,11 @@ function AdminPage() {
                                 {status === "Settled" && (
                                   <div className="flex items-center justify-center">
                                     {m.account.feeWithdrawn ? (
-                                      <span className="text-[#4CAF50] text-[10px] font-bold uppercase">Withdrawn</span>
+                                      <span className="text-verdigris text-[10px] font-bold uppercase">Withdrawn</span>
                                     ) : (
                                       <button
                                         onClick={() => handleWithdrawFees(m)}
-                                        className="px-2.5 py-1 bg-[#ffd89c]/10 hover:bg-[#ffd89c]/20 border border-[#ffd89c]/30 rounded text-[9px] text-[#F5A524] font-bold cursor-pointer uppercase"
+                                        className="px-2.5 py-1 bg-gold-lite/10 hover:bg-gold-lite/20 border border-gold-lite/30 rounded text-[9px] text-gold font-bold cursor-pointer uppercase"
                                       >
                                         Withdraw Fees ({ lamportsToSol(m.account.feeCollected).toFixed(3) } SOL)
                                       </button>
@@ -1712,7 +1714,7 @@ function AdminPage() {
                                   </div>
                                 )}
                                 {status === "Cancelled" && (
-                                  <span className="text-[#808495] text-[10px] italic">Refunds enabled</span>
+                                  <span className="text-ash text-[10px] italic">Refunds enabled</span>
                                 )}
                               </td>
                             </tr>
@@ -1751,38 +1753,38 @@ function AdminPage() {
             className="glass-panel p-8 space-y-6"
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold font-display uppercase tracking-wider text-[#F4F4F9]">Platform Configuration</h2>
+              <h2 className="text-[21px] font-bold font-display uppercase tracking-wider text-ivory">Platform Configuration</h2>
               <div className="flex items-center gap-3">
                 {paused && (
-                  <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-red-400 bg-red-500/10 border border-red-500/30 rounded-md px-3 py-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                  <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-red-400 bg-red-500/10 border border-red-500/30 rounded-[2px] px-3 py-1.5">
+                    <span className="h-1.5 w-1.5 rounded-[2px] bg-red-500 animate-pulse" />
                     Emergency Paused
                   </span>
                 )}
-                <button onClick={handleInitializeConfig} className="btn-glow py-2 text-xs">
+                <button onClick={handleInitializeConfig} className="btn-royale py-2 text-xs">
                   Reinitialize Config PDA
                 </button>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-[var(--surface-1)] rounded-lg p-4 space-y-2">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#808495]">Admin Authority</div>
-                <div className="text-sm font-mono text-[#F4F4F9] break-all">{config?.admin.toBase58() || "—"}</div>
+              <div className="bg-[var(--surface-1)] rounded-[2px] p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-ash">Admin Authority</div>
+                <div className="text-[13px] font-mono text-ivory break-all">{config?.admin.toBase58() || "—"}</div>
               </div>
-              <div className="bg-[var(--surface-1)] rounded-lg p-4 space-y-2">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#808495]">Fee Rate (bps)</div>
-                <div className="text-sm font-mono text-[#F4F4F9]">{config?.feeBps || 0} bps ({(config?.feeBps || 0) / 100}%)</div>
+              <div className="bg-[var(--surface-1)] rounded-[2px] p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-ash">Fee Rate (bps)</div>
+                <div className="text-[13px] font-mono text-ivory">{config?.feeBps || 0} bps ({(config?.feeBps || 0) / 100}%)</div>
               </div>
-              <div className="bg-[var(--surface-1)] rounded-lg p-4 space-y-2">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#808495]">Markets Created</div>
-                <div className="text-sm font-mono text-[#F4F4F9]">{config?.marketCount ?? 0}</div>
+              <div className="bg-[var(--surface-1)] rounded-[2px] p-4 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-ash">Markets Created</div>
+                <div className="text-[13px] font-mono text-ivory">{config?.marketCount ?? 0}</div>
               </div>
             </div>
-            <div className="bg-[var(--surface-1)] rounded-lg p-4 space-y-2">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-[#808495]">Config PDA</div>
-              <div className="text-sm font-mono text-[#F4F4F9] break-all">{config?.publicKey?.toBase58() || "—"}</div>
+            <div className="bg-[var(--surface-1)] rounded-[2px] p-4 space-y-2">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-ash">Config PDA</div>
+              <div className="text-[13px] font-mono text-ivory break-all">{config?.publicKey?.toBase58() || "—"}</div>
             </div>
-            <div className="pt-4 border-t border-white/5">
+            <div className="pt-4 border-t border-hairline">
               <button
                 onClick={() => {
                   if (markets.length > 0) {
@@ -1792,14 +1794,14 @@ function AdminPage() {
                   }
                 }}
                 disabled={withdrawing}
-                className="btn-glow text-xs py-2 px-6 cursor-pointer disabled:opacity-50"
+                className="btn-royale text-xs py-2 px-6 cursor-pointer disabled:opacity-50"
               >
                 {withdrawing ? "Withdrawing..." : "Withdraw Accumulated Fees"}
               </button>
             </div>
-            <div className="pt-4 border-t border-white/5 space-y-3">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-[#808495]">Transfer Admin Authority</div>
-              <p className="text-xs text-[#808495] leading-relaxed">
+            <div className="pt-4 border-t border-hairline space-y-3">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-ash">Transfer Admin Authority</div>
+              <p className="text-xs text-ash leading-relaxed">
                 Transfer the platform admin role to another wallet. Only the current admin can do this. The change takes effect immediately and cannot be undone by the old admin.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -1808,12 +1810,12 @@ function AdminPage() {
                   value={newAdminAddress}
                   onChange={(e) => setNewAdminAddress(e.target.value)}
                   placeholder="New admin wallet address (e.g. dad8hr...)"
-                  className="flex-1 bg-[var(--surface-1)] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-[#F4F4F9] focus:outline-none focus:border-[#F5A524]"
+                  className="flex-1 bg-[var(--surface-1)] border border-hairline rounded-[2px] px-3 py-2 text-xs font-mono text-ivory focus:outline-none focus:border-gold"
                 />
                 <button
                   onClick={handleTransferAdmin}
                   disabled={transferringAdmin || !isWalletAdmin}
-                  className="btn-glow text-xs py-2 px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-royale text-xs py-2 px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {transferringAdmin ? "Transferring..." : "Transfer Admin"}
                 </button>
@@ -1828,14 +1830,14 @@ function AdminPage() {
               <button
                 onClick={() => handleEmergencyPause(true)}
                 disabled={pausing || paused}
-                className="flex-1 text-xs py-2 px-4 rounded-md border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 text-xs py-2 px-4 rounded-[2px] border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Emergency Pause
               </button>
               <button
                 onClick={() => handleEmergencyPause(false)}
                 disabled={pausing || !paused}
-                className="flex-1 text-xs py-2 px-4 rounded-md border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 text-xs py-2 px-4 rounded-[2px] border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Unpause Program
               </button>

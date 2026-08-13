@@ -75,11 +75,11 @@ export default function AdminTreasuryPage() {
       <div className="flex items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
           <DollarSign className="w-5 h-5 text-green-400" />
-          <h2 className="text-xl font-bold text-white">Treasury Dashboard</h2>
+          <h2 className="text-[21px] font-bold text-ivory">Treasury Dashboard</h2>
         </div>
         <button
           onClick={load}
-          className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-ivory transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
@@ -89,7 +89,7 @@ export default function AdminTreasuryPage() {
       {loading ? (
         <div className="grid grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 rounded-2xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+            <div key={i} className="h-32 rounded-[2px] bg-panel border border-hairline animate-pulse" />
           ))}
         </div>
       ) : (
@@ -106,21 +106,21 @@ export default function AdminTreasuryPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-5"
+                className="rounded-[2px] bg-panel border border-hairline p-5"
               >
                 <div className="flex items-start justify-between mb-3">
                   <p className="text-xs text-gray-500 uppercase tracking-wider">{card.label}</p>
-                  <div className={`p-2 rounded-lg ${card.bg}`}>
+                  <div className={`p-2 rounded-[2px] ${card.bg}`}>
                     <card.icon className={`w-4 h-4 ${card.color}`} />
                   </div>
                 </div>
-                <p className="text-2xl font-bold font-mono text-white">{card.value}</p>
+                <p className="text-2xl font-bold font-mono text-ivory">{card.value}</p>
               </motion.div>
             ))}
           </div>
 
-          <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-6">
-            <h3 className="text-sm font-semibold text-white mb-2">Fee Withdrawal</h3>
+          <div className="rounded-[2px] bg-panel border border-hairline p-6">
+            <h3 className="text-[13px] font-semibold text-ivory mb-2">Fee Withdrawal</h3>
             <p className="text-xs text-gray-500 mb-3">
               Fee data source: <span className="text-gray-300 font-mono">{data?.feeSource ?? '—'}</span>
             </p>
@@ -129,9 +129,9 @@ export default function AdminTreasuryPage() {
               ledger stays accurate.
             </p>
             <div className="flex items-center gap-3">
-              <div className="flex-1 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <div className="flex-1 px-4 py-3 rounded-[2px] bg-panel border border-hairline">
                 <p className="text-xs text-gray-500">Available for withdrawal</p>
-                <p className="text-lg font-bold font-mono text-white mt-0.5">
+                <p className="text-[21px] font-bold font-mono text-ivory mt-0.5">
                   {(data?.pendingFeesSol || 0).toFixed(4)} SOL
                 </p>
               </div>
@@ -145,8 +145,8 @@ export default function AdminTreasuryPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[#1A1C22] border border-white/[0.06] p-6">
-            <h3 className="text-sm font-semibold text-white mb-4">Withdrawal History</h3>
+          <div className="rounded-[2px] bg-panel border border-hairline p-6">
+            <h3 className="text-[13px] font-semibold text-ivory mb-4">Withdrawal History</h3>
             {!data?.recentWithdrawals?.length ? (
               <p className="text-xs text-gray-500">No withdrawals recorded yet.</p>
             ) : (
@@ -154,7 +154,7 @@ export default function AdminTreasuryPage() {
                 {data.recentWithdrawals.map((w, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-white">{w.amountSol.toFixed(4)} SOL</span>
+                      <span className="font-mono text-[13px] text-ivory">{w.amountSol.toFixed(4)} SOL</span>
                       {w.signature ? (
                         <a
                           href={`https://explorer.solana.com/tx/${w.signature}${process.env.NEXT_PUBLIC_CLUSTER === 'devnet' ? '?cluster=devnet' : ''}`}

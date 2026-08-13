@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
-import { getMarket } from "@/lib/data/markets";
+import { getMarket, getPriceHistory } from "@/lib/data/markets";
 import { getMarketComments } from "@/lib/db/store";
 import { getTradesByMarketFromDb } from "@/lib/db/trades-store";
 import { ok, notFound, serverError } from "@/lib/api-response";
@@ -18,9 +18,11 @@ export const GET = apiHandler(async (req: NextRequest, context) => {
       return notFound("Market not found");
     }
 
-    const [recentTrades, comments] = await Promise.all([
+    const [recentTrades, comments, dbPriceHistory] = await Promise.all([
       getTradesByMarketFromDb(market.marketPubkey),
       getMarketComments(market.marketPubkey),
+      // Seed the probability sparkline: last ~120 snapshots (24h @ 1/min).
+      getPriceHistory(market.marketPubkey, "7d"),
     ]);
 
     return ok({
@@ -37,9 +39,15 @@ export const GET = apiHandler(async (req: NextRequest, context) => {
           blockTime: t.blockTime,
         })),
         commentsCount: comments.length,
+        dbPriceHistory: dbPriceHistory.slice(-120).map(p => ({
+          timestamp: p.timestamp,
+          yesPct: p.outcomeIndex === 0
+            ? Math.max(1, Math.min(99, Math.round(((p.priceBps ?? 5000) / 10000) * 100)))
+            : Math.max(1, Math.min(99, Math.round((1 - (p.priceBps ?? 5000) / 10000) * 100))),
+        })),
       },
     });
   } catch (err) {
     return serverError(err);
   }
-});
+}, { cacheMaxAge: 5, cacheTags: ["markets"] });

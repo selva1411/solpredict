@@ -30,12 +30,12 @@ export function StatTile3D({
   const springConfig = { stiffness: 280, damping: 22 };
   const rotateX = useSpring(0, springConfig);
   const rotateY = useSpring(0, springConfig);
-  const glowOpacity = useTransform(rotateX, [-8, 0, 8], [0.35, 0.15, 0.35]);
+  const sheenOpacity = useTransform(rotateX, [-8, 0, 8], [0.35, 0.15, 0.35]);
 
   const accentColors = {
-    amber: "from-[#ffd89c]/15 via-transparent to-transparent border-[#ffd89c]/35",
-    green: "from-[#a1d494]/15 via-transparent to-transparent border-[#a1d494]/30",
-    neutral: "from-white/5 via-transparent to-transparent border-white/10",
+    amber: "from-gold-lite/15 via-transparent to-transparent border-gold-lite/35",
+    green: "from-verdigris/15 via-transparent to-transparent border-verdigris/30",
+    neutral: "from-white/5 via-transparent to-transparent border-hairline",
   };
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -71,8 +71,8 @@ export function StatTile3D({
       className={`holo-card p-5 flex flex-col justify-between h-32 bg-[var(--surface-1)] holo-card-3d relative overflow-hidden group ${accentColors[accent]}`}
     >
       <motion.div
-        style={{ opacity: glowOpacity }}
-        className="absolute inset-0 bg-gradient-radial from-[#ffd89c]/5 to-transparent pointer-events-none"
+        style={{ opacity: sheenOpacity }}
+        className="absolute inset-0 bg-gradient-radial from-gold-lite/5 to-transparent pointer-events-none"
       />
 
       <div className="flex items-start justify-between relative z-10" style={{ transform: "translateZ(12px)" }}>
@@ -82,7 +82,7 @@ export function StatTile3D({
         {Icon && (
           <Icon
             className={`w-4 h-4 transition-colors duration-300 ${
-              hovering ? "text-[#ffd89c]" : "text-[#d6c4ac]"
+              hovering ? "text-gold-lite" : "text-[#d6c4ac]"
             }`}
           />
         )}
@@ -91,14 +91,14 @@ export function StatTile3D({
       <div className="flex items-end justify-between relative z-10" style={{ transform: "translateZ(18px)" }}>
         <span className="text-xs font-mono text-[#d6c4ac]">{unit}</span>
         {useSplitFlap ? (
-          <SplitFlapText text={value} charClassName="w-[18px] h-[28px] text-xs text-[#ffd89c]" />
+          <SplitFlapText text={value} charClassName="w-[18px] h-[28px] text-xs text-gold-lite" />
         ) : (
-          <span className="text-xl font-mono font-bold text-[#ffd89c]">{value}</span>
+          <span className="text-[21px] font-mono font-bold text-gold-lite">{value}</span>
         )}
       </div>
 
       <div
-        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#ffd89c]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-gold-lite/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         style={{ transform: "translateZ(8px)" }}
       />
     </motion.div>

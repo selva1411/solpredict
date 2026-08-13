@@ -78,14 +78,14 @@ export function LiveCryptoChart({
     <div className="w-full select-none space-y-3">
       <div className="flex items-center gap-2 mb-3">
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ffd89c] opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ffd89c]" />
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-[2px] bg-gold-lite opacity-75" />
+          <span className="relative inline-flex rounded-[2px] h-2 w-2 bg-gold-lite" />
         </span>
-        <span className="text-xs font-mono text-[#808495]">
+        <span className="text-xs font-mono text-ash">
           LIVE{feedHex ? ` · ${symbol || 'SOL/USD'}` : ''} · updates every 3s
         </span>
         <span className="ml-auto flex items-baseline gap-2">
-          <span className="text-sm font-mono text-[#F4F4F9] font-bold">
+          <span className="text-[13px] font-mono text-ivory font-bold">
             ${lastPrice.toFixed(4)}
           </span>
           <span className={`text-[11px] font-mono font-semibold ${lineColor}`}>

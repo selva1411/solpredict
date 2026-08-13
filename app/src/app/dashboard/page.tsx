@@ -53,7 +53,9 @@ export default function DashboardPage() {
   const { isLoading, isError } = useQuery({
     queryKey: keys.user.positions(walletStr ?? "none"),
     queryFn: async () => {
-      const r = await fetch(`/api/user/positions?wallet=${walletStr}`);
+      // cache: "no-store" — never serve a stale cached positions response
+      // (the previous fetch could race a just-landed trade and freeze at 0).
+      const r = await fetch(`/api/user/positions?wallet=${walletStr}`, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       if (data?.ok) {
@@ -64,7 +66,12 @@ export default function DashboardPage() {
       return data;
     },
     enabled: !!walletStr,
-    staleTime: 15_000,
+    // Live-updating: poll every 12s so the dashboard revalues positions and
+    // picks up new trades without a manual refresh. The detail page also
+    // invalidates this key after every buy/sell/LP, so it refreshes instantly.
+    refetchInterval: 12_000,
+    refetchOnWindowFocus: true,
+    staleTime: 5_000,
   });
   const loading = !!walletStr ? isLoading : false;
   const fetchError = !!walletStr ? isError : false;
@@ -87,7 +94,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card p-12 text-center text-[#808495] animate-pulse">Loading dashboard...</div>
+        <div className="holo-card p-12 text-center text-ash animate-pulse">Loading dashboard...</div>
       </main>
     );
   }
@@ -95,10 +102,10 @@ export default function DashboardPage() {
   if (fetchError) {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
-          <AlertTriangle className="w-12 h-12 opacity-30 text-[#E4574A]" />
+        <div className="holo-card py-16 text-center text-ash flex flex-col items-center justify-center space-y-4">
+          <AlertTriangle className="w-12 h-12 opacity-30 text-bordeaux" />
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-[#F4F4F9] uppercase">Data Feed Error</h3>
+            <h3 className="text-[15px] font-bold text-ivory uppercase">Data Feed Error</h3>
             <p className="text-xs max-w-sm mx-auto">Failed to load dashboard data from the server. Please try again.</p>
           </div>
         </div>
@@ -112,47 +119,47 @@ export default function DashboardPage() {
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       <div className="mb-8">
         <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
-          <span className="text-gradient">Dashboard</span>
+          <span className="text-gold-lite">Dashboard</span>
         </h1>
-        <p className="text-[#808495]">Your personal analytics</p>
+        <p className="text-ash">Your personal analytics</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="holo-card p-5">
-          <p className="text-xs text-[#808495] uppercase tracking-wider mb-2">Net Worth</p>
-          <p className="font-display text-2xl font-bold text-[#F4F4F9]">{stats.netWorthSol.toFixed(2)} SOL</p>
-          {usdValue && <p className="text-xs text-[#808495] mt-1">${usdValue} USD</p>}
+          <p className="text-xs text-ash uppercase tracking-wider mb-2">Net Worth</p>
+          <p className="font-display text-2xl font-bold text-ivory">{stats.netWorthSol.toFixed(2)} SOL</p>
+          {usdValue && <p className="text-xs text-ash mt-1">${usdValue} USD</p>}
         </div>
         <div className="holo-card p-5">
-          <p className="text-xs text-[#808495] uppercase tracking-wider mb-2">24h P&L</p>
-          <p className={`font-display text-2xl font-bold ${stats.pnl24hSol >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
+          <p className="text-xs text-ash uppercase tracking-wider mb-2">24h P&L</p>
+          <p className={`font-display text-2xl font-bold ${stats.pnl24hSol >= 0 ? "text-verdigris" : "text-bordeaux"}`}>
             {stats.pnl24hSol >= 0 ? "+" : ""}{stats.pnl24hSol.toFixed(2)} SOL
           </p>
-          <p className={`text-xs mt-1 ${stats.pnl24hPct >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
+          <p className={`text-xs mt-1 ${stats.pnl24hPct >= 0 ? "text-verdigris" : "text-bordeaux"}`}>
             {stats.pnl24hPct >= 0 ? "+" : ""}{stats.pnl24hPct.toFixed(2)}%
           </p>
         </div>
         <div className="holo-card p-5">
-          <p className="text-xs text-[#808495] uppercase tracking-wider mb-2">Win Rate</p>
-          <p className="font-display text-2xl font-bold text-[#F4F4F9]">{(stats.winRate * 100).toFixed(0)}%</p>
-          <div className="w-full h-1.5 bg-white/5 rounded-full mt-3 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-[#FFA500] to-[#FFA500] rounded-full" style={{ width: `${stats.winRate * 100}%` }} />
+          <p className="text-xs text-ash uppercase tracking-wider mb-2">Win Rate</p>
+          <p className="font-display text-2xl font-bold text-ivory">{(stats.winRate * 100).toFixed(0)}%</p>
+          <div className="w-full h-1.5 bg-panel-2 rounded-[2px] mt-3 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-gold to-gold rounded-[2px]" style={{ width: `${stats.winRate * 100}%` }} />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 holo-card p-6">
-          <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-6">
+          <h3 className="font-display text-[21px] font-bold text-ivory mb-6">
             Active Positions ({positions.length})
           </h3>
           {positions.length === 0 ? (
-            <p className="text-center text-[#808495] py-8">No open positions yet.</p>
+            <p className="text-center text-ash py-8">No open positions yet.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="text-xs text-[#808495] uppercase tracking-wider border-b border-white/5">
+                  <tr className="text-xs text-ash uppercase tracking-wider border-b border-hairline">
                     <th className="pb-3 pr-4">Market</th>
                     <th className="pb-3 pr-4">Side</th>
                     <th className="pb-3 pr-4 text-right">Shares</th>
@@ -163,15 +170,15 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {positions.map((p, i) => (
-                    <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
-                      <td className="py-4 pr-4 font-medium text-[#F4F4F9] max-w-xs truncate">{p.question}</td>
+                    <tr key={i} className="border-b border-hairline text-[13px] hover:bg-panel transition-colors">
+                      <td className="py-4 pr-4 font-medium text-ivory max-w-xs truncate">{p.question}</td>
                       <td className="py-4 pr-4">
-                        <span className={`text-xs font-bold ${p.side === "YES" ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>{p.side}</span>
+                        <span className={`text-xs font-bold ${p.side === "YES" ? "text-verdigris" : "text-bordeaux"}`}>{p.side}</span>
                       </td>
-                      <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.shares.toFixed(2)}</td>
-                      <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.avgPriceSol.toFixed(3)}</td>
-                      <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.currentPriceSol.toFixed(3)}</td>
-                      <td className={`py-4 pr-4 text-right font-mono font-bold ${p.pnlSol >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
+                      <td className="py-4 pr-4 text-right font-mono text-ash">{p.shares.toFixed(2)}</td>
+                      <td className="py-4 pr-4 text-right font-mono text-ash">{p.avgPriceSol.toFixed(3)}</td>
+                      <td className="py-4 pr-4 text-right font-mono text-ash">{p.currentPriceSol.toFixed(3)}</td>
+                      <td className={`py-4 pr-4 text-right font-mono font-bold ${p.pnlSol >= 0 ? "text-verdigris" : "text-bordeaux"}`}>
                         {p.pnlSol >= 0 ? "+" : ""}{p.pnlSol.toFixed(3)}
                         <span className="block text-[10px] opacity-70">({p.pnlPercent >= 0 ? "+" : ""}{p.pnlPercent.toFixed(1)}%)</span>
                       </td>
@@ -183,27 +190,27 @@ export default function DashboardPage() {
           )}
 
           {/* LP Tokens & Yield Section */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-4 flex items-center justify-between">
-              <span className="flex items-center gap-2">💧 Liquidity Positions & LP Tokens</span>
+          <div className="mt-6 pt-6 border-t border-hairline">
+            <h3 className="font-display text-[21px] font-bold text-ivory mb-4 flex items-center justify-between">
+              <span className="flex items-center gap-2">Liquidity Positions & LP Tokens</span>
               {lpPositions.some((lp) => lp.estFeeEarnedSol > 0) ? (
-                <span className="text-xs bg-[#4CAF50]/10 text-[#4CAF50] px-2 py-0.5 rounded border border-[#4CAF50]/30 font-mono font-normal">
+                <span className="text-xs bg-verdigris/10 text-verdigris px-2 py-0.5 rounded border border-verdigris/30 font-mono font-normal">
                   Earning LP Fees
                 </span>
               ) : (
-                <span className="text-xs bg-white/5 text-[#808495] px-2 py-0.5 rounded border border-white/10 font-mono font-normal">
+                <span className="text-xs bg-panel-2 text-ash px-2 py-0.5 rounded border border-hairline font-mono font-normal">
                   Fees tracked on-chain
                 </span>
               )}
             </h3>
 
             {lpPositions.length === 0 ? (
-              <p className="text-sm text-[#808495]">No liquidity provided yet. Visit any market&apos;s LP tab to deposit reserves and earn trading fees.</p>
+              <p className="text-[13px] text-ash">No liquidity provided yet. Visit any market&apos;s LP tab to deposit reserves and earn trading fees.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-xs text-[#808495] uppercase tracking-wider border-b border-white/5">
+                    <tr className="text-xs text-ash uppercase tracking-wider border-b border-hairline">
                       <th className="pb-3 pr-4">Market</th>
                       <th className="pb-3 pr-4 text-right">Deposited SOL</th>
                       <th className="pb-3 pr-4 text-right">LP Tokens</th>
@@ -214,16 +221,16 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {lpPositions.map((lp, i) => (
-                      <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
-                        <td className="py-4 pr-4 font-medium text-[#F4F4F9] max-w-xs truncate">{lp.question}</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#F4F4F9] font-bold">{lp.amountSol.toFixed(2)} SOL</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#FFA500] font-bold">{lp.lpTokens.toLocaleString()} LP</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#4CAF50] font-bold">{lp.estFeeEarnedSol > 0 ? `+${lp.estFeeEarnedSol.toFixed(3)} SOL` : "\u2014"}</td>
-                        <td className="py-4 pr-4 text-right font-mono text-[#FFA500]">{lp.apy}</td>
+                      <tr key={i} className="border-b border-hairline text-[13px] hover:bg-panel transition-colors">
+                        <td className="py-4 pr-4 font-medium text-ivory max-w-xs truncate">{lp.question}</td>
+                        <td className="py-4 pr-4 text-right font-mono text-ivory font-bold">{lp.amountSol.toFixed(2)} SOL</td>
+                        <td className="py-4 pr-4 text-right font-mono text-gold font-bold">{lp.lpTokens.toLocaleString()} LP</td>
+                        <td className="py-4 pr-4 text-right font-mono text-verdigris font-bold">{lp.estFeeEarnedSol > 0 ? `+${lp.estFeeEarnedSol.toFixed(3)} SOL` : "\u2014"}</td>
+                        <td className="py-4 pr-4 text-right font-mono text-gold">{lp.apy}</td>
                         <td className="py-4 pr-4 text-right">
                           <a
                             href={`/market/${lp.marketPubkey}`}
-                            className="inline-block px-3 py-1 bg-[#FFA500]/10 text-[#FFA500] hover:bg-[#FFA500]/20 text-xs font-bold rounded border border-[#FFA500]/40 transition-colors"
+                            className="inline-block px-3 py-1 bg-gold/10 text-gold hover:bg-gold/20 text-xs font-bold rounded border border-gold/40 transition-colors"
                           >
                             Manage LP
                           </a>
@@ -239,34 +246,34 @@ export default function DashboardPage() {
 
         <div className="lg:col-span-4 space-y-6">
           <div className="holo-card p-6">
-            <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-4">Breakdown</h3>
+            <h3 className="font-display text-[21px] font-bold text-ivory mb-4">Breakdown</h3>
             <div className="space-y-4">
               <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#808495]">Winning</span>
-                  <span className="text-[#4CAF50]">{winningPositions}</span>
+                <div className="flex justify-between text-[13px] mb-1">
+                  <span className="text-ash">Winning</span>
+                  <span className="text-verdigris">{winningPositions}</span>
                 </div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#808495]">Losing</span>
-                  <span className="text-[#E4574A]">{losingPositions}</span>
+                <div className="flex justify-between text-[13px] mb-1">
+                  <span className="text-ash">Losing</span>
+                  <span className="text-bordeaux">{losingPositions}</span>
                 </div>
               </div>
-              <div className="border-t border-white/5 pt-4">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#808495]">YES positions</span>
-                  <span className="text-[#4CAF50]">{yesCount}</span>
+              <div className="border-t border-hairline pt-4">
+                <div className="flex justify-between text-[13px] mb-1">
+                  <span className="text-ash">YES positions</span>
+                  <span className="text-verdigris">{yesCount}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#808495]">NO positions</span>
-                  <span className="text-[#E4574A]">{noCount}</span>
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-ash">NO positions</span>
+                  <span className="text-bordeaux">{noCount}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="holo-card p-6">
-            <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-4">Historical Data</h3>
-            <p className="text-sm text-[#808495]">
+            <h3 className="font-display text-[21px] font-bold text-ivory mb-4">Historical Data</h3>
+            <p className="text-[13px] text-ash">
               Historical data available after your first trade.
             </p>
           </div>

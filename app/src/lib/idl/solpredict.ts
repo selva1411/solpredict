@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpredict.json`.
  */
 export type Solpredict = {
-  "address": "BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig",
+  "address": "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG",
   "metadata": {
     "name": "solpredict",
     "version": "0.1.0",

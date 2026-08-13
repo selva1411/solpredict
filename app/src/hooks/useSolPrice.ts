@@ -6,26 +6,15 @@ let cachedPrice: number | null = null;
 
 async function fetchSolPrice(): Promise<number> {
   try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd",
-      { cache: "no-store" }
-    );
+    const res = await fetch("/api/market-data/sol-price", { cache: "no-store" });
     if (res.ok) {
       const json = await res.json();
-      const price = json?.solana?.usd;
+      const price = json?.price;
       if (price && price > 1) return price;
     }
-  } catch { /* fall through */ }
-
-  try {
-    const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT", { cache: "no-store" });
-    if (res.ok) {
-      const json = await res.json();
-      const price = parseFloat(json?.price);
-      if (price && price > 1) return price;
-    }
-  } catch { /* fall through */ }
-
+  } catch {
+    return cachedPrice ?? 0;
+  }
   return cachedPrice ?? 0;
 }
 
@@ -34,22 +23,32 @@ export function useSolPrice(): { solPrice: number; loading: boolean } {
   const [loading, setLoading] = useState(!cachedPrice);
 
   useEffect(() => {
+    let cancelled = false;
     if (cachedPrice === null) {
       setLoading(true);
-      fetchSolPrice().then((price) => {
-        cachedPrice = price;
-        setSolPrice(price);
-      }).catch(() => {}).finally(() => setLoading(false));
+      fetchSolPrice()
+        .then((price) => {
+          if (cancelled) return;
+          cachedPrice = price;
+          setSolPrice(price);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }
 
     const interval = setInterval(() => {
       fetchSolPrice().then((price) => {
+        if (cancelled) return;
         cachedPrice = price;
         setSolPrice(price);
-      }).catch(() => {});
+      });
     }, 60000);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   return { solPrice, loading };

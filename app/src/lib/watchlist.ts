@@ -58,3 +58,26 @@ export function toggleWatchlist(key: string, walletPubkey?: string): string[] {
 export function isWatchlisted(key: string): boolean {
   return getWatchlist().includes(key);
 }
+
+/**
+ * Remove stale market pubkeys from the local watchlist (e.g. markets that were
+ * re-deployed under a new program ID, so the old pubkey no longer exists).
+ * Returns the pruned list. `validKeys` is the set of pubkeys that still exist.
+ * The DB copy is left alone — the caller may also post the removals via
+ * toggleWatchlist per key, but the localStorage is the source of stale links
+ * that users click into.
+ */
+export function pruneWatchlist(validKeys: string[] | Set<string>): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const valid = new Set(validKeys);
+    const current = getWatchlist();
+    const next = current.filter((k) => valid.has(k));
+    if (next.length !== current.length) {
+      localStorage.setItem("solpredict-watchlist", JSON.stringify(next));
+    }
+    return next;
+  } catch {
+    return getWatchlist();
+  }
+}

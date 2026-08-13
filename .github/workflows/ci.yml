@@ -64,3 +64,6 @@ jobs:
 
       - name: Build Program
         run: cargo build --manifest-path programs/solpredict/Cargo.toml
+
+      - name: Run Rust Unit Tests (AMM math, etc.)
+        run: cargo test --manifest-path programs/solpredict/Cargo.toml

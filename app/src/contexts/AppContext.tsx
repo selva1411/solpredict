@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { getWatchlist } from "@/lib/watchlist";
+import { fetchWatchlistFromDb, getWatchlist, toggleWatchlist } from "@/lib/watchlist";
 
 interface AppState {
   mobileMenuOpen: boolean;
@@ -48,34 +48,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Load the wallet's watchlist from the DB whenever the wallet changes.
   useEffect(() => {
     if (!walletPubkey) return;
-    fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/watchlist?wallet=${walletPubkey}`)
-      .then(r => r.json().catch(() => null))
-      .then((data) => {
-        if (data && data.ok && Array.isArray(data.keys)) {
-          localStorage.setItem("solpredict-watchlist", JSON.stringify(data.keys));
-          setWatchlist(data.keys);
-        }
+    let cancelled = false;
+    fetchWatchlistFromDb(walletPubkey)
+      .then((keys) => {
+        if (!cancelled) setWatchlist(keys);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!cancelled) setWatchlist(getWatchlist());
+        console.warn("[AppContext] failed to load watchlist from DB", err);
+      });
+    return () => { cancelled = true; };
   }, [walletPubkey]);
 
   const toggleWatchlistItem = useCallback((pubkey: string) => {
-    const current = getWatchlist();
-    const next = current.includes(pubkey)
-      ? current.filter(k => k !== pubkey)
-      : [...current, pubkey];
-    localStorage.setItem("solpredict-watchlist", JSON.stringify(next));
+    const wallet = walletPubkey ?? localStorage.getItem("solpredict-wallet") ?? undefined;
+    const next = toggleWatchlist(pubkey, wallet);
     setWatchlist(next);
-
-    // Sync directly with NeonDB in the background.
-    const wallet = walletPubkey ?? localStorage.getItem("solpredict-wallet");
-    if (wallet) {
-      fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, marketPubkey: pubkey }),
-      }).catch(() => {});
-    }
   }, [walletPubkey]);
 
   const isWatched = useCallback((pubkey: string) => {

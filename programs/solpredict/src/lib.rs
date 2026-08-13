@@ -12,7 +12,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("BXHBts76C2bwRCGuEB2n8nrUeQ5hfHvyHcQSrJQkvzig");
+declare_id!("AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG");
 
 #[program]
 pub mod solpredict {
@@ -209,7 +209,8 @@ pub mod solpredict {
             let outcome = outcomes[i];
             require!(outcome == 1 || outcome == 2, SolPredictError::InvalidOutcome);
 
-            let mut market = Account::<Market>::try_from(&ctx.remaining_accounts[i])?;
+            let account_info = &ctx.remaining_accounts[i];
+            let mut market = Account::<Market>::try_from(account_info)?;
 
             require!(market.status == MarketStatus::Open, SolPredictError::MarketNotOpen);
 
@@ -233,6 +234,11 @@ pub mod solpredict {
             market.winning_outcome = if outcome == 1 { WinningOutcome::Yes } else { WinningOutcome::No };
             market.status = MarketStatus::Settled;
             market.settled_at = clock.unix_timestamp;
+
+            // Persist the mutated Market back into the on-chain account data.
+            // remaining_accounts are NOT auto-persisted by Anchor's exit(), so
+            // we call Account::exit manually (includes the 8-byte discriminator).
+            market.exit(&crate::ID)?;
 
             emit!(MarketSettled {
                 market_id: market.market_id,

@@ -59,7 +59,7 @@ export function UsersSection() {
   if (loading) {
     return (
       <motion.section variants={cardVariants} initial="hidden" animate="visible" className="glass-panel p-8">
-        <div className="flex items-center justify-center gap-3 text-[#808495]">
+        <div className="flex items-center justify-center gap-3 text-ash">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-xs font-mono">Loading users...</span>
         </div>
@@ -70,7 +70,7 @@ export function UsersSection() {
   if (error) {
     return (
       <motion.section variants={cardVariants} initial="hidden" animate="visible" className="glass-panel p-8">
-        <p className="text-xs text-[#E4574A] font-mono">{error}</p>
+        <p className="text-xs text-bordeaux font-mono">{error}</p>
       </motion.section>
     );
   }
@@ -78,27 +78,27 @@ export function UsersSection() {
   return (
     <motion.section variants={cardVariants} initial="hidden" animate="visible" className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 text-[#FFA500]">
+        <div className="flex items-center gap-2 text-gold">
           <Users className="w-5 h-5" />
-          <h2 className="text-lg font-bold font-display uppercase tracking-wider text-[#F4F4F9]">
+          <h2 className="text-[21px] font-bold font-display uppercase tracking-wider text-ivory">
             Traders ({filtered.length})
           </h2>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#808495]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ash" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by wallet or username..."
-            className="w-64 bg-[#1A1C22] border border-white/10 rounded-lg pl-9 pr-3 py-2 text-xs text-[#F4F4F9] focus:outline-none focus:border-[#FFA500]"
+            className="w-64 bg-panel border border-hairline rounded-[2px] pl-9 pr-3 py-2 text-xs text-ivory focus:outline-none focus:border-gold"
           />
         </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="glass-panel p-8 text-center">
-          <p className="text-sm text-[#808495]">
+          <p className="text-[13px] text-ash">
             {search ? "No users match your search." : "No traders yet. Users appear when they place their first trade."}
           </p>
         </div>
@@ -107,7 +107,7 @@ export function UsersSection() {
           <div className="overflow-x-auto scrollbar-thin">
             <table className="w-full text-left border-collapse min-w-[650px]">
               <thead>
-                <tr className="border-b border-white/5 text-[10px] font-mono uppercase tracking-widest text-[#808495] bg-[#0d0d0d]">
+                <tr className="border-b border-hairline text-[10px] font-mono uppercase tracking-widest text-ash bg-void">
                   <th className="py-3 px-4">Wallet</th>
                   <th className="py-3 px-4">Username</th>
                   <th className="py-3 px-4 text-right">Wagered</th>
@@ -118,25 +118,25 @@ export function UsersSection() {
                   <th className="py-3 px-4 text-right hidden sm:table-cell">Last Active</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5 font-mono text-xs">
+              <tbody className="divide-y divide-hairline font-mono text-xs">
                 {filtered.map((u) => (
-                  <tr key={u.wallet} className="hover:bg-white/5 transition-colors">
+                  <tr key={u.wallet} className="hover:bg-ivory/5 transition-colors">
                     <td className="py-3 px-4">
-                      <span className="text-[#FFA500] text-[10px]">
+                      <span className="text-gold text-[10px]">
                         {u.wallet.slice(0, 4)}...{u.wallet.slice(-4)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-[#F4F4F9] font-bold">
+                    <td className="py-3 px-4 text-ivory font-bold">
                       {u.username || `${u.wallet.slice(0, 4)}...${u.wallet.slice(-4)}`}
                     </td>
-                    <td className="py-3 px-4 text-right text-[#F4F4F9]">{u.totalWagered.toFixed(2)} SOL</td>
-                    <td className={`py-3 px-4 text-right font-bold ${u.totalProfit >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
+                    <td className="py-3 px-4 text-right text-ivory">{u.totalWagered.toFixed(2)} SOL</td>
+                    <td className={`py-3 px-4 text-right font-bold ${u.totalProfit >= 0 ? "text-verdigris" : "text-bordeaux"}`}>
                       {u.totalProfit >= 0 ? "+" : ""}{u.totalProfit.toFixed(2)} SOL
                     </td>
-                    <td className="py-3 px-4 text-right text-[#F4F4F9]">{u.winRate.toFixed(1)}%</td>
-                    <td className="py-3 px-4 text-right text-[#F4F4F9]">{u.pasScore}</td>
-                    <td className="py-3 px-4 text-right text-[#F4F4F9]">{u.marketsTraded}</td>
-                    <td className="py-3 px-4 text-right text-[#808495] text-[10px] hidden sm:table-cell">
+                    <td className="py-3 px-4 text-right text-ivory">{u.winRate.toFixed(1)}%</td>
+                    <td className="py-3 px-4 text-right text-ivory">{u.pasScore}</td>
+                    <td className="py-3 px-4 text-right text-ivory">{u.marketsTraded}</td>
+                    <td className="py-3 px-4 text-right text-ash text-[10px] hidden sm:table-cell">
                       {u.lastActive ? new Date(u.lastActive).toLocaleDateString() : "—"}
                     </td>
                   </tr>

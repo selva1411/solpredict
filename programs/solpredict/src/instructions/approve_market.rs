@@ -44,7 +44,7 @@ pub struct ApproveMarket<'info> {
     pub proposer: SystemAccount<'info>,
 
     #[account(
-        init,
+        init_if_needed,
         payer = admin,
         space = Market::LEN,
         seeds = [MARKET_SEED, proposal.proposal_id.to_le_bytes().as_ref()],
@@ -53,7 +53,7 @@ pub struct ApproveMarket<'info> {
     pub market: Account<'info, Market>,
 
     #[account(
-        init,
+        init_if_needed,
         payer = admin,
         mint::decimals = SHARE_DECIMALS,
         mint::authority = market,
@@ -63,7 +63,7 @@ pub struct ApproveMarket<'info> {
     pub yes_mint: Account<'info, Mint>,
 
     #[account(
-        init,
+        init_if_needed,
         payer = admin,
         mint::decimals = SHARE_DECIMALS,
         mint::authority = market,

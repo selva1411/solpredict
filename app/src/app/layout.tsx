@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { WalletContextProvider } from "@/components/WalletContextProvider";
 import { Navigation } from "@/components/Navigation";
+import { GlobalPriceTicker } from "@/components/GlobalPriceTicker";
 import { MobileBottomNav } from "@/components/MobileNav";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { WebVitals } from "@/components/WebVitals";
@@ -46,13 +47,13 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PREDICT-X — Predict the Future. Win the Future.",
-  description: "Solana's premier prediction market. Trade YES/NO on any outcome with sub-second settlement, CPMM pricing, and Pyth oracle resolution.",
+  title: "SOLPREDICT — Institutional Solana Prediction Markets",
+  description: "Conviction, priced. Solana's premier prediction terminal — trade YES/NO on any outcome with CPMM pricing and Pyth oracle resolution, settled on-chain.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "PREDICT-X",
+    title: "SOLPREDICT",
   },
 };
 
@@ -64,18 +65,23 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${ibmPlexSans.variable} ${shareTech.variable} ${spaceMono.variable} ${orbitron.variable} ${jetBrainsMono.variable} antialiased pb-16 md:pb-0`}
-        style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+        className={`${ibmPlexSans.variable} ${shareTech.variable} ${spaceMono.variable} ${orbitron.variable} ${jetBrainsMono.variable} min-h-screen bg-void text-ivory antialiased pb-16 md:pb-0`}
       >
-        <WalletContextProvider>
-          <ErrorBoundary>
-            <Navigation />
-            <main className="animate-fade-in">
-              {children}
-            </main>
-          </ErrorBoundary>
-          <MobileBottomNav />
-        </WalletContextProvider>
+        <div className="lux-bloom" aria-hidden />
+        <div className="lux-grain" aria-hidden />
+        {/* keep all existing providers here, unchanged */}
+        <div className="relative z-10">
+          <WalletContextProvider>
+            <ErrorBoundary>
+              <Navigation />
+              <GlobalPriceTicker />
+              <main className="rise">
+                {children}
+              </main>
+            </ErrorBoundary>
+            <MobileBottomNav />
+          </WalletContextProvider>
+        </div>
         <Toaster />
         <WebVitals />
         <ServiceWorkerRegister />

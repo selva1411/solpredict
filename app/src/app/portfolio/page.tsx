@@ -2,11 +2,13 @@
 
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Wallet, TrendingUp, Award, BarChart3, AlertTriangle, Filter } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { keys } from "@/lib/api/keys";
+import { LabelLux } from "@/components/ui/label-lux";
+import { Stat } from "@/components/ui/stat";
+import { Rule } from "@/components/ui/rule";
 
 interface Position {
   marketPubkey: string;
@@ -56,7 +58,9 @@ export default function PortfolioPage() {
   const { isLoading, isError } = useQuery({
     queryKey: keys.user.positions(walletStr ?? "none"),
     queryFn: async () => {
-      const r = await fetch(`/api/user/positions?wallet=${walletStr}`);
+      // cache: "no-store" — never serve a stale cached positions response
+      // (the previous fetch could race a just-landed trade and freeze at 0).
+      const r = await fetch(`/api/user/positions?wallet=${walletStr}`, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       if (data?.ok) {
@@ -67,7 +71,12 @@ export default function PortfolioPage() {
       return data;
     },
     enabled: !!walletStr,
-    staleTime: 15_000,
+    // Live-updating: poll every 12s so the portfolio revalues positions and
+    // picks up new trades without a manual refresh. The detail page also
+    // invalidates this key after every buy/sell/LP, so it refreshes instantly.
+    refetchInterval: 12_000,
+    refetchOnWindowFocus: true,
+    staleTime: 5_000,
   });
   const loading = !!walletStr ? isLoading : false;
   const fetchError = !!walletStr ? isError : false;
@@ -96,11 +105,11 @@ export default function PortfolioPage() {
 
   if (!publicKey) {
     return (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card p-12 text-center max-w-md mx-auto">
-          <Wallet className="w-12 h-12 mx-auto mb-4 text-[#FFA500]" />
-          <h2 className="font-display text-xl font-bold mb-2">Connect your wallet</h2>
-          <p className="text-sm text-[#808495] mb-5">
+      <main className="mx-auto w-full max-w-[1240px] px-6 py-24">
+        <div className="max-w-md mx-auto text-center">
+          <LabelLux className="mb-4">Portfolio</LabelLux>
+          <h1 className="text-[34px] text-ivory mb-3">Connect your wallet</h1>
+          <p className="text-[15px] text-ash mb-8">
             Connect a Solana wallet to view your positions and trade history.
           </p>
           <ClientWalletButton />
@@ -111,9 +120,11 @@ export default function PortfolioPage() {
 
   if (loading) {
     return (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card p-12 text-center">
-          <div className="animate-pulse text-[#808495]">Loading your portfolio...</div>
+      <main className="mx-auto w-full max-w-[1240px] px-6 py-24">
+        <div className="space-y-10">
+          <div className="w-48 h-3 bg-panel-2 skeleton-shimmer" />
+          <div className="w-full h-28 bg-panel-2 skeleton-shimmer" />
+          <div className="w-full h-64 bg-panel-2 skeleton-shimmer" />
         </div>
       </main>
     );
@@ -121,131 +132,88 @@ export default function PortfolioPage() {
 
   if (fetchError) {
     return (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card py-16 text-center text-[#808495] flex flex-col items-center justify-center space-y-4">
-          <AlertTriangle className="w-12 h-12 opacity-30 text-[#E4574A]" />
-          <div className="space-y-1">
-            <h3 className="text-base font-bold text-[#F4F4F9] uppercase">Data Feed Error</h3>
-            <p className="text-xs max-w-sm mx-auto">Failed to load portfolio data from the server. Please try again.</p>
-          </div>
-        </div>
+      <main className="mx-auto w-full max-w-[1240px] px-6 py-24 text-center">
+        <LabelLux className="mb-3">Data Feed Error</LabelLux>
+        <p className="text-[15px] text-ash max-w-sm mx-auto">
+          Failed to load portfolio data from the server. Please try again.
+        </p>
       </main>
     );
   }
 
   const usdValue = solPrice > 0 ? (stats.netWorthSol * solPrice).toFixed(2) : null;
-
-  const statCards = [
-    { label: "Net Worth", value: `${stats.netWorthSol.toFixed(2)} SOL`, sub: usdValue ? `$${usdValue} USD` : undefined, icon: Wallet, color: "#FFA500" },
-    { label: "24h P&L", value: `${stats.pnl24hSol >= 0 ? "+" : ""}${stats.pnl24hSol.toFixed(2)} SOL`, sub: `${stats.pnl24hPct >= 0 ? "+" : ""}${stats.pnl24hPct.toFixed(2)}%`, icon: TrendingUp, color: stats.pnl24hSol >= 0 ? "#4CAF50" : "#E4574A" },
-    { label: "Win Rate", value: `${(stats.winRate * 100).toFixed(0)}%`, icon: Award, color: "#FFA500" },
-    { label: "Positions", value: `${positions.length}`, icon: BarChart3, color: "#FFA500" },
-  ];
+  const winRatePct = (stats.winRate * 100).toFixed(0);
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
-          <span className="text-gradient">Portfolio</span>
-        </h1>
-        <p className="text-[#808495]">Your positions and performance</p>
-      </div>
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
+      <LabelLux className="mb-2">Portfolio</LabelLux>
+      <h1 className="text-[44px] text-ivory mb-14">Position Ledger</h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        {statCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className="holo-card p-5 relative overflow-hidden">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-[#808495] uppercase tracking-wider">{card.label}</p>
-                <Icon className="w-4 h-4" style={{ color: card.color }} />
-              </div>
-              <p className="font-display text-xl font-bold" style={{ color: card.color }}>
-                {card.value}
-              </p>
-              {card.sub && <p className="text-xs text-[#808495] mt-1">{card.sub}</p>}
-            </div>
-          );
-        })}
-      </div>
+      {/* Three large stats on one baseline, separated by vertical hairlines */}
+      <section className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-hairline border-b border-hairline mb-14">
+        <div className="py-10 pr-8">
+          <Stat size="lg" label="Net Worth" value={`${stats.netWorthSol.toFixed(2)} SOL`} hint={usdValue ? `$${usdValue} USD` : undefined} />
+        </div>
+        <div className="py-10 px-8">
+          <Stat size="lg" label="24h P&L" value={`${stats.pnl24hSol >= 0 ? "+" : ""}${stats.pnl24hSol.toFixed(2)} SOL`} hint={`${stats.pnl24hPct >= 0 ? "+" : ""}${stats.pnl24hPct.toFixed(2)}%`} />
+        </div>
+        <div className="py-10 pl-8">
+          <Stat size="lg" label="Win Rate" value={`${winRatePct}%`} hint={`${positions.length} open positions`} />
+        </div>
+      </section>
 
-      {categories.length > 0 && (
-        <>
-          <div className="flex flex-wrap items-center gap-2 mb-6">
-            <span className="flex items-center gap-1.5 text-xs text-[#808495] uppercase tracking-wider mr-1">
-              <Filter className="w-3.5 h-3.5" /> Compare:
-            </span>
-            <button onClick={() => setSelectedCategory("All")}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${selectedCategory === "All" ? "bg-[#FFA500] text-white" : "text-[#808495] border border-white/10 hover:border-[#FFA500]/50"}`}>
-              All Categories
+      {categories.length > 1 && (
+        <div className="flex items-center gap-5 mb-8 font-mono text-[10px] uppercase tracking-[.16em]">
+          <span className="text-ash-dim">Compare</span>
+          {["All", ...categories].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`cursor-pointer transition-colors ${
+                selectedCategory === cat ? "text-gold-lite border-b border-gold" : "text-ash hover:text-ivory"
+              }`}
+            >
+              {cat}
             </button>
-            {categories.map((cat) => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${selectedCategory === cat ? "bg-[#FFA500] text-white" : "text-[#808495] border border-white/10 hover:border-[#FFA500]/50"}`}>
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <div className="holo-card p-4">
-              <p className="text-xs text-[#808495] uppercase">Invested ({selectedCategory})</p>
-              <p className="font-display text-lg font-bold text-gradient mt-1">{categoryMetrics.invested.toFixed(2)} SOL</p>
-            </div>
-            <div className="holo-card p-4">
-              <p className="text-xs text-[#808495] uppercase">P&L ({selectedCategory})</p>
-              <p className={`font-display text-lg font-bold mt-1 ${categoryMetrics.pnl >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
-                {categoryMetrics.pnl >= 0 ? "+" : ""}{categoryMetrics.pnl.toFixed(2)} SOL
-              </p>
-            </div>
-            <div className="holo-card p-4">
-              <p className="text-xs text-[#808495] uppercase">Win Rate ({selectedCategory})</p>
-              <p className="font-display text-lg font-bold text-gradient mt-1">{categoryMetrics.winRate.toFixed(0)}%</p>
-            </div>
-          </div>
-        </>
+          ))}
+        </div>
       )}
 
-      <div className="holo-card p-6">
-        <h3 className="font-display text-lg font-bold text-[#F4F4F9] mb-6">
-          Active Positions ({filteredPositions.length})
-        </h3>
+      <Rule className="mb-8" />
+
+      {/* ACTIVE POSITIONS table */}
+      <section className="mb-14">
+        <LabelLux className="mb-4">Active Positions ({filteredPositions.length})</LabelLux>
         {filteredPositions.length === 0 ? (
-          <p className="text-center text-[#808495] py-8">
+          <p className="text-[15px] text-ash-dim py-8">
             No open positions{selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}. Browse markets to start trading.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="text-xs text-[#808495] uppercase tracking-wider border-b border-white/5">
-                  <th className="pb-3 pr-4">Market</th>
-                  <th className="pb-3 pr-4">Side</th>
-                  <th className="pb-3 pr-4">Category</th>
-                  <th className="pb-3 pr-4 text-right">Shares</th>
-                  <th className="pb-3 pr-4 text-right">Avg Price</th>
-                  <th className="pb-3 pr-4 text-right">Current</th>
-                  <th className="pb-3 pr-4 text-right">P&L</th>
+                <tr className="border-b border-hairline">
+                  <th className="pb-3 pr-4 font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Market</th>
+                  <th className="pb-3 pr-4 font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Side</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Shares</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Avg Price</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Current</th>
+                  <th className="pb-3 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">P&L</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredPositions.map((p, i) => (
-                  <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
-                    <td className="py-4 pr-4 font-medium text-[#F4F4F9] max-w-xs truncate">
+                  <tr key={i} className="border-b border-hairline hover:bg-panel transition-colors">
+                    <td className="py-4 pr-4 font-display text-[15px] text-ivory max-w-xs truncate">
                       {p.question}
                     </td>
-                    <td className="py-4 pr-4">
-                      <span className={`text-xs font-bold ${p.side === "YES" ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
-                        {p.side}
-                      </span>
+                    <td className={`py-4 pr-4 font-mono text-[13px] ${p.side === "YES" ? "text-verdigris" : "text-bordeaux"}`}>
+                      {p.side}
                     </td>
-                    <td className="py-4 pr-4">
-                      <span className="text-xs px-2 py-0.5 rounded bg-white/5 text-[#808495]">{p.category || "Other"}</span>
-                    </td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.shares.toFixed(2)}</td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.avgPriceSol.toFixed(3)}</td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#808495]">{p.currentPriceSol.toFixed(3)}</td>
-                    <td className={`py-4 pr-4 text-right font-mono font-bold ${p.pnlSol >= 0 ? "text-[#4CAF50]" : "text-[#E4574A]"}`}>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-ash">{p.shares.toFixed(2)}</td>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-ash">{p.avgPriceSol.toFixed(3)}</td>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-ivory">{p.currentPriceSol.toFixed(3)}</td>
+                    <td className={`py-4 text-right font-mono tnum text-[13px] ${p.pnlSol >= 0 ? "text-verdigris" : "text-bordeaux"}`}>
                       {p.pnlSol >= 0 ? "+" : ""}{p.pnlSol.toFixed(3)}
                       <span className="block text-[10px] opacity-70">
                         ({p.pnlPercent >= 0 ? "+" : ""}{p.pnlPercent.toFixed(1)}%)
@@ -257,53 +225,45 @@ export default function PortfolioPage() {
             </table>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* LP Tokens & Liquidity Positions Section */}
-      <div className="holo-card p-6 mt-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <BarChart3 className="w-5 h-5 text-[#FFA500]" />
-            <h3 className="font-display text-lg font-bold text-[#F4F4F9]">
-              Liquidity Positions & LP Tokens ({filteredLp.length})
-            </h3>
-          </div>
-          <span className="text-xs bg-white/5 text-[#808495] px-2.5 py-1 rounded border border-white/10 font-mono font-normal">
-            Fees tracked on-chain
-          </span>
+      {/* LIQUIDITY positions table */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <LabelLux>Liquidity Positions ({filteredLp.length})</LabelLux>
+          <span className="font-mono text-[10px] text-ash-dim uppercase tracking-[.16em]">Fees tracked on-chain</span>
         </div>
-
         {filteredLp.length === 0 ? (
-          <p className="text-center text-[#808495] py-8">
+          <p className="text-[15px] text-ash-dim py-8">
             No liquidity provided{selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}. Visit any market&apos;s LP tab to deposit seed liquidity and earn trading fee yield.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="text-xs text-[#808495] uppercase tracking-wider border-b border-white/5">
-                  <th className="pb-3 pr-4">Market</th>
-                  <th className="pb-3 pr-4 text-right">Deposited SOL</th>
-                  <th className="pb-3 pr-4 text-right">LP Tokens</th>
-                  <th className="pb-3 pr-4 text-right">Est. Fee Yield</th>
-                  <th className="pb-3 pr-4 text-right">APY</th>
-                  <th className="pb-3 pr-4 text-right">Action</th>
+                <tr className="border-b border-hairline">
+                  <th className="pb-3 pr-4 font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Market</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Deposited SOL</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">LP Tokens</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Est. Fee Yield</th>
+                  <th className="pb-3 pr-4 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">APY</th>
+                  <th className="pb-3 text-right font-mono text-[10px] uppercase tracking-[.18em] text-ash-dim">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLp.map((lp, i) => (
-                  <tr key={i} className="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
-                    <td className="py-4 pr-4 font-medium text-[#F4F4F9] max-w-xs truncate">{lp.question}</td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#F4F4F9] font-bold">{lp.amountSol.toFixed(2)} SOL</td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#FFA500] font-bold">{lp.lpTokens.toLocaleString()} LP</td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#4CAF50] font-bold">{lp.estFeeEarnedSol > 0 ? `+${lp.estFeeEarnedSol.toFixed(3)} SOL` : "\u2014"}</td>
-                    <td className="py-4 pr-4 text-right font-mono text-[#FFA500]">{lp.apy}</td>
-                    <td className="py-4 pr-4 text-right">
+                  <tr key={i} className="border-b border-hairline hover:bg-panel transition-colors">
+                    <td className="py-4 pr-4 font-display text-[15px] text-ivory max-w-xs truncate">{lp.question}</td>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-ivory">{lp.amountSol.toFixed(2)} SOL</td>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-gold-lite">{lp.lpTokens.toLocaleString()} LP</td>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-verdigris">{lp.estFeeEarnedSol > 0 ? `+${lp.estFeeEarnedSol.toFixed(3)} SOL` : "—"}</td>
+                    <td className="py-4 pr-4 text-right font-mono tnum text-[13px] text-gold-lite">{lp.apy}</td>
+                    <td className="py-4 text-right">
                       <a
                         href={`/market/${lp.marketPubkey}`}
-                        className="inline-block px-3 py-1 bg-[#FFA500]/10 text-[#FFA500] hover:bg-[#FFA500]/20 text-xs font-bold rounded border border-[#FFA500]/40 transition-colors"
+                        className="inline-block px-3 py-1.5 rounded-[2px] border border-gold/40 text-gold-lite hover:bg-gold/10 font-mono text-[10px] uppercase tracking-[.16em] transition-colors"
                       >
-                        Manage LP
+                        Manage
                       </a>
                     </td>
                   </tr>
@@ -312,7 +272,7 @@ export default function PortfolioPage() {
             </table>
           </div>
         )}
-      </div>
+      </section>
     </main>
   );
 }

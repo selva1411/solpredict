@@ -1,14 +1,15 @@
 import { useMemo } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider, Program, Idl, Wallet, BorshCoder } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import { ENV } from "@/lib/env";
 import idl from "@/lib/idl/solpredict.json";
 
 export interface InstructionBuilder {
   accounts(accounts: Record<string, unknown>): InstructionBuilder;
-  rpc(): Promise<string>;
+  rpc(opts?: { skipPreflight?: boolean }): Promise<string>;
+  transaction(): Promise<Transaction>;
 }
 
 export interface SolPredictProgram {
@@ -213,13 +214,15 @@ export function useProgram() {
         const t = target as Record<string, unknown>;
         if (prop === "fetch") {
           return async (address: PublicKey, ...args: unknown[]) => {
-            const fetchFn = t.fetch as (address: PublicKey, ...args: unknown[]) => Promise<object>;
+            // Anchor's AccountClient.fetch internally calls this.fetchNullableAndContext;
+            // it MUST be bound to the client or `this` is undefined and it crashes.
+            const fetchFn = (t.fetch as (address: PublicKey, ...args: unknown[]) => Promise<object>).bind(t);
             return wrapMarketAccount(await fetchFn(address, ...args));
           };
         }
         if (prop === "all") {
           return async (...args: unknown[]) => {
-            const allFn = t.all as (...args: unknown[]) => Promise<Array<Record<string, unknown>>>;
+            const allFn = (t.all as (...args: unknown[]) => Promise<Array<Record<string, unknown>>>).bind(t);
             const res = await allFn(...args);
             return res.map((item: Record<string, unknown>) => ({
               ...item,

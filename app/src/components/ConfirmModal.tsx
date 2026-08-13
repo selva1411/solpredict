@@ -37,7 +37,7 @@ export function ConfirmModal({
         >
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 "
             onClick={onCancel}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -53,14 +53,14 @@ export function ConfirmModal({
             className="relative glass-panel p-8 max-w-md w-full space-y-6 z-10"
           >
             <div className="flex items-start space-x-4">
-              <div className={`p-3 rounded-xl ${destructive ? "bg-red-500/10 text-[#E4574A]" : "bg-amber-500/10 text-amber-400"}`}>
+              <div className={`p-3 rounded-[2px] ${destructive ? "bg-red-500/10 text-bordeaux" : "bg-amber-500/10 text-amber-400"}`}>
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div className="space-y-2 flex-1">
-                <h3 className="text-lg font-bold font-display text-text-primary">
+                <h3 className="text-[21px] font-bold font-display text-text-primary">
                   {title}
                 </h3>
-                <p className="text-sm text-text-muted leading-relaxed">
+                <p className="text-[13px] text-text-muted leading-relaxed">
                   {message}
                 </p>
               </div>
@@ -69,15 +69,15 @@ export function ConfirmModal({
             <div className="flex items-center justify-end space-x-3 pt-2">
               <button
                 onClick={onCancel}
-                className="px-5 py-2.5 text-xs font-semibold rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-text-muted hover:text-text-primary transition-all cursor-pointer"
+                className="px-5 py-2.5 text-xs font-semibold rounded-[2px] bg-panel-2 border border-hairline hover:bg-ivory/5 text-text-muted hover:text-text-primary transition-all cursor-pointer"
               >
                 {cancelLabel}
               </button>
               <button
                 onClick={onConfirm}
-                className={`px-5 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                className={`px-5 py-2.5 text-xs font-semibold rounded-[2px] transition-all cursor-pointer ${
                   destructive
-                    ? "bg-red-500/15 border border-red-500/30 text-[#E4574A] hover:bg-red-500/25"
+                    ? "bg-red-500/15 border border-red-500/30 text-bordeaux hover:bg-red-500/25"
                     : "btn-primary"
                 }`}
               >

@@ -27,8 +27,8 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
   return (
     <div className="flex flex-col items-center">
       <div
-        className={`relative overflow-hidden rounded bg-[#131313] border border-[#9e8e78]/40 font-mono font-bold text-[#ffd89c] flex items-center justify-center ${
-          compact ? "w-8 h-8 text-xs" : "w-12 h-12 text-lg"
+        className={`relative overflow-hidden rounded bg-[#131313] border border-gold-deep/40 font-mono font-bold text-gold-lite flex items-center justify-center ${
+          compact ? "w-8 h-8 text-xs" : "w-12 h-12 text-[21px]"
         }`}
         style={{ perspective: "200px" }}
       >
@@ -44,12 +44,33 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
 }
 
 export const FlipCountdown = React.memo(function FlipCountdown({ endTs, compact = false }: FlipCountdownProps) {
-  const [parts, setParts] = useState(() => getParts(endTs));
+  // Start with no parts so the SERVER render (and first client hydration
+  // render) both show the same static placeholder. Date.now() differs between
+  // the server and the client by milliseconds, so rendering seconds during SSR
+  // would cause a hydration mismatch now that pages server-render market data.
+  // The effect fills in real values immediately after hydration.
+  const [parts, setParts] = useState<ReturnType<typeof getParts> | null>(null);
 
   useEffect(() => {
+    setParts(getParts(endTs));
     const interval = setInterval(() => setParts(getParts(endTs)), 1000);
     return () => clearInterval(interval);
   }, [endTs]);
+
+  if (!parts) {
+    // Stable SSR/hydration placeholder. Include a Days unit so the footprint
+    // matches the live countdown (which shows Days when > 0) and there is no
+    // layout shift after hydration. aria-hidden: only the live digits are
+    // announced to assistive tech.
+    return (
+      <div className={`flex items-center ${compact ? "gap-1" : "gap-2"}`} aria-hidden="true">
+        <FlipUnit value={0} label={compact ? "" : "Days"} compact={compact} />
+        <FlipUnit value={0} label={compact ? "" : "Hrs"} compact={compact} />
+        <FlipUnit value={0} label={compact ? "" : "Min"} compact={compact} />
+        <FlipUnit value={0} label={compact ? "" : "Sec"} compact={compact} />
+      </div>
+    );
+  }
 
   if (parts.ended) {
     return (

@@ -50,7 +50,7 @@ export function AdminCharts() {
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-6 text-xs text-[#808495]">
+      <div className="rounded-[2px] bg-panel-2 border border-hairline p-6 text-xs text-ash">
         Unable to load chart data.
       </div>
     );
@@ -58,12 +58,12 @@ export function AdminCharts() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
-        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c] mb-4">
+      <div className="rounded-[2px] bg-panel-2 border border-hairline p-5">
+        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-gold-lite mb-4">
           Volume Trend (30 Days)
         </h3>
         {dailyVolume.length === 0 ? (
-          <p className="text-xs text-[#808495] py-10 text-center">No trading volume in the last 30 days.</p>
+          <p className="text-xs text-ash py-10 text-center">No trading volume in the last 30 days.</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={dailyVolume}>
@@ -81,12 +81,12 @@ export function AdminCharts() {
         )}
       </div>
 
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
-        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#ffd89c] mb-4">
+      <div className="rounded-[2px] bg-panel-2 border border-hairline p-5">
+        <h3 className="text-xs font-bold uppercase tracking-wider font-display text-gold-lite mb-4">
           Category Breakdown
         </h3>
         {categoryBreakdown.length === 0 ? (
-          <p className="text-xs text-[#808495] py-10 text-center">No markets cached yet.</p>
+          <p className="text-xs text-ash py-10 text-center">No markets cached yet.</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>

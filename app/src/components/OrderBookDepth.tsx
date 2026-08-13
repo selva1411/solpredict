@@ -51,7 +51,8 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
   // CPMM reserves weight reflects the share of liquidity each side holds.
   const yesWeight = totalSol > 0 ? (yesSol / totalSol) * 100 : 50;
   const noWeight = 100 - yesWeight;
-  // Spot probability derived from the on-chain spot price of YES (price_y = q_no/q_yes).
+  // Spot probability = pool_side / (pool_yes + pool_no) — the on-chain spot
+  // price basis (see amm_math.rs), matching the page's implied-probability bar.
   const yesSpotBI = getSpotPriceYes(BigInt(yesPoolLamports), BigInt(noPoolLamports), 0);
   const noSpotBI = getSpotPriceNo(BigInt(yesPoolLamports), BigInt(noPoolLamports), 0);
   const yesOdds = yesSpotBI === 0n ? yesWeight
@@ -154,27 +155,27 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
     : "—";
 
   return (
-    <div className="holo-card p-5 space-y-4 border-white/10/40 bg-[#1A1C22]">
+    <div className="holo-card p-5 space-y-4 border-hairline/40 bg-panel">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10/30 pb-3 gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-hairline/30 pb-3 gap-2">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold uppercase tracking-wider font-display text-[#ffd89c]">
+          <h3 className="text-[13px] font-bold uppercase tracking-wider font-display text-gold-lite">
             CLOB Order Book
           </h3>
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#22c55e] font-bold">
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-panel-2 border border-hairline text-verdigris font-bold">
             P2P
           </span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1 bg-[#1A1C22] p-0.5 rounded border border-white/10/20 font-mono text-[10px]">
+          <div className="flex items-center space-x-1 bg-panel p-0.5 rounded border border-hairline/20 font-mono text-[10px]">
             {(["ALL", "YES", "NO"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setSelectedSideFilter(tab)}
                 className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
                   selectedSideFilter === tab
-                    ? "bg-[#ffd89c] text-[#131313] font-bold"
-                    : "text-[#808495] hover:text-[#F4F4F9]"
+                    ? "bg-gold-lite text-[#131313] font-bold"
+                    : "text-ash hover:text-ivory"
                 }`}
               >
                 {tab}
@@ -182,7 +183,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
             ))}
           </div>
           <span className="text-[10px] font-mono text-[#d6c4ac] flex items-center gap-1 pl-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
+            <span className="w-1.5 h-1.5 rounded-[2px] bg-verdigris animate-pulse inline-block" />
             <span>LIVE</span>
           </span>
         </div>
@@ -191,7 +192,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
       {/* Order Book Table */}
       <div className="space-y-1">
         {/* Column Headers */}
-        <div className="grid grid-cols-5 text-[9px] uppercase tracking-wider font-display text-[#d6c4ac] border-b border-white/10/20 pb-1 font-semibold">
+        <div className="grid grid-cols-5 text-[9px] uppercase tracking-wider font-display text-[#d6c4ac] border-b border-hairline/20 pb-1 font-semibold">
           <div className="text-left">Side</div>
           <div className="text-center">Price</div>
           <div className="text-center">Qty</div>
@@ -207,41 +208,41 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
               const depthPct = (remaining / maxQty) * 100;
               const isUserOrder = wallet?.publicKey && ask.account.maker.equals(wallet.publicKey);
               return (
-                <div key={`ask-${idx}`} className="grid grid-cols-5 py-1.5 items-center relative font-mono text-xs hover:bg-white/5 transition-colors rounded px-1 group">
+                <div key={`ask-${idx}`} className="grid grid-cols-5 py-1.5 items-center relative font-mono text-xs hover:bg-ivory/5 transition-colors rounded px-1 group">
                   <div className="text-left">
-                    <span className="text-[#ef4444] font-bold text-[10px]">ASK {ask.side}</span>
+                    <span className="text-bordeaux font-bold text-[10px]">ASK {ask.side}</span>
                   </div>
-                  <div className="text-center text-[#F4F4F9] font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
+                  <div className="text-center text-ivory font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
                   <div className="text-center text-[#d6c4ac]">{remaining}</div>
-                  <div className="text-center text-[#808495] text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
+                  <div className="text-center text-ash text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
                       <button
                         onClick={() => onFillOrder(ask.orderAccountObj, Math.min(remaining, 5))}
-                        className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-[#ef4444]/20 hover:bg-[#ef4444]/40 text-[#ef4444] border border-[#ef4444]/40 transition-all cursor-pointer"
+                        className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-bordeaux/20 hover:bg-bordeaux/40 text-bordeaux border border-bordeaux/40 transition-all cursor-pointer"
                       >
-                        ⚡ Fill
+                        FILL
                       </button>
                     ) : (
-                      <span className="text-[9px] text-[#808495]">{isUserOrder ? "Your Ask" : "Open"}</span>
+                      <span className="text-[9px] text-ash">{isUserOrder ? "Your Ask" : "Open"}</span>
                     )}
                   </div>
                   <div
                     style={{ width: `${Math.min(depthPct, 100)}%` }}
-                    className="absolute top-0 bottom-0 right-0 bg-[#ef4444]/8 pointer-events-none rounded-r transition-[width] duration-300"
+                    className="absolute top-0 bottom-0 right-0 bg-bordeaux/8 pointer-events-none rounded-r transition-[width] duration-300"
                   />
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="py-2 text-center text-[10px] font-mono text-[#d6c4ac]/50 border-b border-white/10/10">
+          <div className="py-2 text-center text-[10px] font-mono text-[#d6c4ac]/50 border-b border-hairline/10">
             No active ask orders
           </div>
         )}
 
         {/* Spread divider */}
-        <div className="py-1.5 px-3 flex justify-between items-center text-[10px] font-mono text-[#ffd89c] font-bold border-y border-white/10/20 bg-[#ffd89c]/5 rounded-sm">
+        <div className="py-1.5 px-3 flex justify-between items-center text-[10px] font-mono text-gold-lite font-bold border-y border-hairline/20 bg-gold-lite/5 rounded-[2px]">
           <span>BID: {bestBid} SOL</span>
           <span>SPREAD: {spreadSol} SOL</span>
           <span>ASK: {bestAsk} SOL</span>
@@ -255,28 +256,28 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
               const depthPct = (remaining / maxQty) * 100;
               const isUserOrder = wallet?.publicKey && bid.account.maker.equals(wallet.publicKey);
               return (
-                <div key={`bid-${idx}`} className="grid grid-cols-5 py-1.5 items-center relative font-mono text-xs hover:bg-white/5 transition-colors rounded px-1 group">
+                <div key={`bid-${idx}`} className="grid grid-cols-5 py-1.5 items-center relative font-mono text-xs hover:bg-ivory/5 transition-colors rounded px-1 group">
                   <div className="text-left">
-                    <span className="text-[#22c55e] font-bold text-[10px]">BID {bid.side}</span>
+                    <span className="text-verdigris font-bold text-[10px]">BID {bid.side}</span>
                   </div>
-                  <div className="text-center text-[#F4F4F9] font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
+                  <div className="text-center text-ivory font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
                   <div className="text-center text-[#d6c4ac]">{remaining}</div>
-                  <div className="text-center text-[#808495] text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
+                  <div className="text-center text-ash text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
                       <button
                         onClick={() => onFillOrder(bid.orderAccountObj, Math.min(remaining, 5))}
-                        className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-[#22c55e]/20 hover:bg-[#22c55e]/40 text-[#22c55e] border border-[#22c55e]/40 transition-all cursor-pointer"
+                        className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-verdigris/20 hover:bg-verdigris/40 text-verdigris border border-verdigris/40 transition-all cursor-pointer"
                       >
-                        ⚡ Fill
+                        FILL
                       </button>
                     ) : (
-                      <span className="text-[9px] text-[#808495]">{isUserOrder ? "Your Bid" : "Open"}</span>
+                      <span className="text-[9px] text-ash">{isUserOrder ? "Your Bid" : "Open"}</span>
                     )}
                   </div>
                   <div
                     style={{ width: `${Math.min(depthPct, 100)}%` }}
-                    className="absolute top-0 bottom-0 left-0 bg-[#22c55e]/8 pointer-events-none rounded-l transition-all duration-500"
+                    className="absolute top-0 bottom-0 left-0 bg-verdigris/8 pointer-events-none rounded-l transition-all duration-500"
                   />
                 </div>
               );
@@ -290,55 +291,61 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
       </div>
 
       {/* AMM Pool Liquidity & Reserves Inspector */}
-      <div className="pt-3 border-t border-white/10/30 space-y-3">
+      <div className="pt-3 border-t border-hairline/30 space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#ffd89c]">
-            💧 CPMM Liquidity & AMM Reserves
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gold-lite">
+            CPMM Liquidity & AMM Reserves
           </span>
-          <span className="text-[10px] font-mono text-[#FFA500] font-bold">
+          <span className="text-[10px] font-mono text-gold font-bold">
             Total Liquidity: {totalSol.toFixed(2)} SOL
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-          <div className="bg-white/5 p-2.5 rounded border border-[#22c55e]/30 space-y-1">
-            <div className="text-[#808495] text-[9px] uppercase font-bold">YES Pool Inventory</div>
-            <div className="text-[#22c55e] font-bold text-sm">{yesSol.toFixed(3)} SOL</div>
-            <div className="text-[9px] text-[#808495]">Weight: {yesWeight.toFixed(1)}%</div>
+        {totalSol === 0 && (
+          <div className="bg-gold/10 border border-gold/30 rounded p-2 text-[9px] font-mono text-gold leading-snug">
+            <strong>Initial Pool Reserves:</strong> New prediction boards start with 0 SOL in reserves. The smart contract automatically applies <strong>Flat Linear Minting</strong> (at baseline share price) for initial trades. Your first buy or LP deposit immediately seeds the pool and activates constant-product ($x \cdot y = k$) CPMM price curves!
           </div>
-          <div className="bg-white/5 p-2.5 rounded border border-[#ef4444]/30 space-y-1">
-            <div className="text-[#808495] text-[9px] uppercase font-bold">NO Pool Inventory</div>
-            <div className="text-[#ef4444] font-bold text-sm">{noSol.toFixed(3)} SOL</div>
-            <div className="text-[9px] text-[#808495]">Weight: {noWeight.toFixed(1)}%</div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+          <div className="bg-panel-2 p-2.5 rounded border border-verdigris/30 space-y-1">
+            <div className="text-ash text-[9px] uppercase font-bold">YES Pool Inventory</div>
+            <div className="text-verdigris font-bold text-[13px]">{yesSol.toFixed(3)} SOL</div>
+            <div className="text-[9px] text-ash">Weight: {yesWeight.toFixed(1)}%</div>
+          </div>
+          <div className="bg-panel-2 p-2.5 rounded border border-bordeaux/30 space-y-1">
+            <div className="text-ash text-[9px] uppercase font-bold">NO Pool Inventory</div>
+            <div className="text-bordeaux font-bold text-[13px]">{noSol.toFixed(3)} SOL</div>
+            <div className="text-[9px] text-ash">Weight: {noWeight.toFixed(1)}%</div>
           </div>
         </div>
 
         <div className="flex justify-between items-center text-[10px] font-mono">
-          <span className="text-[#808495]">Implied YES Probability:</span>
-          <span className="text-[#4CAF50] font-bold">{yesOdds.toFixed(1)}%</span>
+          <span className="text-ash">Implied YES Probability:</span>
+          <span className="text-verdigris font-bold">{yesOdds.toFixed(1)}%</span>
         </div>
 
-        <div className="w-full h-2.5 bg-[#ef4444]/20 rounded-full overflow-hidden flex border border-[#0d0d0d]">
+        <div className="w-full h-2.5 bg-bordeaux/20 rounded-[2px] overflow-hidden flex border border-void">
           <div
             style={{ width: `${yesOdds}%` }}
-            className="h-full bg-[#22c55e] transition-all duration-700 ease-out"
+            className="h-full bg-verdigris transition-all duration-700 ease-out"
           />
         </div>
 
-        <div className="bg-[#1A1C22] p-2.5 rounded border border-white/10 text-[9px] font-mono space-y-1.5 text-[#808495]">
-          <div className="flex justify-between text-[#F4F4F9] font-bold">
+        <div className="bg-panel p-2.5 rounded border border-hairline text-[9px] font-mono space-y-1.5 text-ash">
+          <div className="flex justify-between text-ivory font-bold">
             <span>CPMM Constant (k = YES · NO):</span>
-            <span className="text-[#FFA500]">{(yesSol * noSol).toFixed(4)} SOL²</span>
+            <span className="text-gold">{(yesSol * noSol).toFixed(4)} SOL²</span>
           </div>
-          <div className="flex justify-between text-[#F4F4F9] font-bold">
+          <div className="flex justify-between text-ivory font-bold">
             <span>Spot Price of YES (YES ÷ Total):</span>
-            <span className="text-[#4CAF50]">
+            <span className="text-verdigris">
               {(yesSpotBI === 0n ? 0.5 : Number(yesSpotBI) / 1e12).toFixed(4)} SOL
             </span>
           </div>
-          <div className="flex justify-between text-[#808495]">
-            <span className="text-[#F4F4F9] font-bold">Spot Price of NO (q_yes ÷ q_no):</span>
-            <span className="text-[#ef4444]">
+          <div className="flex justify-between text-ash">
+            <span className="text-ivory font-bold">Spot Price of NO (NO ÷ Total):</span>
+            <span className="text-bordeaux">
               {(noSpotBI === 0n ? 0.5 : Number(noSpotBI) / 1e12).toFixed(4)} SOL
             </span>
           </div>

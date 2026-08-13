@@ -17,11 +17,13 @@ interface CachedMarket {
 const EXPIRY_WINDOW_MS = 60 * 60 * 1000;
 const POLL_INTERVAL_MS = 60 * 1000;
 
-export function WatchlistExpiryChecker() {
+export function WatchlistExpiryChecker({ markets: prefetched }: { markets?: CachedMarket[] }) {
   const notified = useRef<Set<string>>(new Set());
 
   // Poll via React Query; the effect below only reacts to the cache, it never
-  // fetches directly.
+  // fetches directly. When the parent page already fetched the open market
+  // list server-side (home page prefetch), seed the query with it so no
+  // second /api/markets/cached round trip happens on load.
   const { data: markets } = useQuery({
     queryKey: [...keys.markets.list(), { status: "open", limit: 200 }],
     queryFn: async (): Promise<CachedMarket[]> => {
@@ -33,6 +35,7 @@ export function WatchlistExpiryChecker() {
     },
     refetchInterval: POLL_INTERVAL_MS,
     staleTime: 30_000,
+    initialData: prefetched && prefetched.length > 0 ? prefetched : undefined,
   });
 
   useEffect(() => {
