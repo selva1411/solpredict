@@ -2,6 +2,7 @@
 import { useMarkets } from "@/hooks/useMarkets";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { fetchWatchlistFromDb, getWatchlist, pruneWatchlist } from "@/lib/watchlist";
+import { signUserProof, userFetch } from "@/lib/user-client";
 import { formatSol, calcYesPct, calcNoPct, timeUntil, categoryName, outcomeLabel } from "@/lib/format";
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -14,16 +15,16 @@ export default function WatchlistClient({ initialMarkets }: { initialMarkets: Ma
   // statuses are loaded because a watched market may have since settled or
   // been cancelled — it must still render here.
   const { markets, loading } = useMarkets(10_000, initialMarkets, { status: "all" });
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const [watchlistKeys, setWatchlistKeys] = useState<string[]>([]);
 
   useEffect(() => {
     if (publicKey) {
-      fetchWatchlistFromDb(publicKey.toBase58()).then(keys => setWatchlistKeys(keys));
+      fetchWatchlistFromDb(publicKey.toBase58(), { publicKey, signMessage }).then(keys => setWatchlistKeys(keys));
     } else {
       setWatchlistKeys(getWatchlist());
     }
-  }, [publicKey]);
+  }, [publicKey, signMessage]);
 
   // Self-heal: drop stale watchlist keys (markets that no longer exist on-chain
   // — e.g. old pubkeys from a previous program deploy) from the local list so
@@ -49,11 +50,20 @@ export default function WatchlistClient({ initialMarkets }: { initialMarkets: Ma
       if (publicKey) {
         const dead = watchlistKeys.filter((k) => !pruned.includes(k));
         for (const key of dead) {
-          fetch("/api/watchlist", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet: publicKey.toBase58(), marketPubkey: key }),
-          }).catch(() => {});
+          void (async () => {
+            const auth = await signUserProof({ publicKey, signMessage }, signMessage);
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (auth) {
+              headers["x-wallet"] = auth.wallet;
+              headers["x-message"] = auth.message;
+              headers["x-signature"] = auth.signature;
+            }
+            await userFetch("/api/watchlist", {
+              method: "DELETE",
+              headers,
+              body: JSON.stringify({ wallet: publicKey.toBase58(), marketPubkey: key }),
+            }).catch(() => {});
+          })();
         }
       }
     }

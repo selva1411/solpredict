@@ -15,6 +15,9 @@ const cspHeader = [
 
 const nextConfig: NextConfig = {
   transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
+  turbopack: {
+    root: __dirname,
+  },
   async headers() {
     return [
       {

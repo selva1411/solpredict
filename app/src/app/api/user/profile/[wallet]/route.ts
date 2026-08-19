@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { ok, badRequest, notFound, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 import { getUserProfile } from "@/lib/data/users";
+import { requireUser } from "@/lib/user-guard";
 
 /**
  * GET /api/user/profile/[wallet]
@@ -53,6 +54,11 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
   if (!callerWallet || callerWallet !== wallet) {
     return badRequest("Unauthorized: You can only edit your own profile");
   }
+
+  // Verify the caller actually owns the wallet they're editing — a client can
+  // never modify another user's profile (closes the IDOR hole).
+  const auth = await requireUser(req, callerWallet);
+  if (!auth.ok) return auth.response;
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") return badRequest("Invalid JSON body");

@@ -14,6 +14,86 @@ export type Solpredict = {
   },
   "instructions": [
     {
+      "name": "addGuardian",
+      "docs": [
+        "Register a new distinct guardian for the emergency-unpause multisig",
+        "(admin-only). Up to 3 guardians can be registered."
+      ],
+      "discriminator": [
+        167,
+        189,
+        170,
+        27,
+        74,
+        240,
+        201,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergencyPause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newGuardian",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "addLiquidity",
       "docs": [
         "Add liquidity to a market and receive YES/NO tokens + LP position."
@@ -1014,6 +1094,10 @@ export type Solpredict = {
         {
           "name": "quantity",
           "type": "u64"
+        },
+        {
+          "name": "maxCostLamports",
+          "type": "u64"
         }
       ]
     },
@@ -1169,6 +1253,48 @@ export type Solpredict = {
         {
           "name": "orderTokenEscrow",
           "writable": true
+        },
+        {
+          "name": "orderEscrow",
+          "docs": [
+            "Data-less SOL escrow for limit BUY orders — refunded to the maker on",
+            "cancel. Unused for sell orders."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "account",
+                "path": "order.order_id",
+                "account": "order"
+              }
+            ]
+          }
         },
         {
           "name": "emergencyPause",
@@ -1879,7 +2005,8 @@ export type Solpredict = {
     {
       "name": "emergencyUnpause",
       "docs": [
-        "Unpause the program (requires guardian confirmations)."
+        "Unpause the program (requires verified guardian signers passed as",
+        "remaining accounts)."
       ],
       "discriminator": [
         83,
@@ -1948,14 +2075,7 @@ export type Solpredict = {
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "confirmations",
-          "type": {
-            "vec": "pubkey"
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "emergencyWithdraw",
@@ -2170,6 +2290,49 @@ export type Solpredict = {
         {
           "name": "orderTokenEscrow",
           "writable": true
+        },
+        {
+          "name": "orderEscrow",
+          "docs": [
+            "Data-less SOL escrow for limit BUY orders — the source of the maker's",
+            "payment. For sell orders this account is unused (tokens are escrowed in",
+            "order_token_escrow instead)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "account",
+                "path": "order.order_id",
+                "account": "order"
+              }
+            ]
+          }
         },
         {
           "name": "emergencyPause",
@@ -2476,6 +2639,92 @@ export type Solpredict = {
       ]
     },
     {
+      "name": "mockCreatePriceUpdate",
+      "docs": [
+        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
+      ],
+      "discriminator": [
+        103,
+        162,
+        52,
+        4,
+        77,
+        138,
+        211,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "priceUpdate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  99,
+                  107,
+                  95,
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  102,
+                  101,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feedId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "type": "i64"
+        },
+        {
+          "name": "conf",
+          "type": "u64"
+        },
+        {
+          "name": "exponent",
+          "type": "i32"
+        },
+        {
+          "name": "publishTime",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "placeOrder",
       "docs": [
         "Place an on-chain limit order (Bid or Ask) for a prediction outcome."
@@ -2557,6 +2806,49 @@ export type Solpredict = {
         {
           "name": "orderTokenEscrow",
           "writable": true
+        },
+        {
+          "name": "orderEscrow",
+          "docs": [
+            "Data-less SOL escrow for limit BUY orders (seeds: [\"order_escrow\",",
+            "market, maker, order_id]). Holds the escrowed lamports so fill/cancel",
+            "can pay out with a CPI system transfer. Created implicitly by the",
+            "maker's transfer in the handler."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "arg",
+                "path": "orderId"
+              }
+            ]
+          }
         },
         {
           "name": "emergencyPause",
@@ -2749,6 +3041,195 @@ export type Solpredict = {
         {
           "name": "sharePriceLamports",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "rejectMarket",
+      "docs": [
+        "Reject a pending market proposal: close it on-chain and slash its bond (admin-only)."
+      ],
+      "discriminator": [
+        214,
+        108,
+        186,
+        227,
+        122,
+        62,
+        61,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "docs": [
+            "MarketProposal PDA — closed and rent sent back to the admin."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "marketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposalVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "marketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "removeGuardian",
+      "docs": [
+        "Remove a guardian from the emergency-unpause multisig (admin-only).",
+        "Rejected if the removal would leave fewer guardians than the required",
+        "confirmations threshold."
+      ],
+      "discriminator": [
+        72,
+        117,
+        160,
+        244,
+        155,
+        185,
+        71,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergencyPause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "guardian",
+          "type": "pubkey"
         }
       ]
     },
@@ -3461,6 +3942,90 @@ export type Solpredict = {
         {
           "name": "quantity",
           "type": "u64"
+        },
+        {
+          "name": "minProceedsLamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setGuardianThreshold",
+      "docs": [
+        "Set how many distinct guardian signatures are required to unpause",
+        "(admin-only). Must be between 1 and the number of registered guardians."
+      ],
+      "discriminator": [
+        85,
+        225,
+        97,
+        126,
+        126,
+        73,
+        15,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergencyPause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newThreshold",
+          "type": "u8"
         }
       ]
     },
@@ -3480,6 +4045,14 @@ export type Solpredict = {
         217
       ],
       "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Program admin — the only party allowed to settle. Prevents third",
+            "parties from front-running settlement with a stale oracle price."
+          ],
+          "signer": true
+        },
         {
           "name": "market",
           "writable": true,
@@ -4520,6 +5093,36 @@ export type Solpredict = {
       "code": 6069,
       "name": "proposalBondTooLow",
       "msg": "Proposal bond is below the minimum required"
+    },
+    {
+      "code": 6070,
+      "name": "invalidGuardian",
+      "msg": "Guardian pubkey is invalid (cannot be the zero address)"
+    },
+    {
+      "code": 6071,
+      "name": "guardianAlreadyExists",
+      "msg": "Guardian is already registered"
+    },
+    {
+      "code": 6072,
+      "name": "maxGuardiansReached",
+      "msg": "Maximum number of guardians reached (3)"
+    },
+    {
+      "code": 6073,
+      "name": "guardianNotFound",
+      "msg": "Guardian not found in the set"
+    },
+    {
+      "code": 6074,
+      "name": "invalidThreshold",
+      "msg": "Threshold must be between 1 and the number of registered guardians"
+    },
+    {
+      "code": 6075,
+      "name": "thresholdExceedsGuardians",
+      "msg": "Cannot remove guardian: required confirmations exceed remaining guardians"
     }
   ],
   "types": [

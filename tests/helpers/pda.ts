@@ -102,6 +102,25 @@ export function getOrderPda(
   return pda;
 }
 
+export function getOrderEscrowPda(
+  marketPda: PublicKey,
+  makerPubkey: PublicKey,
+  orderId: anchor.BN,
+  programId: PublicKey
+): PublicKey {
+  const orderIdBuffer = orderId.toArrayLike(Buffer, "le", 8);
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("order_escrow"),
+      marketPda.toBuffer(),
+      makerPubkey.toBuffer(),
+      orderIdBuffer,
+    ],
+    programId
+  );
+  return pda;
+}
+
 export function getProposalPda(proposalId: anchor.BN, programId: PublicKey): PublicKey {
   const idBuf = proposalId.toArrayLike(Buffer, "le", 8);
   const [pda] = PublicKey.findProgramAddressSync(

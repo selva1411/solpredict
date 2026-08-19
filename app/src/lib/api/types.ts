@@ -90,7 +90,7 @@ export const leaderboardEntrySchema = z.object({
   totalWagered: z.number(),
   totalProfit: z.number(),
   winRate: z.number().nullable().optional(),
-  pasScore: z.number().optional(),
+  pasScore: z.number().nullable().optional(),
   marketsTraded: z.number().optional(),
 });
 

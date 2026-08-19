@@ -21,6 +21,7 @@ export const GET = apiHandler(async (req: NextRequest) => {
     const sigs = await connection.getSignaturesForAddress(
       new (await import("@solana/web3.js")).PublicKey(PROGRAM_ID),
       { limit: 50, until: untilSig },
+      "confirmed",
     );
 
     if (sigs.length === 0) {

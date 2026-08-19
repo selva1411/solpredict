@@ -20,7 +20,7 @@ interface CategoryRow {
 
 interface StatsResponse {
   ok?: boolean;
-  charts?: {
+  stats?: {
     dailyVolume?: DailyVolumePoint[];
     categoryBreakdown?: CategoryRow[];
   };
@@ -45,8 +45,9 @@ export function AdminCharts() {
     return () => { cancelled = true; };
   }, []);
 
-  const dailyVolume = data?.charts?.dailyVolume ?? [];
-  const categoryBreakdown = data?.charts?.categoryBreakdown ?? [];
+  // /api/admin/stats returns { ok, stats: { dailyVolume, categoryBreakdown } }.
+  const dailyVolume = data?.stats?.dailyVolume ?? [];
+  const categoryBreakdown = data?.stats?.categoryBreakdown ?? [];
 
   if (error) {
     return (

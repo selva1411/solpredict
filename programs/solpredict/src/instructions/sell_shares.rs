@@ -75,7 +75,12 @@ pub struct SellShares<'info> {
     pub emergency_pause: Option<Account<'info, EmergencyPause>>,
 }
 
-pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()> {
+pub fn handler(
+    ctx: Context<SellShares>,
+    side: Side,
+    quantity: u64,
+    min_proceeds_lamports: u64,
+) -> Result<()> {
     check_not_paused(&ctx.accounts.emergency_pause)?;
 
     let market = &ctx.accounts.market;
@@ -121,11 +126,20 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
 
     require!(refund > 0, SolPredictError::MathOverflow);
 
+    // Slippage protection: reject the trade if the actual proceeds fall below
+    // the seller's stated minimum, preventing front-running between simulation
+    // and execution.
+    require!(refund >= min_proceeds_lamports, SolPredictError::SlippageExceeded);
+
     let (mint_info, ata_info) = if is_yes {
         (ctx.accounts.yes_mint.to_account_info(), ctx.accounts.seller_yes_ata.to_account_info())
     } else {
         (ctx.accounts.no_mint.to_account_info(), ctx.accounts.seller_no_ata.to_account_info())
     };
+
+    // Hold the market's reentrancy lock BEFORE any funds move. Previously the
+    // lock was acquired after the refund transfer left the treasury.
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
     token::burn(
         CpiContext::new(
@@ -155,8 +169,6 @@ pub fn handler(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()
         ),
         refund,
     )?;
-
-    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
     let market = &mut ctx.accounts.market;
     if is_yes {

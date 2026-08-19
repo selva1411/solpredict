@@ -218,4 +218,22 @@ pub enum SolPredictError {
 
     #[msg("Proposal bond is below the minimum required")]
     ProposalBondTooLow,
+
+    #[msg("Guardian pubkey is invalid (cannot be the zero address)")]
+    InvalidGuardian,
+
+    #[msg("Guardian is already registered")]
+    GuardianAlreadyExists,
+
+    #[msg("Maximum number of guardians reached (3)")]
+    MaxGuardiansReached,
+
+    #[msg("Guardian not found in the set")]
+    GuardianNotFound,
+
+    #[msg("Threshold must be between 1 and the number of registered guardians")]
+    InvalidThreshold,
+
+    #[msg("Cannot remove guardian: required confirmations exceed remaining guardians")]
+    ThresholdExceedsGuardians,
 }

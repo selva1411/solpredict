@@ -48,14 +48,10 @@ pub use batch_settle::*;
 pub use emergency_pause::*;
 pub mod propose_market;
 pub mod approve_market;
-pub mod batch_match_orders;
+pub mod reject_market;
 pub mod dispute_settlement;
-pub mod update_profile;
-pub mod follow_user;
 
 pub use propose_market::*;
 pub use approve_market::*;
-pub use batch_match_orders::*;
+pub use reject_market::*;
 pub use dispute_settlement::*;
-pub use update_profile::*;
-pub use follow_user::*;

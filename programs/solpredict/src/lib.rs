@@ -58,13 +58,23 @@ pub mod solpredict {
     }
 
     /// Buy YES or NO shares on a market.
-    pub fn buy_shares(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()> {
-        instructions::buy_shares::handler(ctx, side, quantity)
+    pub fn buy_shares(
+        ctx: Context<BuyShares>,
+        side: Side,
+        quantity: u64,
+        max_cost_lamports: u64,
+    ) -> Result<()> {
+        instructions::buy_shares::handler(ctx, side, quantity, max_cost_lamports)
     }
 
     /// Sell YES or NO shares back to the pool before market expiry.
-    pub fn sell_shares(ctx: Context<SellShares>, side: Side, quantity: u64) -> Result<()> {
-        instructions::sell_shares::handler(ctx, side, quantity)
+    pub fn sell_shares(
+        ctx: Context<SellShares>,
+        side: Side,
+        quantity: u64,
+        min_proceeds_lamports: u64,
+    ) -> Result<()> {
+        instructions::sell_shares::handler(ctx, side, quantity, min_proceeds_lamports)
     }
 
     /// Settle a market using a Pyth oracle price (admin-only).
@@ -258,12 +268,38 @@ pub mod solpredict {
         instructions::emergency_pause::pause_handler(ctx)
     }
 
-    /// Unpause the program (requires guardian confirmations).
-    pub fn emergency_unpause(
+    /// Unpause the program (requires verified guardian signers passed as
+    /// remaining accounts).
+    pub fn emergency_unpause(ctx: Context<EmergencyPauseAccounts>) -> Result<()> {
+        instructions::emergency_pause::unpause_handler(ctx)
+    }
+
+    /// Register a new distinct guardian for the emergency-unpause multisig
+    /// (admin-only). Up to 3 guardians can be registered.
+    pub fn add_guardian(
         ctx: Context<EmergencyPauseAccounts>,
-        confirmations: Vec<Pubkey>,
+        new_guardian: Pubkey,
     ) -> Result<()> {
-        instructions::emergency_pause::unpause_handler(ctx, confirmations)
+        instructions::emergency_pause::add_guardian_handler(ctx, new_guardian)
+    }
+
+    /// Remove a guardian from the emergency-unpause multisig (admin-only).
+    /// Rejected if the removal would leave fewer guardians than the required
+    /// confirmations threshold.
+    pub fn remove_guardian(
+        ctx: Context<EmergencyPauseAccounts>,
+        guardian: Pubkey,
+    ) -> Result<()> {
+        instructions::emergency_pause::remove_guardian_handler(ctx, guardian)
+    }
+
+    /// Set how many distinct guardian signatures are required to unpause
+    /// (admin-only). Must be between 1 and the number of registered guardians.
+    pub fn set_guardian_threshold(
+        ctx: Context<EmergencyPauseAccounts>,
+        new_threshold: u8,
+    ) -> Result<()> {
+        instructions::emergency_pause::set_guardian_threshold_handler(ctx, new_threshold)
     }
 
     /// Propose a new prediction market (anyone can propose).
@@ -298,5 +334,10 @@ pub mod solpredict {
     /// Approve a pending market proposal and create the market (admin-only).
     pub fn approve_market(ctx: Context<ApproveMarket>) -> Result<()> {
         instructions::approve_market::handler(ctx)
+    }
+
+    /// Reject a pending market proposal: close it on-chain and slash its bond (admin-only).
+    pub fn reject_market(ctx: Context<RejectMarket>) -> Result<()> {
+        instructions::reject_market::handler(ctx)
     }
 }

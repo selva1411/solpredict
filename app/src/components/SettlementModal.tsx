@@ -48,6 +48,7 @@ export default function SettlementModal({ market, onClose, onSettled }: Props) {
         const tx = await program.methods
           .settleMarket()
           .accounts({
+            admin: program.provider.publicKey,
             market: market.publicKey,
             config: (
               await import("@/lib/pda")

@@ -335,6 +335,72 @@ export async function getPriceHistory(pubkey: string, range = '24h') {
     .orderBy(asc(priceHistory.timestamp));
 }
 
+export interface ReclaimableMarket {
+  marketPubkey: string;
+  question: string;
+  status: string | null;
+  rentLamports: number;
+  rentSol: number;
+  eligible: boolean;
+  reason: string;
+  settledAt: Date | null;
+  rentReclaimedAt: Date | null;
+}
+
+/**
+ * Markets created by a wallet with rent-reclaim eligibility and reason.
+ * Mirrors GET /api/user/reclaimable exactly (spec §3.3).
+ */
+export async function getReclaimableMarkets(wallet: string, cooldownMs = 7 * 24 * 3600 * 1000): Promise<ReclaimableMarket[]> {
+  if (!db) throw new Error("Database not available");
+
+  const rows = await db
+    .select()
+    .from(marketsCache)
+    .where(eq(marketsCache.creator, wallet));
+
+  const now = Date.now();
+
+  return rows.map((m) => {
+    const isSettledOrCancelled = m.status === "settled" || m.status === "cancelled";
+    const alreadyReclaimed = m.rentReclaimedAt !== null && m.rentReclaimedAt !== undefined;
+    const settledAtTs = m.settledAt ? new Date(m.settledAt).getTime() : 0;
+    const cooldownPassed = now > settledAtTs + cooldownMs;
+
+    let eligible = false;
+    let reason = "";
+
+    if (alreadyReclaimed) {
+      reason = "Rent deposit already reclaimed";
+    } else if (!isSettledOrCancelled) {
+      reason = `Market must be settled or cancelled (current: ${m.status})`;
+    } else if (!cooldownPassed) {
+      const remainingHours = Math.ceil((settledAtTs + cooldownMs - now) / (3600 * 1000));
+      reason = `7-day cooldown active (${remainingHours} hours remaining)`;
+    } else {
+      eligible = true;
+      reason = "Eligible for rent reclamation";
+    }
+
+    // The real rent deposit is recorded on-chain when the market is created
+    // and mirrored into markets_cache.rent_deposit_lamports by the indexer;
+    // when it's missing we must not fabricate a number — flag it instead.
+    const rentLamports = m.rentDepositLamports ?? 0;
+
+    return {
+      marketPubkey: m.marketPubkey,
+      question: m.question,
+      status: m.status,
+      rentLamports,
+      rentSol: rentLamports / 1e9,
+      eligible: eligible && rentLamports > 0,
+      reason: rentLamports > 0 ? reason : "Rent deposit not recorded on-chain; cannot estimate",
+      settledAt: m.settledAt,
+      rentReclaimedAt: m.rentReclaimedAt,
+    };
+  });
+}
+
 export async function getTrending(limit = 6) {
   if (!db) return [];
 

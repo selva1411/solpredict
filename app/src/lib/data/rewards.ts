@@ -1,5 +1,5 @@
 import { db } from '@/lib/db/client';
-import { rewards, trades, userStats } from '@/lib/db/schema';
+import { rewards, trades, userStats, marketsCache } from '@/lib/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 
 export async function getClaimable(wallet: string) {
@@ -44,11 +44,18 @@ export async function getEpochHistory(wallet: string) {
 export async function getQuestProgress(wallet: string) {
   if (!db) return [];
 
-  // Calculate quest progress from real trades and userStats
+  // Quest progress is derived from REAL trades and userStats. Categories come
+  // from markets_cache (trades has no category column — the previous query
+  // referenced a nonexistent column and failed at runtime). No fabricated
+  // reward amounts are returned: nothing is displayed as payable unless it
+  // actually exists in the rewards table.
   const [statsRow, tradeCountRow, catCountRow] = await Promise.all([
     db?.select().from(userStats).where(eq(userStats.wallet, wallet)).limit(1),
     db?.select({ count: sql<number>`COUNT(*)::int` }).from(trades).where(eq(trades.trader, wallet)),
-    db?.select({ count: sql<number>`COUNT(DISTINCT category)::int` }).from(trades).where(eq(trades.trader, wallet)),
+    db?.select({ count: sql<number>`COUNT(DISTINCT m.category)::int` })
+      .from(trades)
+      .innerJoin(marketsCache, eq(marketsCache.marketPubkey, trades.marketPubkey))
+      .where(eq(trades.trader, wallet)),
   ]);
 
   const stats = statsRow?.[0];
@@ -61,7 +68,6 @@ export async function getQuestProgress(wallet: string) {
       id: 'first_trade',
       title: 'First Blood',
       description: 'Execute your first trade on SolPredict',
-      rewardSol: 0.1,
       current: Math.min(1, tradeCount),
       target: 1,
       completed: tradeCount >= 1,
@@ -70,7 +76,6 @@ export async function getQuestProgress(wallet: string) {
       id: 'volume_10',
       title: 'High Roller',
       description: 'Reach 10 SOL in total trading volume',
-      rewardSol: 0.5,
       current: Math.min(10, totalVolume),
       target: 10,
       completed: totalVolume >= 10,
@@ -79,7 +84,6 @@ export async function getQuestProgress(wallet: string) {
       id: 'explorer',
       title: 'Category Explorer',
       description: 'Trade markets across 3 different categories',
-      rewardSol: 0.25,
       current: Math.min(3, categoriesTraded),
       target: 3,
       completed: categoriesTraded >= 3,

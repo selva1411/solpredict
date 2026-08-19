@@ -109,12 +109,18 @@ export const ENV = {
   },
 
   get usdcMint(): PublicKey {
-    const mints: Record<ClusterName, string> = {
-      "mainnet-beta": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      "devnet":       "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-      "testnet":      "Gh9ZwEmdLJ8D1K7q4tYq2uZ4u8J5j5j5j5j5j5j5j5j",
-      "localnet":     "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-    };
-    return new PublicKey(mints[this.cluster === "mainnet-beta" ? "mainnet-beta" : "devnet"]);
+    // Only mainnet and devnet have a canonical, widely-deployed USDC mint.
+    // Testnet has no standard USDC deployment — returning a fake address there
+    // would silently break any USDC-denominated flow, so fail loudly instead.
+    const c = this.cluster;
+    if (c === "mainnet-beta") {
+      return new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    }
+    if (c === "devnet") {
+      return new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+    }
+    throw new Error(
+      `No canonical USDC mint exists on cluster "${c}". Configure a USDC mint explicitly or run on devnet/mainnet.`
+    );
   },
 };

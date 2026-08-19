@@ -53,6 +53,13 @@ pub fn handler(ctx: Context<EmergencyWithdrawAccounts>) -> Result<()> {
     let treasury_balance = ctx.accounts.treasury.lamports();
     require!(treasury_balance > 0, SolPredictError::NoFeesToWithdraw);
 
+    // Only PROTOCOL-OWNED funds may ever leave the treasury, never user
+    // principal:
+    //   - Settled: the unclaimed payout pool plus collected fees.
+    //   - Paused but NOT settled: an Open market's treasury holds user
+    //     deposits that are refundable via cancellation — sweeping it would be
+    //     a rug-pull. Only `fee_collected` is protocol-owned at that point
+    //     (and it is 0 until settlement, so the require below rejects).
     let withdraw_amount = if is_settled {
         let unclaimed = market
             .total_payout_pool
@@ -60,8 +67,9 @@ pub fn handler(ctx: Context<EmergencyWithdrawAccounts>) -> Result<()> {
             .saturating_add(market.fee_collected);
         unclaimed.min(treasury_balance)
     } else {
-        treasury_balance
+        market.fee_collected.min(treasury_balance)
     };
+    require!(withdraw_amount > 0, SolPredictError::NoFeesToWithdraw);
 
     let market_id = market.market_id;
     let treasury_bump = market.treasury_bump;

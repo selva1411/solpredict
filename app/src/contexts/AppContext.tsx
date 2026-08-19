@@ -19,7 +19,7 @@ const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -29,6 +29,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const walletPubkey = publicKey?.toBase58() ?? null;
+  const signer = publicKey ? { publicKey, signMessage } : undefined;
 
   // Persist the connected wallet so reads elsewhere stay consistent.
   useEffect(() => {
@@ -49,7 +50,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!walletPubkey) return;
     let cancelled = false;
-    fetchWatchlistFromDb(walletPubkey)
+    fetchWatchlistFromDb(walletPubkey, signer)
       .then((keys) => {
         if (!cancelled) setWatchlist(keys);
       })
@@ -58,13 +59,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.warn("[AppContext] failed to load watchlist from DB", err);
       });
     return () => { cancelled = true; };
-  }, [walletPubkey]);
+  }, [walletPubkey, signer]);
 
   const toggleWatchlistItem = useCallback((pubkey: string) => {
     const wallet = walletPubkey ?? localStorage.getItem("solpredict-wallet") ?? undefined;
-    const next = toggleWatchlist(pubkey, wallet);
+    const next = toggleWatchlist(pubkey, wallet, signer);
     setWatchlist(next);
-  }, [walletPubkey]);
+  }, [walletPubkey, signer]);
 
   const isWatched = useCallback((pubkey: string) => {
     return watchlist.includes(pubkey);

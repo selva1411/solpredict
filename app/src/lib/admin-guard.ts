@@ -37,9 +37,14 @@ export async function requireAdmin(req: NextRequest): Promise<
 
   const configured = (process.env.ADMIN_WALLET || "").split(",").map((w) => w.trim()).filter(Boolean);
 
-  // Fallback: allow the documented CLI admin keypair / dev admin wallet so the
-  // panel keeps working before ADMIN_WALLET is set.
-  const fallbackAdmins = ["2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS"];
+  // The documented CLI admin keypair is used as a fallback ONLY in
+  // development. In production the allowlist comes exclusively from
+  // ADMIN_WALLET — never from a hardcoded wallet baked into the binary.
+  // When no admin wallets are configured, isAdminWallet fails closed for
+  // every wallet, so no request can authenticate as admin.
+  const fallbackAdmins = process.env.NODE_ENV === "production"
+    ? []
+    : ["dad8hrG9n3xoJcUVSZcVcoQQxbBhMS7CEypM2HR3wqf"];
   const allowed = configured.length > 0 ? configured : fallbackAdmins;
 
   // Path 1: signed proof of ownership

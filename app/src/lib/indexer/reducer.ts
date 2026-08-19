@@ -344,6 +344,14 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
     // already exists (replay / repeated reconcile pass), skip ALL downstream
     // accumulation — otherwise positions, volume and user stats get inflated
     // every time a duplicate event is processed.
+    //
+    // avgPriceBps convention: SOL per SHARE in bps (10000 bps = 1 SOL/share).
+    // effectiveTradePrice returns SOL per BASE UNIT (tokensOut is stored in
+    // base units, 1e6 per share — see BASE_UNITS_PER_SHARE), so it must be
+    // scaled by 1e6 before the bps conversion. The previous `price * 10000`
+    // produced ~0 for every real trade (e.g. 0.01 SOL/share ⇒ 1e-4 bps),
+    // corrupting PnL series and price history for all consumers.
+    const pricePerShareSol = price * 1_000_000;
     const inserted = await db.insert(trades).values({
       signature: ev.signature,
       marketPubkey: ev.marketPubkey,
@@ -352,7 +360,7 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
       side: ev.side,
       shares: ev.tokensOut,
       cost: ev.lamportsIn,
-      avgPriceBps: Math.round(price * 10000),
+      avgPriceBps: Math.round(pricePerShareSol * 10000),
       lamportsIn: ev.lamportsIn,
       tokensOut: ev.tokensOut,
       pricePerToken: price.toString(),
@@ -408,26 +416,26 @@ export async function applyTradeEvent(ev: TradeEvent): Promise<void> {
     if (typeof ev.noSupply === "number") marketSet.noSupply = ev.noSupply;
     await db.update(marketsCache).set(marketSet as any).where(eq(marketsCache.marketPubkey, ev.marketPubkey));
 
-    // Price history snapshot
-    const priceBpsVal = Math.round(price * 10000);
-    await db.insert(priceHistory).values({
-      marketPubkey: ev.marketPubkey,
-      outcomeIndex,
-      timestamp: new Date(),
-      priceBps: priceBpsVal,
-      volume: solVolume.toString(),
-    });
-
-    // Refresh the market_outcomes mark prices from the REAL post-trade pool
-    // reserves (mirrors the AMM view the detail page shows). This table was
-    // previously only written on market creation, so positions/leaderboard
-    // consumers read frozen listing prices forever. Only written when real
-    // pool snapshots are supplied (the frontend sync path always does).
+    // Price history + market_outcomes mark prices, both derived from the REAL
+    // post-trade pool reserves (the same on-chain AMM view the detail page
+    // shows). price_bps is the YES probability in bps (0-10000) — NOT the
+    // trade's per-share price, which is SOL/share bps and meaningless as a
+    // probability. When real pool snapshots are absent, skip the writes rather
+    // than fabricate probabilities from stale/absent pools.
     if (typeof ev.yesPoolLamports === "number" && typeof ev.noPoolLamports === "number") {
       const pYes = ev.yesPoolLamports;
       const pNo = ev.noPoolLamports;
       const pTotal = pYes + pNo;
       const yesPriceBps = pTotal > 0 ? Math.round((pYes / pTotal) * 10000) : 5000;
+
+      await db.insert(priceHistory).values({
+        marketPubkey: ev.marketPubkey,
+        outcomeIndex,
+        timestamp: new Date(),
+        priceBps: yesPriceBps,
+        volume: solVolume.toString(),
+      });
+
       await db.insert(marketOutcomes).values({
         marketPubkey: ev.marketPubkey,
         outcomeIndex: 0,

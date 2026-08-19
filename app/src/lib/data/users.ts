@@ -1,8 +1,15 @@
 import { db } from '@/lib/db/client';
-import { userStats, positions, trades, marketsCache, marketOutcomes, liquidityPositions, users, follows, achievements as achievementsTable, marketProposals, leaderboardSnapshots } from '@/lib/db/schema';
+import { userStats, trades, marketsCache, users, follows, achievements as achievementsTable, marketProposals, leaderboardSnapshots } from '@/lib/db/schema';
 import { eq, and, desc, sql, count, inArray } from 'drizzle-orm';
+import { computePasScore } from '@/lib/pas';
 
-const SHARE_PRICE_SOL = 0.01;
+// Canonical homes for position/trade queries. Re-exported here so the existing
+// call sites importing from '@/lib/data/users' keep working; the implementation
+// lives in the domain modules (positions.ts / trades.ts) — see the data-layer
+// layout in docs/AUDIT-REPORT.md Phase 3.
+export { getPositions, getLpPositions } from './positions';
+export type { LpPosition } from './positions';
+export { getTradeHistory, getPnlSeries, getRecentActivity } from './trades';
 
 export async function getUserStats(wallet: string) {
   if (!db) return null;
@@ -51,226 +58,11 @@ export async function getUserStats(wallet: string) {
   };
 }
 
-export async function getPositions(wallet: string) {
-  if (!db) return [];
-
-  const rows = await db
-    .select({
-      id: positions.id,
-      wallet: positions.wallet,
-      marketPubkey: positions.marketPubkey,
-      outcomeIndex: positions.outcomeIndex,
-      shares: positions.shares,
-      costBasis: positions.costBasis,
-      realizedPnl: positions.realizedPnl,
-      claimed: positions.claimed,
-      question: marketsCache.question,
-      category: marketsCache.category,
-      status: marketsCache.status,
-      winningOutcome: marketsCache.winningOutcome,
-      yesPoolLamports: marketsCache.yesPoolLamports,
-      noPoolLamports: marketsCache.noPoolLamports,
-    })
-    .from(positions)
-    .innerJoin(marketsCache, eq(marketsCache.marketPubkey, positions.marketPubkey))
-    .where(eq(positions.wallet, wallet));
-
-  if (rows.length === 0) return [];
-
-  // Current mark price from the REAL on-chain pool reserves (the same numbers
-  // the market detail page reads from the AMM), NOT the market_outcomes table
-  // — that table is only written on market creation and would leave every
-  // position frozen at its listing price forever. markets_cache pools are
-  // mirrored from chain after every trade/LP by the reducer + sync routes, so
-  // positions revalue live and match the detail page exactly.
-  //   probability = yesPool / (yesPool + noPool);  share value = prob × 0.01.
-  const pubkeys = Array.from(new Set(rows.map(r => r.marketPubkey)));
-  const outcomes = await db
-    .select({
-      marketPubkey: marketOutcomes.marketPubkey,
-      outcomeIndex: marketOutcomes.outcomeIndex,
-      lastPriceBps: marketOutcomes.lastPriceBps,
-      label: marketOutcomes.label,
-    })
-    .from(marketOutcomes)
-    .where(sql`${marketOutcomes.marketPubkey} IN ${pubkeys}`);
-
-  const outcomeMap = new Map<string, typeof outcomes>();
-  for (const o of outcomes) {
-    const key = `${o.marketPubkey}:${o.outcomeIndex}`;
-    const list = outcomeMap.get(key) ?? [];
-    list.push(o);
-    outcomeMap.set(key, list);
-  }
 
 
-  return rows.map(r => {
-    // SETTLED markets: shares redeem at face value — the winning side is worth
-    // the full share price (0.01 SOL), the losing side 0. Pool ratios go to
-    // zero when a market is redeemed, so they can't price settled positions.
-    const isSettled = r.status === "settled";
-    const winner = String(r.winningOutcome ?? "").toLowerCase();
-    const won =
-      isSettled &&
-      (winner === "yes" || winner === "no") &&
-      ((r.outcomeIndex === 0 && winner === "yes") || (r.outcomeIndex === 1 && winner === "no"));
-    if (isSettled) {
-      const settledBps = won ? 10000 : 0;
-      const currentPriceSol = (settledBps / 10000) * SHARE_PRICE_SOL;
-      const sharesCount = (r.shares ?? 0) / 1e6;
-      const costSol = (r.costBasis ?? 0) / 1e9;
-      const valueSol = sharesCount * currentPriceSol;
-      const pnlSol = valueSol - costSol;
-      const pnlPercent = costSol > 0 ? (pnlSol / costSol) * 100 : 0;
-      return {
-        marketPubkey: r.marketPubkey,
-        question: r.question,
-        category: r.category ?? 'Crypto',
-        status: r.status ?? 'open',
-        side: (r.outcomeIndex === 0 ? 'YES' : 'NO') as 'YES' | 'NO',
-        outcomeIndex: r.outcomeIndex ?? 0,
-        shares: sharesCount,
-        costSol,
-        avgPriceSol: sharesCount > 0 ? costSol / sharesCount : 0,
-        currentPriceSol,
-        valueSol,
-        pnlSol,
-        pnlPercent,
-        claimed: r.claimed ?? false,
-      };
-    }
 
-    // OPEN markets: pool-ratio probability (0-10000), matching the detail
-    // page's AMM view. YES is valued at the YES probability; NO at the
-    // complement (NO probability).
-    const yesP = Number(r.yesPoolLamports ?? 0);
-    const noP = Number(r.noPoolLamports ?? 0);
-    const poolTotal = yesP + noP;
-    const poolYesBps = poolTotal > 0 ? Math.round((yesP / poolTotal) * 10000) : 5000;
-    const currentPriceBps = poolTotal > 0
-      ? (r.outcomeIndex === 0 ? poolYesBps : 10000 - poolYesBps)
-      : (outcomeMap.get(`${r.marketPubkey}:${r.outcomeIndex}`)?.[0]?.lastPriceBps ?? 5000);
-    // bps is the probability (0-10000); per-share SOL price = prob × 0.01.
-    const currentPriceSol = (currentPriceBps / 10000) * SHARE_PRICE_SOL;
 
-    const sharesCount = (r.shares ?? 0) / 1e6;
-    const costSol = (r.costBasis ?? 0) / 1e9;
-    const valueSol = sharesCount * currentPriceSol;
-    const pnlSol = valueSol - costSol;
-    const pnlPercent = costSol > 0 ? (pnlSol / costSol) * 100 : 0;
 
-    return {
-      marketPubkey: r.marketPubkey,
-      question: r.question,
-      category: r.category ?? 'Crypto',
-      status: r.status ?? 'open',
-      side: (r.outcomeIndex === 0 ? 'YES' : 'NO') as 'YES' | 'NO',
-      outcomeIndex: r.outcomeIndex ?? 0,
-      shares: sharesCount,
-      costSol,
-      avgPriceSol: sharesCount > 0 ? costSol / sharesCount : 0,
-      currentPriceSol,
-      valueSol,
-      pnlSol,
-      pnlPercent,
-      claimed: r.claimed ?? false,
-    };
-  });
-}
-
-export interface LpPosition {
-  id: number;
-  marketPubkey: string;
-  question: string;
-  category: string;
-  status: string;
-  amountSol: number;
-  lpTokens: number;
-  estFeeEarnedSol: number;
-  apy: string;
-}
-
-/**
- * Liquidity positions for a wallet, joined with market metadata.
- * Returns SOL deposited, LP tokens held, and earned fees.
- */
-export async function getLpPositions(wallet: string): Promise<LpPosition[]> {
-  if (!db) return [];
-
-  const rows = await db
-    .select({
-      id: liquidityPositions.id,
-      marketPubkey: liquidityPositions.marketPubkey,
-      lpShares: liquidityPositions.lpShares,
-      deposited: liquidityPositions.deposited,
-      feesEarned: liquidityPositions.feesEarned,
-      question: marketsCache.question,
-      category: marketsCache.category,
-      status: marketsCache.status,
-    })
-    .from(liquidityPositions)
-    .leftJoin(marketsCache, eq(marketsCache.marketPubkey, liquidityPositions.marketPubkey))
-    .where(eq(liquidityPositions.wallet, wallet))
-    .orderBy(desc(liquidityPositions.updatedAt));
-
-  return rows.map(r => ({
-    id: r.id,
-    marketPubkey: r.marketPubkey,
-    question: r.question ?? 'Unknown market',
-    category: r.category ?? 'Other',
-    status: r.status ?? 'open',
-    amountSol: Number(r.deposited ?? 0),
-    lpTokens: Number(r.lpShares ?? 0),
-    estFeeEarnedSol: Number(r.feesEarned ?? 0),
-    // No reliable fee-velocity data stored; show a dash until fees accrue.
-    apy: Number(r.feesEarned ?? 0) > 0 ? '—' : '—',
-  }));
-}
-
-export async function getTradeHistory(wallet: string, limit = 50) {
-  if (!db) return [];
-
-  return db
-    .select({
-      signature: trades.signature,
-      marketPubkey: trades.marketPubkey,
-      outcomeIndex: trades.outcomeIndex,
-      side: trades.side,
-      shares: trades.shares,
-      cost: trades.cost,
-      avgPriceBps: trades.avgPriceBps,
-      feePaidLamports: trades.feePaidLamports,
-      blockTime: trades.blockTime,
-      question: marketsCache.question,
-    })
-    .from(trades)
-    .leftJoin(marketsCache, eq(marketsCache.marketPubkey, trades.marketPubkey))
-    .where(eq(trades.trader, wallet))
-    .orderBy(desc(trades.blockTime))
-    .limit(limit);
-}
-
-export async function getPnlSeries(wallet: string) {
-  if (!db) return [];
-
-  // Group trades by date to build PnL time series
-  const tradeHistory = await getTradeHistory(wallet, 200);
-  let cumulativePnl = 0;
-
-  return tradeHistory.reverse().map(t => {
-    const costSol = (t.cost ?? 0) / 1e9;
-    const priceSol = (t.avgPriceBps ?? 5000) / 10000;
-    // Estimate pnl delta
-    const estValue = ((t.shares ?? 0) / 1e9) * priceSol;
-    const pnlDelta = estValue - costSol;
-    cumulativePnl += pnlDelta;
-
-    return {
-      timestamp: t.blockTime ? new Date(t.blockTime).toISOString() : new Date().toISOString(),
-      pnlSol: cumulativePnl,
-    };
-  });
-}
 
 /* -------------------------------------------------------------------------- */
 /* Profile / activity / achievements — shared data-layer functions.           */
@@ -295,7 +87,7 @@ export interface ProfileResult {
     totalProfit: number;
     marketsTraded: number;
     winRate: number | null;
-    pasScore: number;
+    pasScore: number | null;
   };
   stats: Record<string, unknown>;
   tabs: {
@@ -407,7 +199,7 @@ export async function getUserProfile(wallet: string): Promise<ProfileResult | nu
       totalProfit: realizedNum + unrealizedNum,
       marketsTraded: marketsTradedNum,
       winRate: winRatePct !== null ? winRatePct : null,
-      pasScore: 50,
+      pasScore: computePasScore(winRatePct),
     },
     stats: {
       totalVolume: totalVolumeNum,
@@ -423,7 +215,7 @@ export async function getUserProfile(wallet: string): Promise<ProfileResult | nu
       bestTrade: Number(stats?.bestTrade ?? 0),
       currentStreak: stats?.currentStreak ?? 0,
       rank: stats?.rank ?? null,
-      pasScore: 50,
+      pasScore: computePasScore(winRatePct),
     },
     tabs: {
       recentTrades,
@@ -432,38 +224,7 @@ export async function getUserProfile(wallet: string): Promise<ProfileResult | nu
   };
 }
 
-/**
- * Recent trade activity, optionally filtered to one wallet. Mirrors
- * GET /api/activity/recent exactly.
- */
-export async function getRecentActivity(wallet: string | null, limit = 50) {
-  if (!db) return [];
 
-  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
-  const query = db
-    .select({
-      signature: trades.signature,
-      marketPubkey: trades.marketPubkey,
-      trader: trades.trader,
-      side: trades.side,
-      lamportsIn: trades.lamportsIn,
-      tokensOut: trades.tokensOut,
-      blockTime: trades.blockTime,
-      question: marketsCache.question,
-    })
-    .from(trades)
-    .leftJoin(marketsCache, eq(trades.marketPubkey, marketsCache.marketPubkey))
-    .orderBy(desc(trades.blockTime));
-
-  const rows = wallet
-    ? await query.where(eq(trades.trader, wallet)).limit(safeLimit)
-    : await query.limit(safeLimit);
-
-  return rows.map((r) => ({
-    ...r,
-    question: r.question || `Market Trade (${r.marketPubkey.slice(0, 8)}...)`,
-  }));
-}
 
 interface AchievementUserStats {
   marketsTraded: number;
@@ -560,7 +321,9 @@ export async function getAchievements(wallet: string) {
         .from(marketProposals)
         .where(and(eq(marketProposals.proposer, wallet), eq(marketProposals.status, "approved")));
       stats.proposedMarkets = proposalRes?.count || 0;
-    } catch {}
+    } catch (e) {
+      console.error("[achievements] failed to load proposal count:", e);
+    }
 
     try {
       const [rankRes] = await db
@@ -570,7 +333,9 @@ export async function getAchievements(wallet: string) {
         .orderBy(sql`${leaderboardSnapshots.snapshotDate} DESC`)
         .limit(1);
       stats.weeklyRank = rankRes?.rank ?? null;
-    } catch {}
+    } catch (e) {
+      console.error("[achievements] failed to load weekly rank:", e);
+    }
 
     try {
       const settled = await db
@@ -594,7 +359,9 @@ export async function getAchievements(wallet: string) {
         else break;
       }
       stats.currentStreak = streak;
-    } catch {}
+    } catch (e) {
+      console.error("[achievements] failed to compute streak:", e);
+    }
   }
 
   return ACHIEVEMENT_DEFS.map((a) => ({

@@ -1,13 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
-import { assertDb } from "@/lib/db/client";
-import { platformConfig, auditLog, marketsCache } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { setPlatformPaused, setMarketStatus, logAuditEntry } from "@/lib/data/admin";
 import { ok, badRequest, serverError } from "@/lib/api-response";
-import { apiHandler } from "@/lib/api-handler";
+import { apiHandler, getClientIp } from "@/lib/api-handler";
 import { requireAdmin } from "@/lib/admin-guard";
-import { getClientIp } from "@/lib/api-handler";
 
 /**
  * POST /api/admin/emergency/pause
@@ -34,35 +31,15 @@ export const POST = apiHandler(async (req: NextRequest) => {
   const ip = getClientIp(req);
 
   try {
-    const db = assertDb();
-
     if (pauseScope === "global") {
-      // Upsert platform_config single row
-      const existing = await db.select().from(platformConfig).limit(1);
-      if (existing.length === 0) {
-        await db.insert(platformConfig).values({
-          paused: true,
-          pauseReason: reason.trim(),
-        });
-      } else {
-        await db
-          .update(platformConfig)
-          .set({
-            paused: true,
-            pauseReason: reason.trim(),
-            updatedAt: new Date(),
-          })
-          .where(eq(platformConfig.id, existing[0].id));
-      }
-
-      // Log in immutable audit log
-      await db.insert(auditLog).values({
-        action: "EMERGENCY_PAUSE_GLOBAL",
-        actor: guard.identity.wallet,
-        resource: "global",
-        details: { reason: reason.trim(), scope: "global" },
+      await setPlatformPaused(true, reason.trim());
+      await logAuditEntry(
+        "EMERGENCY_PAUSE_GLOBAL",
+        guard.identity.wallet,
+        "global",
+        { reason: reason.trim(), scope: "global" },
         ip,
-      });
+      );
 
       return ok({
         ok: true,
@@ -71,34 +48,27 @@ export const POST = apiHandler(async (req: NextRequest) => {
         reason: reason.trim(),
         message: "GLOBAL EMERGENCY PAUSE ACTIVATED. All state-changing operations are now blocked.",
       });
-    } else {
-      if (!marketPubkey) return badRequest("marketPubkey required for market scope pause");
-
-      await db
-        .update(marketsCache)
-        .set({
-          status: "paused",
-          updatedAt: new Date(),
-        })
-        .where(eq(marketsCache.marketPubkey, marketPubkey));
-
-      await db.insert(auditLog).values({
-        action: "EMERGENCY_PAUSE_MARKET",
-        actor: guard.identity.wallet,
-        resource: marketPubkey,
-        details: { reason: reason.trim(), scope: "market", marketPubkey },
-        ip,
-      });
-
-      return ok({
-        ok: true,
-        scope: "market",
-        marketPubkey,
-        paused: true,
-        reason: reason.trim(),
-        message: `Market ${marketPubkey} paused successfully.`,
-      });
     }
+
+    if (!marketPubkey) return badRequest("marketPubkey required for market scope pause");
+
+    await setMarketStatus(marketPubkey, "paused");
+    await logAuditEntry(
+      "EMERGENCY_PAUSE_MARKET",
+      guard.identity.wallet,
+      marketPubkey,
+      { reason: reason.trim(), scope: "market", marketPubkey },
+      ip,
+    );
+
+    return ok({
+      ok: true,
+      scope: "market",
+      marketPubkey,
+      paused: true,
+      reason: reason.trim(),
+      message: `Market ${marketPubkey} paused successfully.`,
+    });
   } catch (err) {
     return serverError(err);
   }

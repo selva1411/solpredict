@@ -27,7 +27,15 @@ import {
   getEmergencyPausePda,
   getProposalPda,
   getProposalVaultPda,
+  getOrderPda,
+  getOrderEscrowPda,
 } from "./helpers/pda";
+
+// Slippage guards for the buy_shares/sell_shares instruction args. Generous
+// bounds so the existing tests keep exercising their original behavior;
+// slippage protection itself is asserted by dedicated tests below.
+const SLIPPAGE_MAX_COST = new anchor.BN("100000000000000"); // 100_000 SOL cap
+const SLIPPAGE_MIN_PROCEEDS = new anchor.BN(0);
 
 async function ensureTimePassed(targetTs: number) {
   let currentSlotVal = await connection.getSlot();
@@ -63,6 +71,15 @@ describe("SOLPredict Integration Suite", () => {
     // Fund buyer accounts
     await fundAccount(buyer1.publicKey, 10);
     await fundAccount(buyer2.publicKey, 10);
+    // Admin pays rent for every market PDA/mint/treasury created in the suite
+    // (bootstrapMarket) — top it up generously so subsets and repeat runs never
+    // run dry.
+    await fundAccount(admin.publicKey, 50);
+
+    // The config PDA is deterministic. Pre-derive it so test subsets (mocha -g)
+    // that skip Phase 2 still have a valid config address; Phase 2 creates the
+    // on-chain account in full-suite runs.
+    configPda = getConfigPda(program.programId);
   });
 
   describe("Phase 2: initialize_config + initialize_market", () => {
@@ -231,7 +248,7 @@ describe("SOLPredict Integration Suite", () => {
       console.log("positionPda:", positionPda.toBase58());
 
       const tx = await program.methods
-        .buyShares({ yes: {} } as any, quantity)
+        .buyShares({ yes: {} } as any, quantity, SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer1.publicKey,
           market: marketPda,
@@ -265,7 +282,7 @@ describe("SOLPredict Integration Suite", () => {
       const positionPda = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
 
       await program.methods
-        .buyShares({ no: {} } as any, quantity)
+        .buyShares({ no: {} } as any, quantity, SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer2.publicKey,
           market: marketPda,
@@ -296,7 +313,7 @@ describe("SOLPredict Integration Suite", () => {
 
       try {
         await program.methods
-          .buyShares({ yes: {} } as any, new anchor.BN(0))
+          .buyShares({ yes: {} } as any, new anchor.BN(0), SLIPPAGE_MAX_COST)
           .accounts({
             buyer: buyer1.publicKey,
             market: marketPda,
@@ -363,7 +380,7 @@ describe("SOLPredict Integration Suite", () => {
       const positionPda = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
       
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(5))
+        .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer1.publicKey,
           market: marketPda,
@@ -383,7 +400,7 @@ describe("SOLPredict Integration Suite", () => {
       const positionPda2 = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
 
       await program.methods
-        .buyShares({ no: {} } as any, new anchor.BN(10))
+        .buyShares({ no: {} } as any, new anchor.BN(10), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer2.publicKey,
           market: marketPda,
@@ -432,10 +449,12 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
+            admin: admin.publicKey,
             market: marketPda,
             config: configPda,
             priceUpdate: currentMockPda,
           } as any)
+          .signers([admin])
           .rpc();
         expect.fail("Should have failed with StaleOracle");
       } catch (err: any) {
@@ -473,10 +492,12 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
+            admin: admin.publicKey,
             market: marketPda,
             config: configPda,
             priceUpdate: currentMockPda,
           } as any)
+          .signers([admin])
           .rpc();
         expect.fail("Should have failed with InvalidOracleFeed");
       } catch (err: any) {
@@ -514,10 +535,12 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
+            admin: admin.publicKey,
             market: marketPda,
             config: configPda,
             priceUpdate: currentMockPda,
           } as any)
+          .signers([admin])
           .rpc();
         expect.fail("Should have failed with LowOracleConfidence");
       } catch (err: any) {
@@ -558,10 +581,12 @@ describe("SOLPredict Integration Suite", () => {
       const tx = await program.methods
         .settleMarket()
         .accounts({
+          admin: admin.publicKey,
           market: marketPda,
           config: configPda,
           priceUpdate: currentMockPda,
         } as any)
+        .signers([admin])
         .rpc();
 
       const marketAccount = await program.account.market.fetch(marketPda);
@@ -609,7 +634,7 @@ describe("SOLPredict Integration Suite", () => {
       const positionPda2 = getUserPositionPda(sportsMarketPda, buyer2.publicKey, program.programId);
 
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(5))
+        .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer1.publicKey,
           market: sportsMarketPda,
@@ -625,7 +650,7 @@ describe("SOLPredict Integration Suite", () => {
         .rpc();
 
       await program.methods
-        .buyShares({ no: {} } as any, new anchor.BN(10))
+        .buyShares({ no: {} } as any, new anchor.BN(10), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer2.publicKey,
           market: sportsMarketPda,
@@ -705,10 +730,12 @@ describe("SOLPredict Integration Suite", () => {
         await program.methods
           .settleMarket()
           .accounts({
+            admin: admin.publicKey,
             market: sportsMarketPda,
             config: configPda,
             priceUpdate: currentMockPda,
           } as any)
+          .signers([admin])
           .rpc();
         expect.fail("Should have failed with UseManualSettlement");
       } catch (err: any) {
@@ -775,7 +802,7 @@ describe("SOLPredict Integration Suite", () => {
       const pos1 = getUserPositionPda(techMarketPda, buyer1.publicKey, program.programId);
 
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(5))
+        .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
         .accounts({ buyer: buyer1.publicKey, market: techMarketPda, treasury: result.treasuryPda, yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1, emergencyPause: null } as any)
         .signers([buyer1])
         .rpc();
@@ -800,10 +827,12 @@ describe("SOLPredict Integration Suite", () => {
       await program.methods
         .settleMarket()
         .accounts({
+          admin: admin.publicKey,
           market: techMarketPda,
           config: configPda,
           priceUpdate: mockPda,
         } as any)
+        .signers([admin])
         .rpc();
 
       const acc = await program.account.market.fetch(techMarketPda);
@@ -857,7 +886,7 @@ describe("SOLPredict Integration Suite", () => {
         const positionPda1 = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
         
         await program.methods
-          .buyShares({ yes: {} } as any, new anchor.BN(30))
+          .buyShares({ yes: {} } as any, new anchor.BN(30), SLIPPAGE_MAX_COST)
           .accounts({
             buyer: buyer1.publicKey,
             market: marketPda,
@@ -878,7 +907,7 @@ describe("SOLPredict Integration Suite", () => {
         const positionPda2 = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
         
         await program.methods
-          .buyShares({ yes: {} } as any, new anchor.BN(20))
+          .buyShares({ yes: {} } as any, new anchor.BN(20), SLIPPAGE_MAX_COST)
           .accounts({
             buyer: buyer2.publicKey,
             market: marketPda,
@@ -933,10 +962,12 @@ describe("SOLPredict Integration Suite", () => {
       await program.methods
         .settleMarket()
         .accounts({
+          admin: admin.publicKey,
           market: marketPda,
           config: configPda,
           priceUpdate: mockPriceUpdatePda,
         } as any)
+        .signers([admin])
         .rpc();
 
       const marketAccount = await program.account.market.fetch(marketPda);
@@ -1046,7 +1077,7 @@ describe("SOLPredict Integration Suite", () => {
 
       // 1. Recipient buys 1 NO share to initialize their position PDA and ATAs
       await program.methods
-        .buyShares({ no: {} } as any, new anchor.BN(1))
+        .buyShares({ no: {} } as any, new anchor.BN(1), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: recipient.publicKey,
           market: localMarketPda,
@@ -1063,7 +1094,7 @@ describe("SOLPredict Integration Suite", () => {
 
       // 2. Buyer buys 2 YES shares
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(2))
+        .buyShares({ yes: {} } as any, new anchor.BN(2), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer.publicKey,
           market: localMarketPda,
@@ -1156,7 +1187,7 @@ describe("SOLPredict Integration Suite", () => {
       const b1NoAta = getAssociatedTokenAddressSync(noMintPda, buyer1.publicKey);
       const pos1 = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(100))
+        .buyShares({ yes: {} } as any, new anchor.BN(100), SLIPPAGE_MAX_COST)
         .accounts({ buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1, emergencyPause: null } as any)
         .signers([buyer1])
         .rpc();
@@ -1165,7 +1196,7 @@ describe("SOLPredict Integration Suite", () => {
       const b2NoAta = getAssociatedTokenAddressSync(noMintPda, buyer2.publicKey);
       const pos2 = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
       await program.methods
-        .buyShares({ no: {} } as any, new anchor.BN(50))
+        .buyShares({ no: {} } as any, new anchor.BN(50), SLIPPAGE_MAX_COST)
         .accounts({ buyer: buyer2.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b2YesAta, buyerNoAta: b2NoAta, userPosition: pos2, emergencyPause: null } as any)
         .signers([buyer2])
         .rpc();
@@ -1178,7 +1209,7 @@ describe("SOLPredict Integration Suite", () => {
 
       const beforeBalance = await connection.getBalance(buyer1.publicKey);
       await program.methods
-        .sellShares({ yes: {} } as any, new anchor.BN(10))
+        .sellShares({ yes: {} } as any, new anchor.BN(10), SLIPPAGE_MIN_PROCEEDS)
         .accounts({
           seller: buyer1.publicKey,
           market: marketPda,
@@ -1207,7 +1238,7 @@ describe("SOLPredict Integration Suite", () => {
       const pos = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
 
       await program.methods
-        .sellShares({ no: {} } as any, new anchor.BN(10))
+        .sellShares({ no: {} } as any, new anchor.BN(10), SLIPPAGE_MIN_PROCEEDS)
         .accounts({
           seller: buyer2.publicKey,
           market: marketPda,
@@ -1233,7 +1264,7 @@ describe("SOLPredict Integration Suite", () => {
 
       try {
         await program.methods
-          .sellShares({ yes: {} } as any, new anchor.BN(0))
+          .sellShares({ yes: {} } as any, new anchor.BN(0), SLIPPAGE_MIN_PROCEEDS)
           .accounts({
             seller: buyer1.publicKey,
             market: marketPda,
@@ -1550,7 +1581,7 @@ describe("SOLPredict Integration Suite", () => {
       const b1NoAta = getAssociatedTokenAddressSync(noMintPda, buyer1.publicKey);
       const pos1 = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(10))
+        .buyShares({ yes: {} } as any, new anchor.BN(10), SLIPPAGE_MAX_COST)
         .accounts({ buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda, yesMint: yesMintPda, noMint: noMintPda, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1, emergencyPause: null } as any)
         .signers([buyer1])
         .rpc();
@@ -1584,7 +1615,7 @@ describe("SOLPredict Integration Suite", () => {
 
       try {
         await program.methods
-          .buyShares({ yes: {} } as any, new anchor.BN(5))
+          .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
           .accounts({
             buyer: buyer1.publicKey,
             market: marketPda,
@@ -1604,31 +1635,36 @@ describe("SOLPredict Integration Suite", () => {
       }
     });
 
-    it("Emergency withdraw from paused market", async () => {
+    it("Emergency withdraw from a paused OPEN market is rejected (protects user principal)", async () => {
       const pausePda = getEmergencyPausePda(program.programId);
 
-      const beforeBalance = await connection.getBalance(admin.publicKey);
-      await program.methods
-        .emergencyWithdraw()
-        .accounts({
-          admin: admin.publicKey,
-          market: marketPda,
-          treasury: treasuryPda,
-          config: configPda,
-          emergencyPause: pausePda,
-        } as any)
-        .signers([admin])
-        .rpc();
-
-      const afterBalance = await connection.getBalance(admin.publicKey);
-      expect(afterBalance - beforeBalance).to.be.greaterThan(0);
+      // The market is Open and paused. Its treasury holds only user deposits
+      // (no settlement happened, so fee_collected = 0). emergency_withdraw
+      // must refuse to sweep user principal — only protocol-owned funds
+      // (unclaimed payout pool + fees on a SETTLED market) may leave.
+      try {
+        await program.methods
+          .emergencyWithdraw()
+          .accounts({
+            admin: admin.publicKey,
+            market: marketPda,
+            treasury: treasuryPda,
+            config: configPda,
+            emergencyPause: pausePda,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with NoFeesToWithdraw");
+      } catch (err: any) {
+        expect(err.message).to.include("NoFeesToWithdraw");
+      }
     });
 
     it("Emergency unpause requires guardian confirmation", async () => {
       const pausePda = getEmergencyPausePda(program.programId);
 
       await program.methods
-        .emergencyUnpause([admin.publicKey])
+        .emergencyUnpause().remainingAccounts([{ pubkey: admin.publicKey, isSigner: true, isWritable: false }])
         .accounts({
           admin: admin.publicKey,
           config: configPda,
@@ -1664,7 +1700,7 @@ describe("SOLPredict Integration Suite", () => {
 
       // Clean up: unpause
       await program.methods
-        .emergencyUnpause([admin.publicKey])
+        .emergencyUnpause().remainingAccounts([{ pubkey: admin.publicKey, isSigner: true, isWritable: false }])
         .accounts({ admin: admin.publicKey, config: configPda, emergencyPause: pausePda } as any)
         .signers([admin])
         .rpc();
@@ -1875,6 +1911,138 @@ describe("SOLPredict Integration Suite", () => {
         expect(err.message).to.include("Unauthorized");
       }
     });
+
+    it("Reject a proposal: closes the account on-chain and slashes the bond", async () => {
+      const configAccount = await program.account.config.fetch(configPda);
+      const rejectProposalId = configAccount.marketCount;
+      const rejectProposalPda = getProposalPda(rejectProposalId, program.programId);
+      const rejectVaultPda = getProposalVaultPda(rejectProposalId, program.programId);
+
+      const rejectProposer = Keypair.generate();
+      await fundAccount(rejectProposer.publicKey, 10);
+
+      const p12Slot = await connection.getSlot();
+      const p12Time = await connection.getBlockTime(p12Slot);
+      const p12Now = p12Time ? p12Time : Math.floor(Date.now() / 1000);
+
+      await program.methods
+        .proposeMarket(
+          "Proposal: Will BTC hit $200k? (reject me)",
+          "Rejected in test",
+          0, Array(32).fill(0), new anchor.BN(200_000_00000000), 0, 0,
+          new anchor.BN(p12Now + 3700),
+          new anchor.BN(p12Now + 3700),
+          new anchor.BN(10_000_000)
+        )
+        .accounts({
+          proposer: rejectProposer.publicKey,
+          config: configPda,
+          proposal: rejectProposalPda,
+          proposalVault: rejectVaultPda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([rejectProposer])
+        .rpc();
+
+      const vaultBefore = await connection.getBalance(rejectVaultPda);
+      const adminBefore = await connection.getBalance(admin.publicKey);
+      expect(vaultBefore).to.be.greaterThan(0); // bond escrowed
+
+      // The proposal account must NOT have been created before reject.
+      await program.methods
+        .rejectMarket()
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          proposal: rejectProposalPda,
+          proposalVault: rejectVaultPda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      // Proposal PDA is closed (no longer exists on-chain).
+      const closed = await connection.getAccountInfo(rejectProposalPda);
+      expect(closed).to.be.null;
+
+      // Bond was slashed: vault drained, admin received the bond lamports.
+      const vaultAfter = await connection.getBalance(rejectVaultPda);
+      const adminAfter = await connection.getBalance(admin.publicKey);
+      expect(vaultAfter).to.equal(0);
+      expect(adminAfter - adminBefore).to.be.greaterThanOrEqual(vaultBefore);
+    });
+
+    it("Reject fails on a proposal that was already approved", async () => {
+      try {
+        await program.methods
+          .rejectMarket()
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            proposal: proposalPda,
+            proposalVault: proposalVaultPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with ProposalNotPending");
+      } catch (err: any) {
+        expect(err.message).to.include("ProposalNotPending");
+      }
+    });
+
+    it("Non-admin cannot reject a proposal", async () => {
+      const fakeAdmin = Keypair.generate();
+      await fundAccount(fakeAdmin.publicKey, 2);
+
+      const configAccount = await program.account.config.fetch(configPda);
+      const rejectId = configAccount.marketCount;
+      const rejectPda = getProposalPda(rejectId, program.programId);
+      const rejectVault = getProposalVaultPda(rejectId, program.programId);
+
+      const rejectProposer = Keypair.generate();
+      await fundAccount(rejectProposer.publicKey, 10);
+
+      const p12Slot = await connection.getSlot();
+      const p12Time = await connection.getBlockTime(p12Slot);
+      const p12Now = p12Time ? p12Time : Math.floor(Date.now() / 1000);
+
+      await program.methods
+        .proposeMarket(
+          "Proposal: Will ETH flip BTC? (auth test)",
+          "Auth test",
+          0, Array(32).fill(0), new anchor.BN(100), 0, 0,
+          new anchor.BN(p12Now + 3700),
+          new anchor.BN(p12Now + 3700),
+          new anchor.BN(10_000_000)
+        )
+        .accounts({
+          proposer: rejectProposer.publicKey,
+          config: configPda,
+          proposal: rejectPda,
+          proposalVault: rejectVault,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([rejectProposer])
+        .rpc();
+
+      try {
+        await program.methods
+          .rejectMarket()
+          .accounts({
+            admin: fakeAdmin.publicKey,
+            config: configPda,
+            proposal: rejectPda,
+            proposalVault: rejectVault,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([fakeAdmin])
+          .rpc();
+        expect.fail("Should have failed with Unauthorized");
+      } catch (err: any) {
+        expect(err.message).to.include("Unauthorized");
+      }
+    });
   });
 
   describe("Phase 13: CPMM pricing on buy/sell", () => {
@@ -1909,7 +2077,7 @@ describe("SOLPredict Integration Suite", () => {
       const noPoolBefore = marketBefore.noPoolLamports.toNumber();
 
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(50))
+        .buyShares({ yes: {} } as any, new anchor.BN(50), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda,
           yesMint: yesMintPda, noMint: noMintPda,
@@ -1937,7 +2105,7 @@ describe("SOLPredict Integration Suite", () => {
       const pos2 = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
 
       await program.methods
-        .buyShares({ yes: {} } as any, new anchor.BN(100))
+        .buyShares({ yes: {} } as any, new anchor.BN(100), SLIPPAGE_MAX_COST)
         .accounts({
           buyer: buyer2.publicKey, market: marketPda, treasury: treasuryPda,
           yesMint: yesMintPda, noMint: noMintPda,
@@ -1951,7 +2119,7 @@ describe("SOLPredict Integration Suite", () => {
       const yesSupplyBefore = marketBefore.yesSupply.toNumber();
 
       await program.methods
-        .sellShares({ yes: {} } as any, new anchor.BN(10))
+        .sellShares({ yes: {} } as any, new anchor.BN(10), SLIPPAGE_MIN_PROCEEDS)
         .accounts({
           seller: buyer2.publicKey, market: marketPda, treasury: treasuryPda,
           yesMint: yesMintPda, noMint: noMintPda,
@@ -1963,6 +2131,720 @@ describe("SOLPredict Integration Suite", () => {
 
       const marketAfter = await program.account.market.fetch(marketPda);
       expect(marketAfter.yesSupply.toNumber()).to.be.lessThan(yesSupplyBefore);
+    });
+  });
+
+  describe("Phase 14: security hardening — slippage guards, mock-oracle settlement, LP ratio, order refund", () => {
+    it("buy_shares rejects when max_cost_lamports is below the actual cost", async () => {
+      const result = await bootstrapMarket(
+        configPda,
+        "Slippage buy test?",
+        "Slippage guard on buy",
+        0,
+        Array(32).fill(0),
+        new anchor.BN(100),
+        0,
+        0,
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200),
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200)
+      );
+      const m = result.marketPda;
+      const b1YesAta = getAssociatedTokenAddressSync(result.yesMintPda, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(result.noMintPda, buyer1.publicKey);
+      const pos1 = getUserPositionPda(m, buyer1.publicKey, program.programId);
+
+      // A 1-lamport max cost can never cover the trade → must revert.
+      try {
+        await program.methods
+          .buyShares({ yes: {} } as any, new anchor.BN(10), new anchor.BN(1))
+          .accounts({
+            buyer: buyer1.publicKey, market: m, treasury: result.treasuryPda,
+            yesMint: result.yesMintPda, noMint: result.noMintPda,
+            buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1,
+            emergencyPause: null,
+          } as any)
+          .signers([buyer1])
+          .rpc();
+        expect.fail("Should have failed with SlippageExceeded");
+      } catch (err: any) {
+        expect(err.message).to.include("SlippageExceeded");
+      }
+    });
+
+    it("sell_shares rejects when min_proceeds_lamports is above the actual refund", async () => {
+      const result = await bootstrapMarket(
+        configPda,
+        "Slippage sell test?",
+        "Slippage guard on sell",
+        0,
+        Array(32).fill(0),
+        new anchor.BN(100),
+        0,
+        0,
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200),
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200)
+      );
+      const m = result.marketPda;
+      const b1YesAta = getAssociatedTokenAddressSync(result.yesMintPda, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(result.noMintPda, buyer1.publicKey);
+      const pos1 = getUserPositionPda(m, buyer1.publicKey, program.programId);
+
+      // Buy first so the seller actually holds tokens.
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(10), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer1.publicKey, market: m, treasury: result.treasuryPda,
+          yesMint: result.yesMintPda, noMint: result.noMintPda,
+          buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      // An impossible minimum proceeds must revert.
+      try {
+        await program.methods
+          .sellShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
+          .accounts({
+            seller: buyer1.publicKey, market: m, treasury: result.treasuryPda,
+            yesMint: result.yesMintPda, noMint: result.noMintPda,
+            sellerYesAta: b1YesAta, sellerNoAta: b1NoAta, userPosition: pos1,
+            emergencyPause: null,
+          } as any)
+          .signers([buyer1])
+          .rpc();
+        expect.fail("Should have failed with SlippageExceeded");
+      } catch (err: any) {
+        expect(err.message).to.include("SlippageExceeded");
+      }
+    });
+
+    it("settle_market with mock oracle — YES wins when price is above target", async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const resolveTs = now + 65;
+
+      const feed = Array(32).fill(0);
+      feed[0] = 91; // Unique feed ID for this market
+
+      const result = await bootstrapMarket(
+        configPda,
+        "Oracle YES wins?",
+        "Mock oracle settle — YES",
+        3, // Tech
+        feed,
+        new anchor.BN(150_00), // Target $150
+        -2,
+        0, // GreaterThan
+        new anchor.BN(resolveTs),
+        new anchor.BN(resolveTs)
+      );
+      const m = result.marketPda;
+      const yesMint = result.yesMintPda;
+      const noMint = result.noMintPda;
+
+      // The winning side must have supply, otherwise settle would cancel the market.
+      const b1YesAta = getAssociatedTokenAddressSync(yesMint, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(noMint, buyer1.publicKey);
+      const pos1 = getUserPositionPda(m, buyer1.publicKey, program.programId);
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer1.publicKey, market: m, treasury: result.treasuryPda,
+          yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      await ensureTimePassed(resolveTs);
+
+      // Re-read the clock AFTER the wait so the price update is not stale.
+      const settleSlot = await connection.getSlot();
+      const settleTime = await connection.getBlockTime(settleSlot);
+      const freshNow = settleTime ? settleTime : Math.floor(Date.now() / 1000);
+
+      const mockPayer = Keypair.generate();
+      await fundAccount(mockPayer.publicKey, 1);
+      const mockPda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
+
+      // Price 160 > target 150 → YES wins.
+      await program.methods
+        .mockCreatePriceUpdate(feed, new anchor.BN(160_00), new anchor.BN(1), -2, new anchor.BN(freshNow))
+        .accounts({ payer: mockPayer.publicKey, priceUpdate: mockPda } as any)
+        .signers([mockPayer])
+        .rpc();
+
+      await program.methods
+        .settleMarket()
+        .accounts({
+          admin: admin.publicKey,
+          market: m,
+          config: configPda,
+          priceUpdate: mockPda,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const acc = await program.account.market.fetch(m);
+      expect(acc.status).to.deep.equal({ settled: {} });
+      expect(acc.winningOutcome).to.deep.equal({ yes: {} });
+    });
+
+    it("settle_market with mock oracle — NO wins when price is below target", async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const resolveTs = now + 65;
+
+      const feed = Array(32).fill(0);
+      feed[0] = 92; // Unique feed ID for this market
+
+      const result = await bootstrapMarket(
+        configPda,
+        "Oracle NO wins?",
+        "Mock oracle settle — NO",
+        3, // Tech
+        feed,
+        new anchor.BN(150_00), // Target $150
+        -2,
+        0, // GreaterThan
+        new anchor.BN(resolveTs),
+        new anchor.BN(resolveTs)
+      );
+      const m = result.marketPda;
+      const yesMint = result.yesMintPda;
+      const noMint = result.noMintPda;
+
+      // Buy NO shares so the winning side has supply.
+      const b1YesAta = getAssociatedTokenAddressSync(yesMint, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(noMint, buyer1.publicKey);
+      const pos1 = getUserPositionPda(m, buyer1.publicKey, program.programId);
+      await program.methods
+        .buyShares({ no: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer1.publicKey, market: m, treasury: result.treasuryPda,
+          yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      await ensureTimePassed(resolveTs);
+
+      const settleSlot = await connection.getSlot();
+      const settleTime = await connection.getBlockTime(settleSlot);
+      const freshNow = settleTime ? settleTime : Math.floor(Date.now() / 1000);
+
+      const mockPayer = Keypair.generate();
+      await fundAccount(mockPayer.publicKey, 1);
+      const mockPda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
+
+      // Price 140 < target 150 → NO wins.
+      await program.methods
+        .mockCreatePriceUpdate(feed, new anchor.BN(140_00), new anchor.BN(1), -2, new anchor.BN(freshNow))
+        .accounts({ payer: mockPayer.publicKey, priceUpdate: mockPda } as any)
+        .signers([mockPayer])
+        .rpc();
+
+      await program.methods
+        .settleMarket()
+        .accounts({
+          admin: admin.publicKey,
+          market: m,
+          config: configPda,
+          priceUpdate: mockPda,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const acc = await program.account.market.fetch(m);
+      expect(acc.status).to.deep.equal({ settled: {} });
+      expect(acc.winningOutcome).to.deep.equal({ no: {} });
+    });
+
+    it("remove_liquidity after trades returns proportionally adjusted amounts", async () => {
+      const result = await bootstrapMarket(
+        configPda,
+        "LP ratio test?",
+        "LP withdrawal after trades",
+        0,
+        Array(32).fill(0),
+        new anchor.BN(100),
+        0,
+        0,
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200),
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200)
+      );
+      const m = result.marketPda;
+      const yesMint = result.yesMintPda;
+      const noMint = result.noMintPda;
+      const treasury = result.treasuryPda;
+
+      const provider = Keypair.generate();
+      await fundAccount(provider.publicKey, 20);
+      const pYesAta = getAssociatedTokenAddressSync(yesMint, provider.publicKey);
+      const pNoAta = getAssociatedTokenAddressSync(noMint, provider.publicKey);
+      const lpPda = getLpPda(m, provider.publicKey, program.programId);
+
+      // 1) Provider adds 50M lamports on each side → 100M LP tokens.
+      await program.methods
+        .addLiquidity(new anchor.BN(50_000_000), new anchor.BN(50_000_000))
+        .accounts({
+          provider: provider.publicKey, market: m, treasury,
+          yesMint, noMint, providerYesAta: pYesAta, providerNoAta: pNoAta,
+          liquidityPosition: lpPda, emergencyPause: null,
+        } as any)
+        .signers([provider])
+        .rpc();
+
+      // 2) A trader buys YES shares — the YES pool grows (pool ratio changes).
+      const b1YesAta = getAssociatedTokenAddressSync(yesMint, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(noMint, buyer1.publicKey);
+      const pos1 = getUserPositionPda(m, buyer1.publicKey, program.programId);
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(20), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer1.publicKey, market: m, treasury,
+          yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos1,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      const marketAfterTrade = await program.account.market.fetch(m);
+      const yesPoolAfterTrade = marketAfterTrade.yesPoolLamports.toNumber();
+      const noPoolAfterTrade = marketAfterTrade.noPoolLamports.toNumber();
+      const yesSupplyAfterTrade = marketAfterTrade.yesSupply.toNumber();
+      const noSupplyAfterTrade = marketAfterTrade.noSupply.toNumber();
+
+      // 3) Provider burns 40M of 100M LP tokens (ratio 0.4). Mirror the
+      // on-chain integer math: refund = min(deposit * ratio, current_pool * ratio).
+      const burn = 40_000_000;
+      const lpTotal = 100_000_000;
+      const yesRefund = Math.min(
+        Math.floor((50_000_000 * burn) / lpTotal),
+        Math.floor((yesPoolAfterTrade * burn) / lpTotal)
+      );
+      const noRefund = Math.min(
+        Math.floor((50_000_000 * burn) / lpTotal),
+        Math.floor((noPoolAfterTrade * burn) / lpTotal)
+      );
+      const burnYes = Math.floor((50_000_000 * burn) / lpTotal);
+      const burnNo = Math.floor((50_000_000 * burn) / lpTotal);
+
+      const providerBalBefore = await connection.getBalance(provider.publicKey);
+      await program.methods
+        .removeLiquidity(new anchor.BN(burn))
+        .accounts({
+          provider: provider.publicKey, market: m, treasury,
+          yesMint, noMint, providerYesAta: pYesAta, providerNoAta: pNoAta,
+          liquidityPosition: lpPda, emergencyPause: null,
+        } as any)
+        .signers([provider])
+        .rpc();
+
+      // Provider receives exactly the computed refunds (minus only the tx fee).
+      const providerBalAfter = await connection.getBalance(provider.publicKey);
+      expect(providerBalAfter - providerBalBefore).to.be.closeTo(yesRefund + noRefund, 1_000_000);
+
+      // LP position decremented proportionally and stays open.
+      const lp = await program.account.liquidityPosition.fetch(lpPda);
+      expect(lp.lpTokens.toNumber()).to.equal(lpTotal - burn);
+      expect(lp.yesDeposited.toNumber()).to.equal(50_000_000 - burnYes);
+      expect(lp.noDeposited.toNumber()).to.equal(50_000_000 - burnNo);
+
+      // Market pools/supplies shrink by exactly the refunds/burns.
+      const marketAfter = await program.account.market.fetch(m);
+      expect(marketAfter.yesPoolLamports.toNumber()).to.equal(yesPoolAfterTrade - yesRefund);
+      expect(marketAfter.noPoolLamports.toNumber()).to.equal(noPoolAfterTrade - noRefund);
+      expect(marketAfter.yesSupply.toNumber()).to.equal(yesSupplyAfterTrade - burnYes);
+      expect(marketAfter.noSupply.toNumber()).to.equal(noSupplyAfterTrade - burnNo);
+    });
+
+    it("cancel_order — partially filled buy order refunds the remaining escrowed SOL", async () => {
+      const result = await bootstrapMarket(
+        configPda,
+        "Order refund test?",
+        "Partial fill + cancel refund",
+        0,
+        Array(32).fill(0),
+        new anchor.BN(100),
+        0,
+        0,
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200),
+        new anchor.BN(Math.floor(Date.now() / 1000) + 7200)
+      );
+      const m = result.marketPda;
+      const yesMint = result.yesMintPda;
+      const noMint = result.noMintPda;
+      const treasury = result.treasuryPda;
+
+      const maker = Keypair.generate();
+      const taker = Keypair.generate();
+      await fundAccount(maker.publicKey, 20);
+      await fundAccount(taker.publicKey, 20);
+
+      // Maker needs an initialized YES ATA for the fill's token transfer to
+      // succeed, so buy one share through the AMM first.
+      const makerYesAta = getAssociatedTokenAddressSync(yesMint, maker.publicKey);
+      const makerNoAta = getAssociatedTokenAddressSync(noMint, maker.publicKey);
+      const makerPos = getUserPositionPda(m, maker.publicKey, program.programId);
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(1), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: maker.publicKey, market: m, treasury, yesMint, noMint,
+          buyerYesAta: makerYesAta, buyerNoAta: makerNoAta, userPosition: makerPos,
+          emergencyPause: null,
+        } as any)
+        .signers([maker])
+        .rpc();
+
+      // Taker buys 100 YES shares via the AMM so they can fill the maker's order.
+      const takerYesAta = getAssociatedTokenAddressSync(yesMint, taker.publicKey);
+      const takerNoAta = getAssociatedTokenAddressSync(noMint, taker.publicKey);
+      const takerPos = getUserPositionPda(m, taker.publicKey, program.programId);
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(100), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: taker.publicKey, market: m, treasury, yesMint, noMint,
+          buyerYesAta: takerYesAta, buyerNoAta: takerNoAta, userPosition: takerPos,
+          emergencyPause: null,
+        } as any)
+        .signers([taker])
+        .rpc();
+
+      // Maker places a BUY order: 50 shares @ 5000 bps (0.5 SOL/share) →
+      // escrows 50 * 0.5 * 10M = 250M lamports.
+      const orderId = new anchor.BN(1);
+      const orderPda = getOrderPda(m, maker.publicKey, orderId, program.programId);
+      const orderEscrowPda = getOrderEscrowPda(m, maker.publicKey, orderId, program.programId);
+      // The order PDA is off-curve, so its ATA needs allowOwnerOffCurve.
+      const orderEscrowAta = getAssociatedTokenAddressSync(yesMint, orderPda, true);
+
+      await program.methods
+        .placeOrder(orderId, { yes: {} } as any, true, new anchor.BN(5000), new anchor.BN(50))
+        .accounts({
+          maker: maker.publicKey, market: m, order: orderPda,
+          makerTokenAta: makerYesAta, orderTokenEscrow: orderEscrowAta,
+          orderEscrow: orderEscrowPda,
+          emergencyPause: null,
+        } as any)
+        .signers([maker])
+        .rpc();
+
+      // The SOL escrow lives on the data-less order_escrow PDA (the order PDA
+      // itself only holds its rent); 50 * 0.5 * 10M = 250M lamports escrowed.
+      expect(await connection.getBalance(orderEscrowPda)).to.equal(250_000_000);
+      expect(await connection.getBalance(orderPda)).to.be.greaterThan(0); // rent only
+
+      // Taker fills 30 of the 50 shares → 150M lamports leave the escrow to the
+      // taker (30 * 0.5 * 10M); 20 shares (100M) remain escrowed.
+      await program.methods
+        .fillOrder(new anchor.BN(30))
+        .accounts({
+          taker: taker.publicKey, maker: maker.publicKey, market: m, order: orderPda,
+          takerTokenAta: takerYesAta, makerTokenAta: makerYesAta,
+          orderTokenEscrow: orderEscrowAta,
+          orderEscrow: orderEscrowPda,
+          emergencyPause: null,
+        } as any)
+        .signers([taker])
+        .rpc();
+
+      expect(await connection.getBalance(orderEscrowPda)).to.equal(100_000_000);
+
+      // Maker cancels the remaining 20 shares → the unspent 100M escrow is
+      // refunded from the escrow PDA (the order account close returns rent).
+      const makerBalBeforeCancel = await connection.getBalance(maker.publicKey);
+      await program.methods
+        .cancelOrder()
+        .accounts({
+          maker: maker.publicKey, market: m, order: orderPda,
+          makerTokenAta: makerYesAta, orderTokenEscrow: orderEscrowAta,
+          orderEscrow: orderEscrowPda,
+          emergencyPause: null,
+        } as any)
+        .signers([maker])
+        .rpc();
+
+      const makerBalAfterCancel = await connection.getBalance(maker.publicKey);
+      // The unspent 100M escrow returns to the maker, plus the rent of the
+      // closed order account (~1.6M) minus the tx fee.
+      expect(makerBalAfterCancel - makerBalBeforeCancel).to.be.greaterThan(100_000_000);
+      // Escrow PDA drained.
+      expect(await connection.getBalance(orderEscrowPda)).to.equal(0);
+
+      // Order account is closed.
+      try {
+        await program.account.order.fetch(orderPda);
+        expect.fail("Order account should be closed after cancel");
+      } catch {
+        // Expected: account no longer exists.
+      }
+    });
+  });
+
+  describe("Phase 15: guardian multisig — add_guardian / remove_guardian / set_guardian_threshold", () => {
+    let guardian1: Keypair;
+    let guardian2: Keypair;
+
+    before(async () => {
+      guardian1 = Keypair.generate();
+      guardian2 = Keypair.generate();
+      await fundAccount(guardian1.publicKey, 2);
+      await fundAccount(guardian2.publicKey, 2);
+    });
+
+    it("add_guardian registers a distinct guardian (admin is the seeded first guardian)", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+
+      await program.methods
+        .addGuardian(guardian1.publicKey)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          emergencyPause: pausePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const pauseAccount = await program.account.emergencyPause.fetch(pausePda);
+      const guardians = pauseAccount.guardians.map((g: PublicKey) => g.toBase58());
+      expect(guardians).to.include(admin.publicKey.toBase58());
+      expect(guardians).to.include(guardian1.publicKey.toBase58());
+    });
+
+    it("add_guardian rejects a duplicate guardian", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+      try {
+        await program.methods
+          .addGuardian(guardian1.publicKey)
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            emergencyPause: pausePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with GuardianAlreadyExists");
+      } catch (err: any) {
+        expect(err.message).to.include("GuardianAlreadyExists");
+      }
+    });
+
+    it("add_guardian rejects the zero pubkey", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+      try {
+        await program.methods
+          .addGuardian(PublicKey.default)
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            emergencyPause: pausePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with InvalidGuardian");
+      } catch (err: any) {
+        expect(err.message).to.include("InvalidGuardian");
+      }
+    });
+
+    it("set_guardian_threshold to 2 with two distinct guardians", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+
+      // Register the second distinct guardian first.
+      await program.methods
+        .addGuardian(guardian2.publicKey)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          emergencyPause: pausePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      await program.methods
+        .setGuardianThreshold(2)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          emergencyPause: pausePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const pauseAccount = await program.account.emergencyPause.fetch(pausePda);
+      expect(pauseAccount.requiredConfirmations).to.equal(2);
+    });
+
+    it("set_guardian_threshold rejects a threshold above the guardian count", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+      try {
+        await program.methods
+          .setGuardianThreshold(4)
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            emergencyPause: pausePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with ThresholdExceedsGuardians");
+      } catch (err: any) {
+        expect(err.message).to.include("ThresholdExceedsGuardians");
+      }
+    });
+
+    it("pause then unpause requires BOTH guardians when threshold is 2", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+
+      // Pause the program.
+      await program.methods
+        .emergencyPause()
+        .accounts({ admin: admin.publicKey, config: configPda, emergencyPause: pausePda } as any)
+        .signers([admin])
+        .rpc();
+
+      // A single guardian signature must be rejected (threshold is 2).
+      try {
+        await program.methods
+          .emergencyUnpause().remainingAccounts([
+            { pubkey: admin.publicKey, isSigner: true, isWritable: false },
+          ])
+          .accounts({ admin: admin.publicKey, config: configPda, emergencyPause: pausePda } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with MultisigRequired");
+      } catch (err: any) {
+        expect(err.message).to.include("MultisigRequired");
+      }
+
+      // A non-guardian signer must not count toward the threshold.
+      try {
+        await program.methods
+          .emergencyUnpause().remainingAccounts([
+            { pubkey: admin.publicKey, isSigner: true, isWritable: false },
+            { pubkey: buyer1.publicKey, isSigner: true, isWritable: false },
+          ])
+          .accounts({ admin: admin.publicKey, config: configPda, emergencyPause: pausePda } as any)
+          .signers([admin, buyer1])
+          .rpc();
+        expect.fail("Should have failed with MultisigRequired");
+      } catch (err: any) {
+        expect(err.message).to.include("MultisigRequired");
+      }
+
+      // Both guardians sign → unpause succeeds.
+      await program.methods
+        .emergencyUnpause().remainingAccounts([
+          { pubkey: admin.publicKey, isSigner: true, isWritable: false },
+          { pubkey: guardian1.publicKey, isSigner: true, isWritable: false },
+        ])
+        .accounts({ admin: admin.publicKey, config: configPda, emergencyPause: pausePda } as any)
+        .signers([admin, guardian1])
+        .rpc();
+
+      const pauseAccount = await program.account.emergencyPause.fetch(pausePda);
+      expect(pauseAccount.paused).to.be.false;
+    });
+
+    it("remove_guardian succeeds when removal still meets threshold, then fails when it would drop below", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+
+      // With 3 guardians (admin, guardian1, guardian2) and threshold=2,
+      // removing one leaves 2 ≥ 2 → succeeds.
+      await program.methods
+        .removeGuardian(guardian2.publicKey)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          emergencyPause: pausePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      let pauseAccount = await program.account.emergencyPause.fetch(pausePda);
+      let guardians = pauseAccount.guardians.map((g: PublicKey) => g.toBase58());
+      expect(guardians).to.not.include(guardian2.publicKey.toBase58());
+      expect(guardians).to.include(guardian1.publicKey.toBase58());
+      expect(guardians).to.include(admin.publicKey.toBase58());
+
+      // Now with 2 guardians and threshold=2, removing one would leave
+      // 1 < 2 → rejected with ThresholdExceedsGuardians.
+      try {
+        await program.methods
+          .removeGuardian(guardian1.publicKey)
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            emergencyPause: pausePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with ThresholdExceedsGuardians");
+      } catch (err: any) {
+        expect(err.message).to.include("ThresholdExceedsGuardians");
+      }
+    });
+
+    it("lower threshold then remove_guardian works; remove_guardian rejects unknown keys", async () => {
+      const pausePda = getEmergencyPausePda(program.programId);
+
+      // Lower the threshold back to 1 so removal is allowed.
+      await program.methods
+        .setGuardianThreshold(1)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          emergencyPause: pausePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      await program.methods
+        .removeGuardian(guardian1.publicKey)
+        .accounts({
+          admin: admin.publicKey,
+          config: configPda,
+          emergencyPause: pausePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const pauseAccount = await program.account.emergencyPause.fetch(pausePda);
+      const guardians = pauseAccount.guardians.map((g: PublicKey) => g.toBase58());
+      expect(guardians).to.not.include(guardian1.publicKey.toBase58());
+      expect(guardians).to.include(admin.publicKey.toBase58());
+
+      // Unknown guardian removal must fail.
+      try {
+        await program.methods
+          .removeGuardian(buyer2.publicKey)
+          .accounts({
+            admin: admin.publicKey,
+            config: configPda,
+            emergencyPause: pausePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([admin])
+          .rpc();
+        expect.fail("Should have failed with GuardianNotFound");
+      } catch (err: any) {
+        expect(err.message).to.include("GuardianNotFound");
+      }
     });
   });
 });

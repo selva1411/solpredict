@@ -21,6 +21,46 @@ describe("lamportsToSol", () => {
   it("converts null to 0", () => expect(lamportsToSol(null)).toBe(0));
 });
 
+describe("precision above 2^53 (u64 lamports)", () => {
+  // 2^53 = 9007199254740992 — JS numbers cannot represent integers above this
+  // exactly, so any lamport value that large must never pass through Number()
+  // in the formatter. These tests lock the BigInt formatting path.
+  const BIG = 9_007_199_254_740_993n; // 2^53 + 1 lamports
+
+  it("formatSol keeps full precision for bigint above 2^53", () => {
+    // 9007199.254740993 SOL — Number(2^53+1) would round to 9007199254740992,
+    // so the exact last digit proves BigInt arithmetic is used.
+    expect(formatSol(BIG)).toBe("9007199.255");
+    expect(formatSol(BIG, 6)).toBe("9007199.254741");
+  });
+
+  it("formatSol accepts BN above 2^53 without precision loss", () => {
+    const bn = new BN("9007199254740993"); // 2^53 + 1
+    expect(formatSol(bn, 0)).toBe("9007199");
+  });
+
+  it("formatSol matches toFixed rounding", () => {
+    expect(formatSol(1_500_000_000n)).toBe("1.500");
+    expect(formatSol(1_000_000_499n)).toBe("1.000");
+    // Half-lamport-boundary values round like toFixed(3): JS double precision
+    // represents 1.0000005 as 1.00000049999…, so both round DOWN; 1.5005000
+    // rounds UP to 1.501.
+    expect(formatSol(1_000_000_500n)).toBe("1.000");
+    expect(formatSol(1_500_000_500n)).toBe("1.500");
+    expect(formatSol(1_500_500_000n)).toBe("1.501");
+    expect(formatSol(0n)).toBe("0.000");
+  });
+
+  it("formatSol rejects negative lamports (never renders negative money)", () => {
+    expect(formatSol(-5n)).toBe("0.000");
+  });
+
+  it("u64 max formats without overflow", () => {
+    const u64max = 18_446_744_073_709_551_615n;
+    expect(formatSol(u64max)).toBe("18446744073.710");
+  });
+});
+
 describe("bnToSol", () => {
   it("converts 2e9 to 2", () => expect(bnToSol(2_000_000_000)).toBe(2));
 });

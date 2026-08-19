@@ -11,6 +11,7 @@ import { AirdropSolButton } from "@/components/AirdropSolButton";
 import { useProgram } from "@/hooks/useProgram";
 import { useAppState } from "@/contexts/AppContext";
 import { keys } from "@/lib/api/keys";
+import { signUserProof, userFetch } from "@/lib/user-client";
 import { Settings, Star, Wallet, Activity } from "lucide-react";
 
 import { Logo3D } from "@/components/Logo3D";
@@ -18,15 +19,15 @@ import { MobileNav } from "@/components/MobileNav";
 
 const NAV_ITEMS = [
   { href: "/markets", label: "Markets" },
+  { href: "/create", label: "Propose" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/dashboard", label: "Dashboard" },
   { href: "/activity", label: "Activity" },
   { href: "/watchlist", label: "Watchlist" },
 ];
 
 function NotificationBell() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const [open, setOpen] = useState(false);
 
   const walletStr = publicKey?.toBase58() ?? null;
@@ -34,7 +35,14 @@ function NotificationBell() {
   const { data: notifications = [] } = useQuery({
     queryKey: keys.user.notifications(walletStr ?? "none"),
     queryFn: async () => {
-      const r = await fetch(`/api/user/notifications?wallet=${walletStr}`);
+      const auth = await signUserProof({ publicKey, signMessage }, signMessage);
+      const headers: Record<string, string> = {};
+      if (auth) {
+        headers["x-wallet"] = auth.wallet;
+        headers["x-message"] = auth.message;
+        headers["x-signature"] = auth.signature;
+      }
+      const r = await userFetch(`/api/user/notifications?wallet=${walletStr}`, { headers });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       return (data.notifications ?? []) as Array<{ id: string; type: string; message: string; read: boolean; createdAt: string }>;

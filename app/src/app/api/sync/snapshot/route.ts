@@ -12,18 +12,24 @@ export const POST = apiHandler(async (req: NextRequest) => {
     return ok({ error: "Unauthorized" }, { status: 401 } as ResponseInit);
   }
   if (!db) return serverError("Database not configured");
-  await recordLeaderboardSnapshot();
-  return ok({ ok: true, message: "Leaderboard snapshot generated & saved to NeonDB" });
+  try {
+    await recordLeaderboardSnapshot();
+    return ok({ ok: true, message: "Leaderboard snapshot generated & saved to NeonDB" });
+  } catch (err) {
+    return serverError(err);
+  }
 });
 
 export const GET = apiHandler(async () => {
-  if (db) {
+  if (!db) return serverError("Database not configured");
+  try {
     const snapshots = await db
       .select()
       .from(leaderboardSnapshots)
       .orderBy(desc(leaderboardSnapshots.id))
       .limit(50);
     return ok({ ok: true, snapshots });
+  } catch (err) {
+    return serverError(err);
   }
-  return ok({ ok: true, snapshots: [] });
 });

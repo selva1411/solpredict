@@ -10,6 +10,12 @@ export const POST = apiHandler(async (req: NextRequest) => {
   if (!getDb()) return serverError("Database not configured");
 
   const secret = process.env.HELIUS_WEBHOOK_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    // Fail closed: an unauthenticated webhook in production would let anyone
+    // inject fake trade events into the indexer. The instrumentation module
+    // already lists HELIUS_WEBHOOK_SECRET as required in production.
+    return ok({ error: "Webhook not configured" }, { status: 503 } as ResponseInit);
+  }
   if (secret) {
     const authHeader = req.headers.get("authorization");
     if (authHeader !== `Bearer ${secret}` && authHeader !== secret) {

@@ -73,6 +73,33 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         ctx.accounts.market.total_payout_pool, user_tokens, winning_supply,
     )?;
 
+    let claimer_key = ctx.accounts.claimer.key();
+    let market_id = ctx.accounts.market.market_id;
+    let market_key = ctx.accounts.market.key();
+    let treasury_bump = ctx.accounts.market.treasury_bump;
+
+    // Acquire the reentrancy lock BEFORE any state change or fund movement and
+    // hold it for the entire claim (sufficiency check → burn → transfer →
+    // accounting). Previously the lock was taken AFTER the payout transfer,
+    // leaving the accounting window unguarded.
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
+
+    // Verify the treasury still covers every remaining payout BEFORE funds
+    // move. (The check used to run after the transfer had already paid out.)
+    let remaining = {
+        let market = &ctx.accounts.market;
+        let new_total_claimed = market
+            .total_claimed
+            .checked_add(payout)
+            .ok_or(SolPredictError::MathOverflow)?;
+        market
+            .total_payout_pool
+            .checked_sub(new_total_claimed)
+            .ok_or(SolPredictError::MathOverflow)?
+    };
+    let treasury_balance = ctx.accounts.treasury.to_account_info().lamports();
+    require!(treasury_balance >= remaining, SolPredictError::TreasuryInsufficient);
+
     ctx.accounts.user_position.yes_amount = 0;
     ctx.accounts.user_position.no_amount = 0;
     ctx.accounts.user_position.claimed = true;
@@ -89,8 +116,6 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         user_tokens,
     )?;
 
-    let market_key = ctx.accounts.market.key();
-    let treasury_bump = ctx.accounts.market.treasury_bump;
     let seeds = &[TREASURY_SEED, market_key.as_ref(), &[treasury_bump]];
     let signer_seeds = &[&seeds[..]];
 
@@ -106,17 +131,11 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         payout,
     )?;
 
-    let claimer_key = ctx.accounts.claimer.key();
-    let market_id = ctx.accounts.market.market_id;
-
-    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
-
     let market = &mut ctx.accounts.market;
-    market.total_claimed = market.total_claimed.checked_add(payout).ok_or(SolPredictError::MathOverflow)?;
-
-    let remaining = market.total_payout_pool.checked_sub(market.total_claimed).ok_or(SolPredictError::MathOverflow)?;
-    let treasury_balance = ctx.accounts.treasury.to_account_info().lamports();
-    require!(treasury_balance >= remaining, SolPredictError::TreasuryInsufficient);
+    market.total_claimed = market
+        .total_claimed
+        .checked_add(payout)
+        .ok_or(SolPredictError::MathOverflow)?;
 
     ctx.accounts.market.reentrancy_lock.release();
 

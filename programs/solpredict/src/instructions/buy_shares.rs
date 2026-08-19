@@ -97,7 +97,12 @@ pub struct BuyShares<'info> {
 ///
 /// Validates market state, transfers SOL to treasury, mints YES or NO tokens
 /// to buyer's ATA, and updates pool/supply/position accounting.
-pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()> {
+pub fn handler(
+    ctx: Context<BuyShares>,
+    side: Side,
+    quantity: u64,
+    max_cost_lamports: u64,
+) -> Result<()> {
     check_not_paused(&ctx.accounts.emergency_pause)?;
 
     let market = &ctx.accounts.market;
@@ -135,6 +140,15 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
         }.map_err(|_| error!(SolPredictError::MathOverflow))?
     };
     let cost = u64::try_from(cost_u128).map_err(|_| error!(SolPredictError::MathOverflow))?;
+
+    // Slippage protection: reject the trade if the actual cost exceeds the
+    // buyer's stated maximum, preventing front-running between simulation and
+    // execution.
+    require!(cost <= max_cost_lamports, SolPredictError::SlippageExceeded);
+
+    // Hold the market's reentrancy lock BEFORE any funds move. Previously the
+    // lock was acquired after the transfer to treasury.
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
     system_program::transfer(
         CpiContext::new(
@@ -191,8 +205,6 @@ pub fn handler(ctx: Context<BuyShares>, side: Side, quantity: u64) -> Result<()>
 
     let rent = Rent::get()?;
     let treasury_min = rent.minimum_balance(0);
-
-    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
     let market = &mut ctx.accounts.market;
     match side {

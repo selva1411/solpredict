@@ -1,27 +1,27 @@
 export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
-import { db } from "@/lib/db/client";
-import { notifications } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { ok, badRequest, serviceUnavailable } from "@/lib/api-response";
+import { getNotifications } from "@/lib/data/notifications";
+import { walletSchema } from "@/lib/schemas";
+import { ok, badRequest, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { requireUser } from "@/lib/user-guard";
 
 export const GET = apiHandler(async (req: NextRequest) => {
   const wallet = req.nextUrl.searchParams.get("wallet");
   if (!wallet) return badRequest("Wallet required");
-  if (!db) return serviceUnavailable('Database not available');
+
+  const parsed = walletSchema.safeParse(wallet);
+  if (!parsed.success) return badRequest("Invalid wallet format");
+
+  const auth = await requireUser(req, parsed.data);
+  if (!auth.ok) return auth.response;
+
+  const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get("limit") || 50), 1), 200);
 
   try {
-    const rows = await db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.wallet, wallet))
-      .orderBy(desc(notifications.createdAt))
-      .limit(50);
-
+    const rows = await getNotifications(auth.identity.wallet, limit);
     return ok({ ok: true, notifications: rows });
-  } catch (e) {
-    console.warn("Could not query notifications from DB:", e);
-    return ok({ ok: true, notifications: [] });
+  } catch (err) {
+    return serverError(err);
   }
 });

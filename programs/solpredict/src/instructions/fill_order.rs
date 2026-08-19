@@ -4,8 +4,8 @@ use anchor_spl::token::{self, Token, Transfer};
 
 use crate::constants::*;
 use crate::errors::SolPredictError;
-use crate::state::{EmergencyPause, Market, MarketStatus, Order, OrderStatus};
-use crate::utils::check_not_paused;
+use crate::state::{EmergencyPause, Market, MarketStatus, Order, OrderStatus, Side};
+use crate::utils::{check_not_paused, require_valid_ata};
 
 #[derive(Accounts)]
 pub struct FillOrder<'info> {
@@ -46,6 +46,16 @@ pub struct FillOrder<'info> {
     #[account(mut)]
     pub order_token_escrow: UncheckedAccount<'info>,
 
+    /// Data-less SOL escrow for limit BUY orders — the source of the maker's
+    /// payment. For sell orders this account is unused (tokens are escrowed in
+    /// order_token_escrow instead).
+    #[account(
+        mut,
+        seeds = [ORDER_ESCROW_SEED, market.key().as_ref(), maker.key().as_ref(), order.order_id.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub order_escrow: SystemAccount<'info>,
+
     /// Optional emergency-pause account. When present and paused, trading is halted.
     pub emergency_pause: Option<Account<'info, EmergencyPause>>,
 
@@ -56,12 +66,38 @@ pub struct FillOrder<'info> {
 pub fn handler(ctx: Context<FillOrder>, quantity: u64) -> Result<()> {
     check_not_paused(&ctx.accounts.emergency_pause)?;
 
-    let is_buy = ctx.accounts.order.is_buy;
-    let price_bps = ctx.accounts.order.price_bps;
-    let order_qty = ctx.accounts.order.quantity;
-    let filled_qty = ctx.accounts.order.filled_quantity;
-    let order_id = ctx.accounts.order.order_id;
-    let order_bump = ctx.accounts.order.bump;
+    // Determine the mint this order trades: the market's YES or NO mint
+    // depending on the order's side. The token accounts the caller passes in
+    // MUST be ATAs of this exact mint, owned by the expected party. Without
+    // this check a malicious taker could supply ATAs of a completely different
+    // mint (or someone else's tokens) and receive/drain the wrong assets.
+    let order = &ctx.accounts.order;
+    let expected_mint = match order.side {
+        Side::Yes => ctx.accounts.market.yes_mint,
+        Side::No => ctx.accounts.market.no_mint,
+    };
+
+    let is_buy = order.is_buy;
+    let price_bps = order.price_bps;
+    let order_qty = order.quantity;
+    let filled_qty = order.filled_quantity;
+    let order_id = order.order_id;
+    let order_bump = order.bump;
+    let order_key = order.key();
+
+    // Validate only the token accounts this branch actually touches (a Buy
+    // order never has an initialized escrow ATA — it escrowed SOL instead).
+    if is_buy {
+        let taker_ata = ctx.accounts.taker_token_ata.to_account_info();
+        let maker_ata = ctx.accounts.maker_token_ata.to_account_info();
+        require_valid_ata(&taker_ata, expected_mint, ctx.accounts.taker.key())?;
+        require_valid_ata(&maker_ata, expected_mint, ctx.accounts.maker.key())?;
+    } else {
+        let escrow_ata = ctx.accounts.order_token_escrow.to_account_info();
+        let taker_ata = ctx.accounts.taker_token_ata.to_account_info();
+        require_valid_ata(&escrow_ata, expected_mint, order_key)?;
+        require_valid_ata(&taker_ata, expected_mint, ctx.accounts.taker.key())?;
+    }
 
     let remaining = order_qty
         .checked_sub(filled_qty)
@@ -86,9 +122,35 @@ pub fn handler(ctx: Context<FillOrder>, quantity: u64) -> Result<()> {
 
     if is_buy {
         // Maker is Buying tokens:
-        // 1. Send SOL from Order PDA escrow -> Taker
-        ctx.accounts.order.sub_lamports(trade_val_u64)?;
-        ctx.accounts.taker.add_lamports(trade_val_u64)?;
+        // 1. Send SOL from the data-less order_escrow PDA -> Taker. This MUST
+        //    be a CPI transfer: the taker is a system-owned account, so
+        //    directly crediting lamports to it (add_lamports) is rejected by
+        //    the runtime, and the system program refuses to debit a
+        //    data-carrying account — hence the escrow lives on a dedicated
+        //    plain system account.
+        let market_key = ctx.accounts.market.key();
+        let maker_key = ctx.accounts.maker.key();
+        let order_id_bytes = order_id.to_le_bytes();
+        let escrow_seeds = &[
+            ORDER_ESCROW_SEED,
+            market_key.as_ref(),
+            maker_key.as_ref(),
+            order_id_bytes.as_ref(),
+            &[ctx.bumps.order_escrow],
+        ];
+        let escrow_signer_seeds = &[&escrow_seeds[..]];
+
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.order_escrow.to_account_info(),
+                    to: ctx.accounts.taker.to_account_info(),
+                },
+                escrow_signer_seeds,
+            ),
+            trade_val_u64,
+        )?;
 
         // 2. Transfer tokens Taker -> Maker
         token::transfer(

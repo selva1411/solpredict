@@ -8,6 +8,10 @@ use crate::utils::{oracle, payout_math};
 
 #[derive(Accounts)]
 pub struct SettleMarket<'info> {
+    /// Program admin — the only party allowed to settle. Prevents third
+    /// parties from front-running settlement with a stale oracle price.
+    pub admin: Signer<'info>,
+
     #[account(
         mut,
         seeds = [MARKET_SEED, market.market_id.to_le_bytes().as_ref()],
@@ -18,6 +22,7 @@ pub struct SettleMarket<'info> {
     #[account(
         seeds = [CONFIG_SEED],
         bump = config.bump,
+        constraint = admin.key() == config.admin @ SolPredictError::Unauthorized,
     )]
     pub config: Account<'info, Config>,
 

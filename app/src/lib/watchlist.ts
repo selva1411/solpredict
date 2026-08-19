@@ -1,4 +1,7 @@
 import { logger } from "@/lib/logger";
+import { userFetch, signUserProof, type UserSigner } from "@/lib/user-client";
+
+export type WatchlistSigner = UserSigner;
 
 export function getWatchlist(): string[] {
   if (typeof window === "undefined") return [];
@@ -10,10 +13,18 @@ export function getWatchlist(): string[] {
   }
 }
 
-export async function fetchWatchlistFromDb(walletPubkey: string): Promise<string[]> {
+export async function fetchWatchlistFromDb(walletPubkey: string, signer?: UserSigner): Promise<string[]> {
   if (!walletPubkey) return getWatchlist();
   try {
-    const res = await fetch(`/api/watchlist?wallet=${walletPubkey}`);
+    // Prove ownership of the wallet before reading its watchlist.
+    const auth = signer ? await signUserProof(signer, signer.signMessage) : null;
+    const headers: Record<string, string> = {};
+    if (auth) {
+      headers["x-wallet"] = auth.wallet;
+      headers["x-message"] = auth.message;
+      headers["x-signature"] = auth.signature;
+    }
+    const res = await userFetch(`/api/watchlist?wallet=${walletPubkey}`, { headers });
     const data = await res.json();
     if (data.ok && Array.isArray(data.keys)) {
       if (typeof window !== "undefined") {
@@ -27,7 +38,7 @@ export async function fetchWatchlistFromDb(walletPubkey: string): Promise<string
   return getWatchlist();
 }
 
-export function toggleWatchlist(key: string, walletPubkey?: string): string[] {
+export function toggleWatchlist(key: string, walletPubkey?: string, signer?: UserSigner): string[] {
   if (typeof window === "undefined") return [];
   try {
     const current = getWatchlist();
@@ -40,13 +51,23 @@ export function toggleWatchlist(key: string, walletPubkey?: string): string[] {
     const next = Array.from(set);
     localStorage.setItem("solpredict-watchlist", JSON.stringify(next));
 
-    // Sync directly with NeonDB
+    // Sync directly with NeonDB (fire-and-forget). Attach the ownership proof
+    // so the server can verify this wallet is really the one toggling.
     if (walletPubkey) {
-      fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: walletPubkey, marketPubkey: key }),
-      }).catch((err) => logger.warn("Watchlist DB sync warning:", err));
+      void (async () => {
+        const auth = signer ? await signUserProof(signer, signer.signMessage) : null;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (auth) {
+          headers["x-wallet"] = auth.wallet;
+          headers["x-message"] = auth.message;
+          headers["x-signature"] = auth.signature;
+        }
+        userFetch("/api/watchlist", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ wallet: walletPubkey, marketPubkey: key }),
+        }).catch((err) => logger.warn("Watchlist DB sync warning:", err));
+      })();
     }
 
     return next;

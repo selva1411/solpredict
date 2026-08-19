@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useRealtime } from "@/hooks/useRealtime";
 import { EmptyState, LoadingState } from "@/components/StatePanels";
 import { LabelLux } from "@/components/ui/label-lux";
 import { Rule } from "@/components/ui/rule";
@@ -49,6 +50,21 @@ function LeaderboardPage() {
       setLoading(false);
     }
   };
+
+  const realtimeFetch = useCallback(() => {
+    fetch(`/api/leaderboard?sortBy=${sortBy}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.ok && Array.isArray(data.leaderboard)) setTraders(data.leaderboard);
+      })
+      .catch(() => {});
+  }, [sortBy]);
+
+  const rt = useRealtime("leaderboard");
+  useEffect(() => {
+    const unsub = rt.on("update", () => realtimeFetch());
+    return () => unsub?.();
+  }, [rt, realtimeFetch]);
 
   useEffect(() => {
     fetchLeaderboard();

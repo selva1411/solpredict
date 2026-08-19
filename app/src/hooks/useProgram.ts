@@ -8,6 +8,7 @@ import idl from "@/lib/idl/solpredict.json";
 
 export interface InstructionBuilder {
   accounts(accounts: Record<string, unknown>): InstructionBuilder;
+  remainingAccounts(accounts: Array<{ pubkey: PublicKey; isSigner: boolean; isWritable: boolean }>): InstructionBuilder;
   rpc(opts?: { skipPreflight?: boolean }): Promise<string>;
   transaction(): Promise<Transaction>;
 }
@@ -255,7 +256,12 @@ export function useProgram() {
     });
 
     return wrappedProgram as unknown as SolPredictProgram;
-  }, [connection, wallet]);
+    // Memoize on the wallet's identity (pubkey + connection state) rather than
+    // the wallet adapter object itself: most adapters return a new object
+    // reference on every render, which previously forced the entire program
+    // (provider + proxies) to be rebuilt constantly, causing UI flicker and
+    // redundant RPC connections.
+  }, [connection, wallet.publicKey?.toBase58(), wallet.connected]);
 
   return { program, connection, wallet };
 }

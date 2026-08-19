@@ -5,7 +5,7 @@ use anchor_spl::token::{self, Token, Transfer};
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::state::{EmergencyPause, Market, MarketStatus, Order, OrderStatus, Side};
-use crate::utils::check_not_paused;
+use crate::utils::{check_not_paused, require_valid_ata};
 
 #[derive(Accounts)]
 #[instruction(order_id: u64)]
@@ -37,6 +37,17 @@ pub struct PlaceOrder<'info> {
     /// CHECK: Order's token ATA escrow — validated by token program CPI.
     #[account(mut)]
     pub order_token_escrow: UncheckedAccount<'info>,
+
+    /// Data-less SOL escrow for limit BUY orders (seeds: ["order_escrow",
+    /// market, maker, order_id]). Holds the escrowed lamports so fill/cancel
+    /// can pay out with a CPI system transfer. Created implicitly by the
+    /// maker's transfer in the handler.
+    #[account(
+        mut,
+        seeds = [ORDER_ESCROW_SEED, market.key().as_ref(), maker.key().as_ref(), order_id.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub order_escrow: SystemAccount<'info>,
 
     /// Optional emergency-pause account. When present and paused, trading is halted.
     pub emergency_pause: Option<Account<'info, EmergencyPause>>,
@@ -83,18 +94,34 @@ pub fn handler(
             .ok_or(SolPredictError::MathOverflow)?;
         let cost_u64 = u64::try_from(cost).map_err(|_| SolPredictError::MathOverflow)?;
 
+        // Escrow the cost on the dedicated data-less order_escrow account (not
+        // on the order PDA, which carries data and therefore can never be the
+        // `from` of a system-program transfer). The transfer itself creates
+        // the account (0 data, cost covers rent).
         system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(),
                 system_program::Transfer {
                     from: ctx.accounts.maker.to_account_info(),
-                    to: ctx.accounts.order.to_account_info(),
+                    to: ctx.accounts.order_escrow.to_account_info(),
                 },
             ),
             cost_u64,
         )?;
     } else {
         // Limit Sell Order (Ask): Lock SPL tokens in Order escrow
+        // Validate the maker's ATA and escrow ATA are for this side's mint so
+        // an order can never escrow a wrong mint (which fill/cancel would then
+        // reject, soft-locking the maker's tokens).
+        let expected_mint = match side {
+            Side::Yes => ctx.accounts.market.yes_mint,
+            Side::No => ctx.accounts.market.no_mint,
+        };
+        let maker_ata = ctx.accounts.maker_token_ata.to_account_info();
+        let escrow_ata = ctx.accounts.order_token_escrow.to_account_info();
+        require_valid_ata(&maker_ata, expected_mint, ctx.accounts.maker.key())?;
+        require_valid_ata(&escrow_ata, expected_mint, ctx.accounts.order.key())?;
+
         let token_amount = (quantity as u128)
             .checked_mul(BASE_UNITS_PER_SHARE as u128)
             .ok_or(SolPredictError::MathOverflow)?;

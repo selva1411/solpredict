@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest } from 'next/server';
 import { serverError, ok } from '@/lib/api-response';
 import { apiHandler } from '@/lib/api-handler';
-import { getRecentActivity } from '@/lib/data/users';
+import { getRecentActivity } from '@/lib/data/trades';
 
 export const GET = apiHandler(async (req: NextRequest) => {
   try {

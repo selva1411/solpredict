@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Settings, Save, RefreshCw, AlertTriangle, Power, PowerOff } from 'lucide-react';
+import { Settings, Save, RefreshCw, AlertTriangle, Power, PowerOff, UserPlus, UserX, ShieldCheck } from 'lucide-react';
 import { adminFetch } from '@/lib/admin-client';
 import { toast } from 'sonner';
 import { useProgram } from '@/hooks/useProgram';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { getConfigPda, getEmergencyPausePda } from '@/lib/pda';
 import { txAccounts, sendWithRetry } from '@/lib/anchor-utils';
-import { SystemProgram } from '@solana/web3.js';
+import { PublicKey, SystemProgram } from '@solana/web3.js';
 
 interface Setting {
   key: string;
@@ -40,6 +40,11 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
+  const [guardians, setGuardians] = useState<string[]>([]);
+  const [requiredConfirmations, setRequiredConfirmations] = useState(1);
+  const [newGuardian, setNewGuardian] = useState('');
+  const [guardianThreshold, setGuardianThreshold] = useState(1);
+  const [guardianLoading, setGuardianLoading] = useState(false);
 
   useEffect(() => {
     adminFetch('/api/admin/settings')
@@ -76,13 +81,131 @@ export default function AdminSettingsPage() {
     return () => { cancelled = true; };
   }, [program]);
 
+  // Fetch the on-chain guardian set + required confirmations. The account may
+  // not exist yet (created lazily on first pause/add-guardian) — treat a
+  // missing account as "admin is the only guardian, threshold 1".
+  const fetchGuardians = async () => {
+    if (!program) return;
+    try {
+      const emergencyPda = getEmergencyPausePda(program.programId);
+      const accounts = (program.account as unknown as {
+        emergencyPause: {
+          fetch(pda: ReturnType<typeof getEmergencyPausePda>): Promise<{
+            paused: boolean;
+            guardians: PublicKey[];
+            requiredConfirmations: number;
+          }>;
+        };
+      });
+      const acc = await accounts.emergencyPause.fetch(emergencyPda).catch(() => null);
+      if (!acc) {
+        setGuardians(publicKey ? [publicKey.toBase58()] : []);
+        setRequiredConfirmations(1);
+        setGuardianThreshold(1);
+        return;
+      }
+      const active = acc.guardians
+        .map((g) => g.toBase58())
+        .filter((b58: string) => b58 !== PublicKey.default.toBase58());
+      setGuardians(active);
+      setRequiredConfirmations(acc.requiredConfirmations);
+      setGuardianThreshold(acc.requiredConfirmations);
+    } catch {
+      // non-critical — the section renders with whatever state we have
+    }
+  };
+
+  useEffect(() => {
+    fetchGuardians();
+  }, [program, publicKey]);
+
+  const handleAddGuardian = async () => {
+    if (!program || !publicKey) { toast.error('Connect an admin wallet first'); return; }
+    let parsed: PublicKey;
+    try {
+      parsed = new PublicKey(newGuardian.trim());
+    } catch {
+      toast.error('Invalid public key');
+      return;
+    }
+    setGuardianLoading(true);
+    try {
+      const configPda = getConfigPda(program.programId);
+      const emergencyPda = getEmergencyPausePda(program.programId);
+      const builder = program.methods.addGuardian(parsed).accounts(txAccounts({
+        admin: publicKey,
+        config: configPda,
+        emergencyPause: emergencyPda,
+        systemProgram: SystemProgram.programId,
+      }));
+      await sendWithRetry(program, builder);
+      toast.success('Guardian added on-chain');
+      setNewGuardian('');
+      fetchGuardians();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add guardian');
+    } finally {
+      setGuardianLoading(false);
+    }
+  };
+
+  const handleRemoveGuardian = async (guardianB58: string) => {
+    if (!program || !publicKey) { toast.error('Connect an admin wallet first'); return; }
+    setGuardianLoading(true);
+    try {
+      const configPda = getConfigPda(program.programId);
+      const emergencyPda = getEmergencyPausePda(program.programId);
+      const builder = program.methods.removeGuardian(new PublicKey(guardianB58)).accounts(txAccounts({
+        admin: publicKey,
+        config: configPda,
+        emergencyPause: emergencyPda,
+        systemProgram: SystemProgram.programId,
+      }));
+      await sendWithRetry(program, builder);
+      toast.success('Guardian removed on-chain');
+      fetchGuardians();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove guardian');
+    } finally {
+      setGuardianLoading(false);
+    }
+  };
+
+  const handleSetThreshold = async (threshold: number) => {
+    if (!program || !publicKey) { toast.error('Connect an admin wallet first'); return; }
+    setGuardianLoading(true);
+    try {
+      const configPda = getConfigPda(program.programId);
+      const emergencyPda = getEmergencyPausePda(program.programId);
+      const builder = program.methods.setGuardianThreshold(threshold).accounts(txAccounts({
+        admin: publicKey,
+        config: configPda,
+        emergencyPause: emergencyPda,
+        systemProgram: SystemProgram.programId,
+      }));
+      await sendWithRetry(program, builder);
+      toast.success(`Unpause threshold set to ${threshold}`);
+      fetchGuardians();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to set threshold');
+    } finally {
+      setGuardianLoading(false);
+    }
+  };
+
   const handleEmergencyPause = async (pause: boolean) => {
     if (!program || !publicKey) { toast.error('Connect an admin wallet first'); return; }
     setPauseLoading(true);
     try {
       const configPda = getConfigPda(program.programId);
       const emergencyPda = getEmergencyPausePda(program.programId);
-      const method = pause ? program.methods.emergencyPause() : program.methods.emergencyUnpause([]);
+      // Unpause requires verified guardian signers passed as remaining
+      // accounts. The connected admin wallet is the (only) guardian today.
+      const method = pause
+        ? program.methods.emergencyPause()
+        : program.methods.emergencyUnpause().remainingAccounts([
+            { pubkey: publicKey, isSigner: true, isWritable: false },
+          ]);
       const builder = method.accounts(txAccounts({
         admin: publicKey,
         config: configPda,
@@ -184,6 +307,83 @@ export default function AdminSettingsPage() {
               Unpause
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Guardian multisig — who can unpause, and how many signatures are needed */}
+      <div className="rounded-[2px] bg-panel border border-hairline p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <label className="text-[13px] font-semibold text-ivory block">Unpause Guardians (Multisig)</label>
+        </div>
+        <p className="text-xs text-gray-600">
+          Unpausing requires <span className="text-emerald-400 font-mono">{requiredConfirmations}</span> distinct guardian
+          signature(s). The admin is automatically the first guardian; add up to 3 total.
+        </p>
+
+        {guardians.length > 0 && (
+          <div className="space-y-2">
+            {guardians.map((g) => (
+              <div key={g} className="flex items-center justify-between gap-3 rounded-[2px] bg-black/20 border border-hairline/40 px-3 py-2">
+                <span className="font-mono text-[11px] text-ivory truncate">{g}</span>
+                {g !== publicKey?.toBase58() ? (
+                  <button
+                    onClick={() => handleRemoveGuardian(g)}
+                    disabled={guardianLoading}
+                    className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 disabled:opacity-50 flex-shrink-0"
+                    title="Remove guardian (lowers threshold first if needed)"
+                  >
+                    <UserX className="w-3 h-3" />
+                    Remove
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-mono text-ash flex-shrink-0">(admin)</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <div className="flex-1 min-w-0">
+            <label className="text-[10px] uppercase tracking-wider text-ash block mb-1">Add Guardian Pubkey</label>
+            <input
+              value={newGuardian}
+              onChange={(e) => setNewGuardian(e.target.value)}
+              placeholder="Base58 public key…"
+              className="input-glass text-[12px] font-mono w-full"
+            />
+          </div>
+          <button
+            onClick={handleAddGuardian}
+            disabled={guardianLoading || !newGuardian.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Add
+          </button>
+        </div>
+
+        <div className="flex items-end gap-2 border-t border-hairline/40 pt-4">
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-wider text-ash block mb-1">Required Confirmations</label>
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, guardians.length)}
+              value={guardianThreshold}
+              onChange={(e) => setGuardianThreshold(Math.max(1, Number(e.target.value)))}
+              className="input-glass text-[12px] font-mono w-full"
+            />
+          </div>
+          <button
+            onClick={() => handleSetThreshold(guardianThreshold)}
+            disabled={guardianLoading || guardianThreshold === requiredConfirmations}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Set Threshold
+          </button>
         </div>
       </div>
 

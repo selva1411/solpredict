@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
-import { getPositions, getLpPositions, getUserStats } from "@/lib/data/users";
+import { getPositions, getLpPositions } from "@/lib/data/positions";
+import { getUserStats } from "@/lib/data/users";
 import { badRequest, ok, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 import { positionsGetSchema } from "@/lib/schemas";

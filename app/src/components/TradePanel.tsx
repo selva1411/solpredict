@@ -116,8 +116,12 @@ export function TradePanel({ market, onTrade }: TradePanelProps) {
       const buyerYesAta = getAssociatedTokenAddressSync(yesMintPda, publicKey);
       const buyerNoAta = getAssociatedTokenAddressSync(noMintPda, publicKey);
 
+      // Slippage guard: the user intends to spend `numAmount` SOL; allow 5%
+      // headroom so the on-chain cost (fee + price impact) can't exceed it by
+      // more than the tolerance, while still failing fast on front-running.
+      const maxCostLamports = new BN(Math.ceil(numAmount * 1e9 * 1.05));
       const txSig = await program.methods
-        .buyShares(sideEnum, new BN(shares))
+        .buyShares(sideEnum, new BN(shares), maxCostLamports)
         .accounts({
           buyer: publicKey,
           market: marketPda,

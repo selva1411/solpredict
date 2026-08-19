@@ -166,6 +166,23 @@ export function feedIdBytesToHex(feedId: number[] | Uint8Array): string {
   return "0x" + arr.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Normalize a user-supplied oracle feed ID into the canonical 64-char hex
+ * (no `0x` prefix) that the propose API persists. Strips an optional `0x`
+ * prefix, lowercases, and falls back to 64 zeros for non-oracle markets
+ * ("all zeros" as the create form instructs). Returns null when the value
+ * is not valid 64-char hex, so callers can reject it before it reaches the
+ * DB validation.
+ */
+export function normalizeOracleFeedId(value?: string | null): string | null {
+  if (!value) return "0".repeat(64);
+  const cleaned = value.trim().replace(/^0x/i, "").toLowerCase();
+  if (cleaned.length === 0) return "0".repeat(64);
+  if (!/^[0-9a-f]+$/.test(cleaned)) return null;
+  if (cleaned.length !== 64) return null;
+  return cleaned;
+}
+
 export function lookupFeedEntry(feedIdHex: string): PythFeedEntry | undefined {
   const normalized = feedIdHex.toLowerCase();
   return Object.values(PYTH_FEED_REGISTRY).find(

@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { getMarketList } from "@/lib/data/markets";
 import { ok, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { requireAdmin } from "@/lib/admin-guard";
 import { getDb } from "@/lib/db/client";
 import { marketsCache } from "@/lib/db/schema";
 import { getMarketPda } from "@/lib/pda";
@@ -44,12 +45,25 @@ export const GET = apiHandler(async (req: NextRequest) => {
   }
 }, { cacheMaxAge: 10 });
 
+/**
+ * POST /api/markets
+ *
+ * Direct DB market creation — ADMIN ONLY. Markets are normally created via
+ * the on-chain initialize_market / approve_market flow and mirrored by the
+ * indexer; this route exists for admin seeding and must never be callable by
+ * unauthenticated clients (the previous version let anyone inject markets,
+ * with a race-prone COUNT(*)+1 market id and a client-chosen pubkey).
+ */
 export const POST = apiHandler(async (req: NextRequest) => {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
+
   const db = getDb();
   if (!db) return serverError("Database not configured");
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body) return ok({ ok: false, error: "Invalid JSON body" }, { status: 400 });
     const { question, description, category, endTs, resolveTs, thumbnailUrl, tags, marketPubkey } = body;
 
     if (!question || !endTs) {
@@ -58,7 +72,9 @@ export const POST = apiHandler(async (req: NextRequest) => {
 
     const countRes = await db.select({ count: sql<number>`COUNT(*)::int` }).from(marketsCache);
     const nextId = (countRes[0]?.count ?? 0) + 1;
-    const pubkey = marketPubkey || getMarketPda(new anchor.BN(nextId), ENV.programId).toBase58();
+    // market_pubkey must be the REAL PDA for this id — a client-supplied
+    // pubkey is never trusted.
+    const pubkey = getMarketPda(new anchor.BN(nextId), ENV.programId).toBase58();
 
     const [inserted] = await db.insert(marketsCache).values({
       marketPubkey: pubkey,

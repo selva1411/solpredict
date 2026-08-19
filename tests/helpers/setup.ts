@@ -68,8 +68,13 @@ export async function bootstrapMarket(
   resolveTs: anchor.BN = new anchor.BN(Math.floor(Date.now() / 1000) + 3600),
   sharePriceLamports: anchor.BN = new anchor.BN(10_000_000) // 0.01 SOL per share
 ) {
+  // The config PDA is deterministic — fall back to deriving it when the caller
+  // runs a test subset (mocha -g) that never executed Phase 2's config
+  // bootstrap, so individual phases are runnable in isolation.
+  const cfg = configPda ?? getConfigPda(program.programId);
+
   // Read current config to get market ID
-  const configAccount = await program.account.config.fetch(configPda);
+  const configAccount = await program.account.config.fetch(cfg);
   const marketId = configAccount.marketCount;
   
   const marketPda = getMarketPda(marketId, program.programId);
@@ -101,7 +106,7 @@ export async function bootstrapMarket(
     )
     .accounts({
       admin: admin.publicKey,
-      config: configPda,
+      config: cfg,
       market: marketPda,
       yesMint: yesMintPda,
       noMint: noMintPda,

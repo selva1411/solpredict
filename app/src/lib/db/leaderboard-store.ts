@@ -3,6 +3,7 @@ import { users, userStats } from './schema';
 import { desc, sql, eq } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { getLeaderboard } from '@/lib/data/platform';
+import { computePasScore } from '@/lib/pas';
 
 export async function getLeaderboardFromDb(
   limit = 50,
@@ -22,7 +23,7 @@ export async function getLeaderboardFromDb(
       totalWagered: e.totalWagered,
       totalProfit: e.totalProfit,
       winRate: e.winRate ?? 0,
-      pasScore: 50,
+      pasScore: computePasScore(e.winRate),
       marketsTraded: e.marketsTraded,
     }));
   } catch (e) {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, ChevronDown } from "lucide-react";
+import { signUserProof, userFetch } from "@/lib/user-client";
 const Loader = Loader2;
 
 export function MarketDispute({
@@ -13,7 +14,7 @@ export function MarketDispute({
   marketPubkey: string;
   status: string;
 }) {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signMessage } = useWallet();
   const [open, setOpen] = useState(false);
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
   const [reason, setReason] = useState("");
@@ -33,12 +34,18 @@ export function MarketDispute({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/markets/${marketPubkey}/disputes`, {
+      const auth = await signUserProof({ publicKey, signMessage }, signMessage);
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "x-wallet": publicKey.toBase58(),
+      };
+      if (auth) {
+        headers["x-message"] = auth.message;
+        headers["x-signature"] = auth.signature;
+      }
+      const res = await userFetch(`/api/markets/${marketPubkey}/disputes`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-wallet": publicKey.toBase58(),
-        },
+        headers,
         body: JSON.stringify({
           claimedOutcome: outcome,
           reason,

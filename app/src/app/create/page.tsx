@@ -12,8 +12,10 @@ import { useProgram } from "@/hooks/useProgram";
 import { GlassPanel } from "@/components/GlassPanel";
 import { getConfigPda, getProposalPda, getProposalVaultPda } from "@/lib/pda";
 import { buildSignSendConfirm } from "@/lib/anchor-utils";
+import { signUserProof, userFetch } from "@/lib/user-client";
 import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
 import { lamportsToSol, solToLamports } from "@/lib/format";
+import { normalizeOracleFeedId } from "@/lib/pyth-feeds";
 
 const PROPOSAL_BOND_SOL = 0.1;
 const CATEGORIES = [
@@ -32,7 +34,7 @@ const DEFAULT_FEED_ID = "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac
 export default function CreateProposalPage() {
   const router = useRouter();
   const { program, connection } = useProgram();
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
 
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -86,7 +88,42 @@ export default function CreateProposalPage() {
           .proposeMarket(question, description, category, feedIdArr, new anchor.BN(targetPrice), expo, comparison, new anchor.BN(endTimestamp), new anchor.BN(resolveTimestamp), new anchor.BN(sharePrice))
           .accounts({ proposer: publicKey, config: configPda, proposal: proposalPda, proposalVault: vaultPda, systemProgram: anchor.web3.SystemProgram.programId } as Record<string, unknown>)
       );
-      toast.success("Market proposed successfully!");
+      toast.success("Market proposed on-chain!");
+      // Record the proposal in the DB so it appears in the admin's proposal
+      // review queue. The server verifies the on-chain tx + wallet proof before
+      // inserting — so wait for confirmation first.
+      try {
+        await connection.confirmTransaction(tx, "confirmed");
+        const proof = await signUserProof(
+          { publicKey, signMessage },
+          signMessage,
+        );
+        if (!proof) throw new Error("Wallet does not support message signing");
+        const res = await userFetch("/api/markets/propose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question,
+            description,
+            category: CATEGORIES[category]?.label ?? "Other",
+            closeTs: endTimestamp,
+            // Send the canonical 64-char hex (strip 0x / default to zeros) so
+            // the API's strict validation never rejects a landed on-chain tx.
+            oracleFeedId: normalizeOracleFeedId(oracleFeedId) ?? "0".repeat(64),
+            signature: tx,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.warn("Proposal recorded on-chain but DB record failed:", data);
+          toast.info("Proposal is on-chain. The DB record will be retried — please contact an admin if it does not appear.");
+        } else {
+          toast.success("Market proposed successfully!");
+        }
+      } catch (err) {
+        console.warn("Proposal DB sync failed (on-chain tx succeeded):", err);
+        toast.info("Proposal is on-chain, but the DB record failed to sync.");
+      }
       router.push(`/discover`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Transaction failed";

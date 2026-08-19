@@ -179,13 +179,17 @@ export async function recordLeaderboardSnapshot() {
 
     for (let i = 0; i < topUsers.length; i++) {
       const u = topUsers[i];
+      const wins = u.wins ?? 0;
+      const losses = u.losses ?? 0;
+      const settled = u.marketsResolved ?? wins + losses;
+      const pasScore = settled > 0 ? Math.round((wins / settled) * 100) : null;
       await db.insert(leaderboardSnapshots).values({
         wallet: u.wallet,
         period: 'daily',
         rank: i + 1,
         profitSol: (u.realizedPnl || '0').toString(),
         winRate: (u.winRateBps ? (u.winRateBps / 100).toString() : '0'),
-        pasScore: 50,
+        pasScore,
         marketsCount: u.marketsTraded || 0,
         snapshotDate: todayStr,
       });
@@ -206,6 +210,9 @@ export async function getLeaderboardData() {
       realizedPnl: userStats.realizedPnl,
       winRateBps: userStats.winRateBps,
       marketsTraded: userStats.marketsTraded,
+      marketsResolved: userStats.marketsResolved,
+      wins: userStats.wins,
+      losses: userStats.losses,
       username: users.username,
       avatarUrl: users.avatarUrl,
     })
@@ -215,7 +222,12 @@ export async function getLeaderboardData() {
     .limit(20);
 
     if (rows.length > 0) {
-      return rows.map((u, i) => ({
+      return rows.map((u, i) => {
+        const wins = u.wins ?? 0;
+        const losses = u.losses ?? 0;
+        const settled = u.marketsResolved ?? wins + losses;
+        const pasScore = settled > 0 ? Math.round((wins / settled) * 100) : null;
+        return {
         rank: i + 1,
         wallet: u.wallet,
         username: u.username || `${u.wallet.slice(0, 4)}...${u.wallet.slice(-4)}`,
@@ -223,9 +235,10 @@ export async function getLeaderboardData() {
         totalWagered: Number(u.totalVolume || 0),
         totalProfit: Number(u.realizedPnl || 0),
         winRate: u.winRateBps != null ? u.winRateBps / 100 : 0,
-        pasScore: 50,
+        pasScore,
         marketsTraded: u.marketsTraded || 0,
-      }));
+        };
+      });
     }
 
     // 2. Aggregate from trades table
@@ -246,7 +259,7 @@ export async function getLeaderboardData() {
           totalWagered: Number(volumeSol.toFixed(2)),
           totalProfit: 0,
           winRate: 0,
-          pasScore: 0,
+          pasScore: null,
           marketsTraded: Number(t.tradeCount || 0),
         };
       });

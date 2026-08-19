@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
-import { assertDb } from "@/lib/db/client";
-import { disputes, marketsCache } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { getMarketDisputes, submitDispute } from "@/lib/data/disputes";
 import { ok, badRequest, serverError, notFound } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 import { disputeBodySchema } from "@/lib/api/contracts";
+import { getMarket } from "@/lib/data/markets";
+import { requireUser } from "@/lib/user-guard";
 
 export const GET = apiHandler(async (_req: NextRequest, context: { params?: Promise<Record<string, string>> } = {}) => {
   const params = await context.params;
@@ -14,29 +14,8 @@ export const GET = apiHandler(async (_req: NextRequest, context: { params?: Prom
   if (!marketPubkey) return badRequest("Market ID required");
 
   try {
-    const db = assertDb();
-    const rows = await db
-      .select()
-      .from(disputes)
-      .where(eq(disputes.marketPubkey, marketPubkey))
-      .orderBy(desc(disputes.createdAt));
-
-    return ok({
-      ok: true,
-      disputes: rows.map((d) => ({
-        id: d.id,
-        marketPubkey: d.marketPubkey,
-        disputer: d.disputer,
-        claimedOutcome: d.claimedOutcome,
-        reason: d.reason,
-        evidenceUrl: d.evidenceUrl ?? d.evidence,
-        status: d.status,
-        resolution: d.resolution,
-        resolutionNote: d.resolutionNote,
-        createdAt: d.createdAt,
-        resolvedAt: d.resolvedAt,
-      })),
-    });
+    const disputes = await getMarketDisputes(marketPubkey);
+    return ok({ ok: true, disputes });
   } catch (err) {
     return serverError(err);
   }
@@ -52,6 +31,11 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
     return badRequest("x-wallet header required to dispute settlement");
   }
 
+  // The dispute must be filed by the wallet that signed the request — a
+  // client can never file a dispute as another user.
+  const auth = await requireUser(req, disputer);
+  if (!auth.ok) return auth.response;
+
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") return badRequest("Invalid JSON body");
 
@@ -64,13 +48,7 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
   const { claimedOutcome, evidenceUrl, reason } = parsed.data;
 
   try {
-    const db = assertDb();
-    const [market] = await db
-      .select()
-      .from(marketsCache)
-      .where(eq(marketsCache.marketPubkey, marketPubkey))
-      .limit(1);
-
+    const market = await getMarket(marketPubkey);
     if (!market) return notFound("Market not found");
 
     if (market.status !== "settled") {
@@ -84,30 +62,14 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
       return badRequest("Dispute window has expired (must dispute within 24 hours of settlement)");
     }
 
-    // Insert dispute record
-    const [row] = await db
-      .insert(disputes)
-      .values({
-        marketPubkey,
-        disputer,
-        claimedOutcome,
-        reason,
-        evidenceUrl: evidenceUrl ?? null,
-        evidence: evidenceUrl ?? null,
-        bondLamports: 100_000_000, // 0.1 SOL dispute bond
-        status: "open",
-        createdAt: new Date(),
-      })
-      .returning();
-
-    // Flip market status to 'disputed' to freeze reward claims
-    await db
-      .update(marketsCache)
-      .set({
-        status: "disputed",
-        updatedAt: new Date(),
-      })
-      .where(eq(marketsCache.marketPubkey, marketPubkey));
+    const row = await submitDispute({
+      marketPubkey,
+      disputer: auth.identity.wallet,
+      claimedOutcome,
+      reason,
+      evidenceUrl: evidenceUrl ?? null,
+      bondLamports: 100_000_000, // 0.1 SOL dispute bond
+    });
 
     return ok(
       {

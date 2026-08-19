@@ -208,16 +208,18 @@ test.describe("Rewards", () => {
   });
 });
 
-test.describe("Dashboard (analytics)", () => {
-  test("dashboard page loads (connect gate or dashboard)", async ({ page }) => {
+test.describe("Portfolio (formerly Dashboard)", () => {
+  test("portfolio page loads (connect gate or portfolio)", async ({ page }) => {
+    // /dashboard redirects to /portfolio (consolidated duplicate page).
     await gotoWithSettled(page, "/dashboard");
+    await page.waitForURL("**/portfolio", { timeout: 15_000 });
     // Without a wallet the page shows a connect-wallet gate; with a wallet it
-    // shows the Dashboard heading. Either is a successful render.
+    // shows the Portfolio heading. Either is a successful render.
     const body = await page.locator("body").innerText();
     expect(body.length).toBeGreaterThan(0);
-    const hasConnect = await page.locator("text=Connect Wallet").first().isVisible().catch(() => false);
-    const hasDashboard = await page.locator("text=Dashboard").first().isVisible().catch(() => false);
-    expect(hasConnect || hasDashboard).toBe(true);
+    const hasConnect = await page.locator("text=Connect your wallet").first().isVisible().catch(() => false);
+    const hasPortfolio = await page.locator("text=Position Ledger").first().isVisible().catch(() => false);
+    expect(hasConnect || hasPortfolio).toBe(true);
   });
 });
 

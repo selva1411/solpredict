@@ -1,36 +1,28 @@
 export const dynamic = "force-dynamic";
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db/client';
-import { marketComments } from '@/lib/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
-import { ok, badRequest, serverError, serviceUnavailable } from '@/lib/api-response';
+import { getCommentThread, insertComment } from '@/lib/data/comments';
+import { commentPostSchema } from '@/lib/schemas';
+import { z } from 'zod';
+import { ok, badRequest, serverError } from '@/lib/api-response';
 import { apiHandler } from '@/lib/api-handler';
+import { requireUser } from '@/lib/user-guard';
+
+// Accepts both field-name conventions from the UI.
+const commentBodySchema = commentPostSchema.extend({
+  author: z.string().min(32).max(44).optional(),
+}).refine(
+  (v) => Boolean(v.authorWallet || v.author),
+  { message: "authorWallet (or author) is required" },
+);
 
 export const GET = apiHandler(async (_req: NextRequest, context) => {
   const params = await context.params!;
   const marketPubkey = params.id;
   if (!marketPubkey) return badRequest('Market ID required');
 
-  if (!db) return serviceUnavailable('Database not available');
-
   try {
-    const allComments = await db.select().from(marketComments)
-      .where(eq(marketComments.marketPubkey, marketPubkey))
-      .orderBy(desc(marketComments.createdAt));
-
-    // Build threaded structure: top-level comments with nested replies
-    const topLevel = allComments.filter(c => !c.parentId);
-    const replies = allComments.filter(c => !!c.parentId);
-
-    const thread = topLevel.map(comment => ({
-      ...comment,
-      upvotes: comment.upvotes ?? 0,
-      replies: replies
-        .filter(r => r.parentId === comment.id)
-        .map(r => ({ ...r, upvotes: r.upvotes ?? 0 })),
-    }));
-
-    return ok({ ok: true, comments: thread, total: allComments.length });
+    const { comments, total } = await getCommentThread(marketPubkey);
+    return ok({ ok: true, comments, total });
   } catch (err) {
     return serverError(err);
   }
@@ -41,57 +33,28 @@ export const POST = apiHandler(async (req: NextRequest, context) => {
   const marketPubkey = params.id;
   if (!marketPubkey) return badRequest('Market ID required');
 
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") return badRequest('Invalid JSON body');
+
+  const parsed = commentBodySchema.safeParse(body);
+  if (!parsed.success) return badRequest('Invalid comment data');
+
+  // The comment must be authored by the wallet that signed the request — a
+  // client can never post as another user (closes the IDOR hole).
+  const authorWallet = parsed.data.authorWallet || parsed.data.author!;
+  const auth = await requireUser(req, authorWallet);
+  if (!auth.ok) return auth.response;
+
   try {
-    const body = await req.json();
-    // Accept both field name conventions
-    const { author, authorWallet, authorUsername, content, parentId } = body;
-    const resolvedAuthor = author || authorWallet;
-
-    if (!resolvedAuthor || !content?.trim()) {
-      return badRequest('author/authorWallet and content are required');
-    }
-    if (content.length > 2000) {
-      return badRequest('Comment too long (max 2000 chars)');
-    }
-
-    if (!db) {
-      return serviceUnavailable('Database not available');
-    }
-
-    const [inserted] = await db.insert(marketComments).values({
+    const { authorUsername, content, parentId } = parsed.data;
+    const inserted = await insertComment({
       marketPubkey,
-      authorWallet: resolvedAuthor,
+      authorWallet: auth.identity.wallet,
       authorUsername: authorUsername ?? null,
       content: content.trim(),
       parentId: parentId ?? null,
-      upvotes: 0,
-      createdAt: new Date(),
-    }).returning();
-
+    });
     return ok({ ok: true, comment: inserted }, { status: 201 });
-  } catch (err) {
-    return serverError(err);
-  }
-});
-
-// PATCH — upvote a comment
-export const PATCH = apiHandler(async (req: NextRequest, context) => {
-  const params = await context.params!;
-  const marketPubkey = params.id;
-  if (!marketPubkey) return badRequest('Market ID required');
-
-  try {
-    const body = await req.json();
-    const { commentId } = body;
-    if (!commentId) return badRequest('commentId is required');
-
-    if (!db) return serviceUnavailable('Database not available');
-
-    await db.update(marketComments)
-      .set({ upvotes: sql`COALESCE(${marketComments.upvotes}, 0) + 1` })
-      .where(eq(marketComments.id, Number(commentId)));
-
-    return ok({ ok: true });
   } catch (err) {
     return serverError(err);
   }

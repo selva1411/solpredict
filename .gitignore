@@ -13,3 +13,4 @@ test_output.log
 price_feeds.json
 yarn.lock
 opencode.json
+logs/

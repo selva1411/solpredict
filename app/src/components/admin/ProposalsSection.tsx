@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, Variants } from "framer-motion";
 import { Check, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { adminFetch } from "@/lib/admin-client";
 
 const cardVariants: Variants = {
@@ -13,6 +14,7 @@ const cardVariants: Variants = {
 interface Proposal {
   id: string;
   creator: string;
+  proposalPubkey: string;
   question: string;
   description: string;
   category: string;
@@ -20,7 +22,14 @@ interface Proposal {
   status: "pending" | "approved" | "rejected";
 }
 
-export function ProposalsSection() {
+interface ProposalsSectionProps {
+  /** Full on-chain approve (approve_market tx + DB record). Falls back to DB-only if not provided. */
+  onApprove?: (proposal: Proposal) => Promise<void>;
+  /** Full on-chain reject (reject_market tx: closes proposal + slashes bond, then DB record). */
+  onReject?: (proposal: Proposal) => Promise<void>;
+}
+
+export function ProposalsSection({ onApprove, onReject }: ProposalsSectionProps) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,15 +63,23 @@ export function ProposalsSection() {
   async function handleAction(id: string, action: "approve" | "reject") {
     setActionLoading(id);
     try {
-      const res = await adminFetch(`/api/admin/proposals`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, action }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const proposal = proposals.find((p) => p.id === id);
+      if (action === "approve" && onApprove && proposal) {
+        await onApprove(proposal);
+      } else if (action === "reject" && onReject && proposal) {
+        await onReject(proposal);
+      } else {
+        const res = await adminFetch(`/api/admin/proposals`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, action }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }
       setProposals((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       console.error("Proposal action failed:", err);
+      toast.error(err instanceof Error ? err.message : "Proposal action failed");
     } finally {
       setActionLoading(null);
     }

@@ -24,11 +24,39 @@ function toLamports(value: number): number {
   return Math.floor(value);
 }
 
+/**
+ * Convert a BN (u64) lamport value to a JS number at the DB boundary.
+ *
+ * Solana u64 values can exceed Number.MAX_SAFE_INTEGER (2^53 — the max safe
+ * integer) for pools/supply above ~9e15 lamports. `BN.toNumber()` silently
+ * corrupts those values, so we detect precision loss and fail loud instead of
+ * persisting wrong numbers (rule: never trust Number() on u64/lamport values).
+ *
+ * Practical note: real market pools stay far below this threshold, so this is
+ * a guard, not a hot path.
+ */
 function bnToNumber(v: unknown): number {
+  let num: number;
   if (typeof v === "object" && v !== null && "toNumber" in (v as Record<string, unknown>)) {
-    return Number((v as { toNumber(): number }).toNumber());
+    const bn = v as { toString(base?: number): string; toNumber(): number };
+    const str = bn.toString(10);
+    if (str.length > 15) {
+      // > 9e15 lamports — precision is at risk. Fail loud rather than store a
+      // corrupted value; callers with genuine u64 overflow must switch the
+      // boundary to bigint/string.
+      const parsed = BigInt(str);
+      if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error(`bnToNumber: u64 value ${str} exceeds Number.MAX_SAFE_INTEGER`);
+      }
+    }
+    num = bn.toNumber();
+  } else {
+    num = Number(v ?? 0);
   }
-  return Number(v ?? 0);
+  if (num !== 0 && !Number.isSafeInteger(num)) {
+    throw new Error(`bnToNumber: value ${num} is not a safe integer`);
+  }
+  return num;
 }
 
 /**
@@ -101,7 +129,7 @@ export async function reconcileTrades({
 }: ReconcileOptions & { before?: string }): Promise<{ trades: number; nextCursor: string | null }> {
   if (!getDb()) return { trades: 0, nextCursor: null };
 
-  const sigs = await connection.getSignaturesForAddress(program.programId, { limit, before });
+  const sigs = await connection.getSignaturesForAddress(program.programId, { limit, before }, "confirmed");
   if (sigs.length === 0) return { trades: 0, nextCursor: null };
 
   let trades = 0;
@@ -110,7 +138,10 @@ export async function reconcileTrades({
       const tx = await connection.getParsedTransaction(s.signature, {
         maxSupportedTransactionVersion: 0,
       });
-      if (!tx || !tx.meta?.err) continue;
+      // Skip only FAILED transactions. meta.err is null on success — the
+      // previous `!tx.meta?.err` inverted this and dropped every successful
+      // trade from the index.
+      if (!tx || tx.meta?.err) continue;
 
       const msg = tx.transaction.message;
       const meta = tx.meta;

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import * as anchor from "@coral-xyz/anchor";
 import { EventParser } from "@coral-xyz/anchor";
-import { getConfigPda, getEmergencyPausePda, getMarketPda, getMockPriceUpdatePda, getYesMintPda, getNoMintPda, getTreasuryPda } from "@/lib/pda";
+import { getConfigPda, getEmergencyPausePda, getMarketPda, getMockPriceUpdatePda, getYesMintPda, getNoMintPda, getTreasuryPda, getProposalVaultPda } from "@/lib/pda";
 import { formatEventTime, findMarketQuestion, getMarketStatusString, AnchorMarketStatus } from "@/lib/events";
 import type { MarketCacheEntry } from "@/lib/db/store";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -336,76 +336,126 @@ function AdminPage() {
     }
   };
 
+  /**
+   * Load the admin activity / audit trail.
+   *
+   * Primary source is on-chain (the admin wallet's signatures parsed for
+   * MarketCreated/Settled/Cancelled/FeesWithdrawn events). The local
+   * test-validator only retains a few hundred slots of signature history, so
+   * older admin actions can roll out of the RPC window — in that case we fall
+   * back to the persistent DB audit log (written by approve/reject and other
+   * admin API actions).
+   */
   const fetchAdminActivity = async (currentMarkets: Market[]) => {
     if (!wallet?.publicKey) return;
     try {
       setActivityLoading(true);
-      const sigs = await connection.getSignaturesForAddress(wallet.publicKey, { limit: 40 });
       const items: AdminActivity[] = [];
-      const eventParser = new EventParser(program.programId, program.coder);
 
-      const txs = await Promise.all(
-        sigs.map(async (sig) => {
-          try {
-            return await connection.getParsedTransaction(sig.signature, {
-              maxSupportedTransactionVersion: 0,
-              commitment: "confirmed"
-            });
-          } catch {
-            return null;
+      try {
+        const sigs = await connection.getSignaturesForAddress(wallet.publicKey, { limit: 40 }, "confirmed");
+        const eventParser = new EventParser(program.programId, program.coder);
+
+        const txs = await Promise.all(
+          sigs.map(async (sig) => {
+            try {
+              return await connection.getParsedTransaction(sig.signature, {
+                maxSupportedTransactionVersion: 0,
+                commitment: "confirmed"
+              });
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        sigs.forEach((sig, idx) => {
+          const tx = txs[idx];
+          if (!tx || !tx.meta || !tx.meta.logMessages) return;
+
+          const timeStr = formatEventTime(sig.blockTime);
+          const events = eventParser.parseLogs(tx.meta.logMessages);
+
+          for (const event of events) {
+            const marketId = event.data.marketId as anchor.BN;
+            const questionText = findMarketQuestion(marketId, currentMarkets);
+
+            if (event.name === "MarketCreated") {
+              items.push({
+                signature: sig.signature,
+                type: "CREATE",
+                question: questionText || `ID #${marketId.toString()}`,
+                timeStr,
+                details: `Category: ${getCategoryString(event.data.category)}. Target: $${(event.data.targetPrice.toNumber() / 100).toFixed(2)}`
+              });
+            } else if (event.name === "MarketSettled") {
+              const outcome = event.data.winningOutcome.yes ? "YES" : "NO";
+              items.push({
+                signature: sig.signature,
+                type: "SETTLE",
+                question: questionText || `ID #${marketId.toString()}`,
+                timeStr,
+                details: `Outcome: ${outcome}. Settled Price: $${(event.data.settledPrice.toNumber() / 100).toFixed(2)}`
+              });
+            } else if (event.name === "MarketCancelled") {
+              items.push({
+                signature: sig.signature,
+                type: "CANCEL",
+                question: questionText || `ID #${marketId.toString()}`,
+                timeStr,
+                details: "Market cancelled by admin. All buy orders are fully refundable."
+              });
+            } else if (event.name === "FeesWithdrawn") {
+              items.push({
+                signature: sig.signature,
+                type: "WITHDRAW",
+                question: questionText || `ID #${marketId.toString()}`,
+                timeStr,
+                details: `Withdrawn ${ lamportsToSol(event.data.amount).toFixed(4) } SOL to admin`
+              });
+            }
           }
-        })
-      );
+        });
+      } catch (err) {
+        console.log("Error loading on-chain admin activity logs:", err);
+      }
 
-      const getStatusString = getMarketStatusString;
-
-      sigs.forEach((sig, idx) => {
-        const tx = txs[idx];
-        if (!tx || !tx.meta || !tx.meta.logMessages) return;
-
-        const timeStr = formatEventTime(sig.blockTime);
-        const events = eventParser.parseLogs(tx.meta.logMessages);
-
-        for (const event of events) {
-          const marketId = event.data.marketId as anchor.BN;
-          const questionText = findMarketQuestion(marketId, currentMarkets);
-
-          if (event.name === "MarketCreated") {
-            items.push({
-              signature: sig.signature,
-              type: "CREATE",
-              question: questionText || `ID #${marketId.toString()}`,
-              timeStr,
-              details: `Category: ${getCategoryString(event.data.category)}. Target: $${(event.data.targetPrice.toNumber() / 100).toFixed(2)}`
-            });
-          } else if (event.name === "MarketSettled") {
-            const outcome = event.data.winningOutcome.yes ? "YES" : "NO";
-            items.push({
-              signature: sig.signature,
-              type: "SETTLE",
-              question: questionText || `ID #${marketId.toString()}`,
-              timeStr,
-              details: `Outcome: ${outcome}. Settled Price: $${(event.data.settledPrice.toNumber() / 100).toFixed(2)}`
-            });
-          } else if (event.name === "MarketCancelled") {
-            items.push({
-              signature: sig.signature,
-              type: "CANCEL",
-              question: questionText || `ID #${marketId.toString()}`,
-              timeStr,
-              details: "Market cancelled by admin. All buy orders are fully refundable."
-            });
-          } else if (event.name === "FeesWithdrawn") {
-            items.push({
-              signature: sig.signature,
-              type: "WITHDRAW",
-              question: questionText || `ID #${marketId.toString()}`,
-              timeStr,
-              details: `Withdrawn ${ lamportsToSol(event.data.amount).toFixed(4) } SOL to admin`
+      // Fall back to the persistent DB audit log when the on-chain signature
+      // window has rolled over (bare test-validator retains only recent slots).
+      if (items.length === 0) {
+        try {
+          const res = await adminFetch("/api/admin/audit?page=1&limit=40");
+          if (res.ok) {
+            const json = await res.json();
+            const logs = json.logs as Array<{
+              id: string | number;
+              action: string;
+              actor: string;
+              resource: string | null;
+              details: { approvedMarketPubkey?: string } | null;
+              createdAt: string;
+            }> | undefined;
+            (logs ?? []).forEach((log) => {
+              const action = (log.action || "").toUpperCase();
+              let type: AdminActivity["type"] = "WITHDRAW";
+              if (action.includes("CREATE") || action.includes("APPROVE")) type = "CREATE";
+              else if (action.includes("SETTLE")) type = "SETTLE";
+              else if (action.includes("CANCEL") || action.includes("REJECT")) type = "CANCEL";
+              items.push({
+                signature: `db:${log.id}`,
+                type,
+                question: log.details?.approvedMarketPubkey
+                  ? `Approved proposal #${log.resource} → ${log.details.approvedMarketPubkey.slice(0, 8)}…`
+                  : `Proposal #${log.resource ?? "?"} ${action.includes("REJECT") ? "rejected" : action.includes("APPROVE") ? "approved" : ""}`,
+                timeStr: formatEventTime(new Date(log.createdAt).getTime() / 1000),
+                details: `Action: ${log.action} · by ${log.actor.slice(0, 8)}…`,
+              });
             });
           }
+        } catch (err) {
+          console.log("Error loading DB audit logs:", err);
         }
-      });
+      }
 
       setAdminActivity(items);
     } catch (err) {
@@ -483,6 +533,157 @@ function AdminPage() {
     } finally {
       setTransferringAdmin(false);
     }
+  };
+
+  /**
+   * Approve a pending market proposal.
+   *
+   * 1. Sends the on-chain approve_market transaction (admin signs): this
+   *    creates the Market + YES/NO mints + treasury PDA and returns the 0.1 SOL
+   *    bond to the proposer.
+   * 2. Records the created market in the DB via /api/sync/market (verified
+   *    against the on-chain account — no phantom markets).
+   * 3. Flips the proposal row to approved with the market pubkey so it leaves
+   *    the review queue.
+   */
+  const handleApproveProposal = async (proposal: { id: string; proposalPubkey: string }) => {
+    if (!wallet?.publicKey || !program) throw new Error("Connect your admin wallet first");
+
+    let onChainProposal;
+    try {
+      onChainProposal = await program.account.marketProposal.fetch(new PublicKey(proposal.proposalPubkey));
+    } catch {
+      throw new Error("Proposal account not found on-chain — it may have already been approved or rejected.");
+    }
+    if ((onChainProposal.status as { approved?: unknown })?.approved) {
+      throw new Error("Proposal is already approved on-chain.");
+    }
+
+    const proposalId = onChainProposal.proposalId;
+    const marketPda = getMarketPda(proposalId, program.programId);
+    const proposalVaultPda = getProposalVaultPda(proposalId, program.programId);
+    const configPda = getConfigPda(program.programId);
+
+    // 1) On-chain: creates Market + mints + treasury, returns the bond.
+    const approveSig = await sendWithRetry(
+      program,
+      program.methods
+        .approveMarket()
+        .accounts(txAccounts({
+          admin: wallet.publicKey,
+          config: configPda,
+          proposal: new PublicKey(proposal.proposalPubkey),
+          proposalVault: proposalVaultPda,
+          proposer: onChainProposal.proposer,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
+        }))
+    );
+
+    // buildSignSendConfirm returns as soon as the tx is SENT (confirmation runs
+    // in the background), but /api/sync/market re-reads the on-chain account at
+    // "confirmed" commitment — if we sync before the block lands, the server
+    // sees no market and refuses with "phantom market". Wait for the approve
+    // tx to confirm before recording it in the DB.
+    try {
+      await connection.confirmTransaction(approveSig, "confirmed");
+    } catch {
+      // give the account a couple more beats if confirmTransaction raced the
+      // background confirm already consuming the signature
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    // 2) Record the newly-created market in the DB (verified on-chain).
+    const syncRes = await fetch("/api/sync/market", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        marketPubkey: marketPda.toBase58(),
+        marketId: proposalId.toNumber(),
+        question: onChainProposal.question,
+        description: onChainProposal.description || "",
+        category: CATEGORIES[onChainProposal.category] || "Other",
+        status: "open",
+        endTs: onChainProposal.endTs.toNumber(),
+        resolveTs: onChainProposal.resolveTs.toNumber(),
+      }),
+    });
+    if (!syncRes.ok) {
+      const errBody = await syncRes.json().catch(() => ({}));
+      throw new Error(`Market synced on-chain but DB cache failed: ${(errBody as { error?: string }).error ?? `HTTP ${syncRes.status}`}`);
+    }
+
+    // 3) Mark the proposal approved in the DB so it leaves the review queue.
+    const dbRes = await adminFetch("/api/admin/proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: proposal.id,
+        action: "approve",
+        approvedMarketPubkey: marketPda.toBase58(),
+        reviewer: wallet.publicKey.toBase58(),
+      }),
+    });
+    if (!dbRes.ok) throw new Error(`Proposal approved on-chain but DB status update failed (HTTP ${dbRes.status})`);
+
+    toast.success("Proposal approved on-chain — market is now tradable!");
+    fetchConfigAndMarkets();
+  };
+
+  /**
+   * Reject a pending market proposal.
+   *
+   * 1. Sends the on-chain reject_market transaction (admin signs): this closes
+   *    the proposal PDA on-chain and slashes its 0.1 SOL bond to the admin.
+   * 2. Flips the proposal row to rejected in the DB so it leaves the review
+   *    queue (the bond forfeiture is the on-chain half of the slash).
+   */
+  const handleRejectProposal = async (proposal: { id: string; proposalPubkey: string }) => {
+    if (!wallet?.publicKey || !program) throw new Error("Connect your admin wallet first");
+
+    let onChainProposal;
+    try {
+      onChainProposal = await program.account.marketProposal.fetch(new PublicKey(proposal.proposalPubkey));
+    } catch {
+      throw new Error("Proposal account not found on-chain — it may have already been approved or rejected.");
+    }
+    if ((onChainProposal.status as { rejected?: unknown })?.rejected) {
+      throw new Error("Proposal is already rejected on-chain.");
+    }
+
+    const proposalId = onChainProposal.proposalId;
+    const proposalVaultPda = getProposalVaultPda(proposalId, program.programId);
+    const configPda = getConfigPda(program.programId);
+
+    // 1) On-chain: closes the proposal PDA and slashes the bond to the admin.
+    await sendWithRetry(
+      program,
+      program.methods
+        .rejectMarket()
+        .accounts(txAccounts({
+          admin: wallet.publicKey,
+          config: configPda,
+          proposal: new PublicKey(proposal.proposalPubkey),
+          proposalVault: proposalVaultPda,
+          systemProgram: SystemProgram.programId,
+        }))
+    );
+
+    // 2) Mark the proposal rejected in the DB so it leaves the review queue.
+    const dbRes = await adminFetch("/api/admin/proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: proposal.id,
+        action: "reject",
+        reviewer: wallet.publicKey.toBase58(),
+      }),
+    });
+    if (!dbRes.ok) throw new Error(`Proposal rejected on-chain but DB status update failed (HTTP ${dbRes.status})`);
+
+    toast.success("Proposal rejected on-chain — bond slashed.");
+    fetchConfigAndMarkets();
   };
 
   const handleCreateMarket = async (e: React.FormEvent) => {
@@ -650,6 +851,7 @@ function AdminPage() {
       const settleBuilder = program.methods
         .settleMarket()
         .accounts(txAccounts({
+          admin: wallet.publicKey,
           market: market.publicKey,
           config: configPda,
           priceUpdate: mockPriceUpdatePda,
@@ -859,7 +1061,13 @@ function AdminPage() {
     try {
       const configPda = getConfigPda(program.programId);
       const emergencyPda = getEmergencyPausePda(program.programId);
-      const method = pause ? program.methods.emergencyPause() : program.methods.emergencyUnpause([]);
+      // Unpause requires verified guardian signers passed as remaining
+      // accounts. The connected admin wallet is the (only) guardian today.
+      const method = pause
+        ? program.methods.emergencyPause()
+        : program.methods.emergencyUnpause().remainingAccounts([
+            { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
+          ]);
       const builder = method.accounts(txAccounts({
         admin: wallet.publicKey,
         config: configPda,
@@ -1731,7 +1939,7 @@ function AdminPage() {
 
         {/* PROPOSALS TAB */}
         {activeAdminSection === "proposals" && (
-          <ProposalsSection />
+          <ProposalsSection onApprove={handleApproveProposal} onReject={handleRejectProposal} />
         )}
 
         {/* USERS TAB */}

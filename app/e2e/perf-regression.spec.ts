@@ -1,5 +1,6 @@
 import { test, expect, Page } from "@playwright/test";
 import { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { ed25519 } from "@noble/curves/ed25519";
 
 /**
  * PERFORMANCE REGRESSION GUARD.
@@ -46,7 +47,15 @@ test.describe("Performance regression budgets", () => {
   }
 
   test("home page renders hero within budget", async ({ page }) => {
-    await warmRoute(page, "/", "Conviction,");
+    // The hero text ("Conviction,") streams with the static shell BEFORE the
+    // server's getMarketList/getPlatformStats DB queries resolve, so waiting
+    // on it would let the warm visit return early — leaving the Neon cold
+    // start for the measured navigation. Wait on a DB-driven market question
+    // ("Manchester") instead: it only appears once the DB query completes, so
+    // the warm visit absorbs the cold start. Warm TWICE so a second cold start
+    // (at most one per idle period) can't land on the measured visit either.
+    await warmRoute(page, "/", "Manchester");
+    await warmRoute(page, "/", "Manchester");
     const t0 = Date.now();
     await page.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await expect(page.getByText("Conviction,").first()).toBeVisible({ timeout: HOME_BUDGET });
@@ -55,11 +64,21 @@ test.describe("Performance regression budgets", () => {
   });
 
   test("markets directory renders within budget", async ({ page }) => {
-    await warmRoute(page, "/markets", "Directory");
+    // Warm on a DB-driven market row (not the static "Directory" heading, which
+    // is SSR'd before the Neon cold-start query returns). Waiting on a real
+    // market row means the warm visit pays the first-DB-query cost, so the
+    // measured navigation below reflects render time only.
+    //
+    // Warm TWICE: the Neon serverless DB cold-starts (~14s) at most once per
+    // idle period, so the second warm is guaranteed fast and leaves the DB warm
+    // for the measured visit. This keeps the measured navigation free of
+    // infra cold-start noise.
+    await warmRoute(page, "/markets", "Manchester United");
+    await warmRoute(page, "/markets", "Manchester United");
     const t0 = Date.now();
     await page.goto(BASE + "/markets", { waitUntil: "domcontentloaded", timeout: 30_000 });
-    // The directory lists market rows; wait for the heading.
-    await expect(page.getByText("Directory").first()).toBeVisible({ timeout: MARKETS_BUDGET });
+    // The directory lists market rows; wait for a DB-backed row.
+    await expect(page.getByText(/Manchester United/i).first()).toBeVisible({ timeout: MARKETS_BUDGET });
     console.log(`PERF markets dir visible: ${Date.now() - t0}ms (budget ${MARKETS_BUDGET}ms)`);
     expect(Date.now() - t0).toBeLessThan(MARKETS_BUDGET);
   });
@@ -113,6 +132,11 @@ async function marketDeployed(): Promise<boolean> {
 
 /** Install a mock Phantom injected-wallet before the app bundle runs. */
 async function installMockWallet(page: Page, kp: Keypair) {
+  // Chromium's WebCrypto does not support Ed25519, so sign messages in Node
+  // (@noble/curves) and hand the signature to the page via an exposed binding.
+  await page.exposeFunction("__edSign", (msg: number[]) =>
+    Array.from(ed25519.sign(Uint8Array.from(msg), kp.secretKey.slice(0, 32)))
+  );
   await page.addInitScript(
     ({ pubB58, pub32, secret64, seed32 }) => {
       const PUB_B58 = pubB58 as string;
@@ -166,8 +190,7 @@ async function installMockWallet(page: Page, kp: Keypair) {
           return txs;
         },
         async signMessage(message: Uint8Array) {
-          const key = await crypto.subtle.importKey("raw", SEED as BufferSource, { name: "Ed25519" }, false, ["sign"]);
-          const signature = await crypto.subtle.sign({ name: "Ed25519" }, key, message as BufferSource);
+          const signature = await (window as any).__edSign(Array.from(message));
           return { signature: new Uint8Array(signature) };
         },
       };

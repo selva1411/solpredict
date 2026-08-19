@@ -4,15 +4,21 @@ import { NextRequest } from "next/server";
 import { assertDb } from "@/lib/db/client";
 import { marketsCache, treasuryLedger } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { ok, badRequest, notFound, serverError } from "@/lib/api-response";
+import { ok, badRequest, notFound } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { verifyRentReclaimSignature } from "@/lib/indexer/onchain";
 
 const RECLAIM_COOLDOWN_MS = 7 * 24 * 3600 * 1000;
 
 /**
  * POST /api/markets/[id]/reclaim
  *
- * Reclaims rent deposit for a settled/cancelled market after the 7-day cooldown.
+ * Records a rent-deposit reclaim for a settled/cancelled market after the
+ * 7-day cooldown. The reclaim is ONLY recorded after the market account has
+ * actually been closed on-chain (balance 0) — the transaction that closed it
+ * must be submitted as `signature` and is verified via RPC. The ledger entry
+ * is written only after that verification succeeds; the endpoint never claims
+ * a reclaim that did not happen.
  */
 export const POST = apiHandler(async (req: NextRequest, context: { params?: Promise<Record<string, string>> } = {}) => {
   const params = await context.params;
@@ -22,6 +28,14 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
   const creator = req.headers.get("x-wallet");
   if (!creator || creator.length < 32) {
     return badRequest("x-wallet header required");
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const signature = typeof body?.signature === "string" ? body.signature.trim() : "";
+  if (!signature) {
+    return badRequest(
+      "signature (the confirmed transaction that closed the market account) is required to record a reclaim",
+    );
   }
 
   try {
@@ -47,9 +61,12 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
       return badRequest("7-day cooldown period has not elapsed yet");
     }
 
-    const rentLamports = market.rentDepositLamports ?? 24_000_000;
+    // The market account must be verifiably closed on-chain before the DB and
+    // ledger reflect the reclaim.
+    const verified = await verifyRentReclaimSignature(signature, marketPubkey);
 
-    // Update market record
+    const rentLamports = market.rentDepositLamports ?? 0;
+
     await db
       .update(marketsCache)
       .set({
@@ -58,14 +75,14 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
       })
       .where(eq(marketsCache.marketPubkey, marketPubkey));
 
-    // Audit in treasury ledger
     await db.insert(treasuryLedger).values({
+      signature: verified.signature,
       direction: "out",
       kind: "rent",
       amount: rentLamports,
       marketPubkey,
       actor: creator,
-      note: `Rent deposit reclaimed by creator ${creator}`,
+      note: `Rent deposit reclaimed by creator ${creator} (market account closed on-chain)`,
     });
 
     return ok({
@@ -73,9 +90,11 @@ export const POST = apiHandler(async (req: NextRequest, context: { params?: Prom
       rentLamports,
       rentSol: rentLamports / 1e9,
       marketPubkey,
-      message: "Rent deposit reclaimed successfully",
+      verified: true,
+      message: "Rent deposit reclaimed successfully (market account closed on-chain)",
     });
   } catch (err) {
-    return serverError(err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return ok({ ok: false, error: msg }, { status: 400 } as ResponseInit);
   }
 });

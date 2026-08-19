@@ -24,6 +24,12 @@ export const ERROR_MAP: Record<string, string> = {
   "NotPaused": "Emergency pause is not active",
   "EmergencyPaused": "Trading is halted — the market is under an emergency pause",
   "MultisigRequired": "Admin operation requires multisig approval",
+  "InvalidGuardian": "Guardian pubkey is invalid (cannot be the zero address)",
+  "GuardianAlreadyExists": "Guardian is already registered",
+  "MaxGuardiansReached": "Maximum number of guardians reached (3)",
+  "GuardianNotFound": "Guardian not found in the set",
+  "InvalidThreshold": "Threshold must be between 1 and the number of registered guardians",
+  "ThresholdExceedsGuardians": "Cannot remove guardian: required confirmations exceed remaining guardians",
 };
 
 export function getFriendlyErrorMessage(err: unknown): string {

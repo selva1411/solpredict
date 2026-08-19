@@ -21,7 +21,7 @@ interface UserRow {
   totalWon: number;
   marketsTraded: number;
   winRate: number;
-  pasScore: number;
+  pasScore: number | null;
   lastActive: string | null;
   createdAt: string | null;
 }
@@ -134,7 +134,7 @@ export function UsersSection() {
                       {u.totalProfit >= 0 ? "+" : ""}{u.totalProfit.toFixed(2)} SOL
                     </td>
                     <td className="py-3 px-4 text-right text-ivory">{u.winRate.toFixed(1)}%</td>
-                    <td className="py-3 px-4 text-right text-ivory">{u.pasScore}</td>
+                    <td className="py-3 px-4 text-right text-ivory">{u.pasScore != null ? u.pasScore : "—"}</td>
                     <td className="py-3 px-4 text-right text-ivory">{u.marketsTraded}</td>
                     <td className="py-3 px-4 text-right text-ash text-[10px] hidden sm:table-cell">
                       {u.lastActive ? new Date(u.lastActive).toLocaleDateString() : "—"}

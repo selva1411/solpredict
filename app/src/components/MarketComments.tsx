@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useProgram } from "@/hooks/useProgram";
 import { MessageSquare, Send, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
+import { signUserProof, userFetch } from "@/lib/user-client";
 
 interface Comment {
   id?: number;
@@ -57,9 +58,16 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
 
     try {
       setSubmitting(true);
-      const res = await fetch(`/api/markets/${marketPubkey}/comments`, {
+      const auth = await signUserProof(wallet, wallet.signMessage);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (auth) {
+        headers["x-wallet"] = auth.wallet;
+        headers["x-message"] = auth.message;
+        headers["x-signature"] = auth.signature;
+      }
+      const res = await userFetch(`/api/markets/${marketPubkey}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           authorWallet: wallet.publicKey.toBase58(),
           authorUsername: `${wallet.publicKey.toBase58().slice(0, 4)}...${wallet.publicKey.toBase58().slice(-4)}`,
@@ -103,7 +111,14 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
       prevComments.map(c => c.id === comment.id ? { ...c, upvotes: prev + 1 } : c)
     );
     try {
-      const res = await fetch(`/api/markets/${marketPubkey}/comments/${comment.id}/upvote`, { method: "POST" });
+      const auth = await signUserProof(wallet, wallet.signMessage);
+      const headers: Record<string, string> = {};
+      if (auth) {
+        headers["x-wallet"] = auth.wallet;
+        headers["x-message"] = auth.message;
+        headers["x-signature"] = auth.signature;
+      }
+      const res = await userFetch(`/api/markets/${marketPubkey}/comments/${comment.id}/upvote`, { method: "POST", headers });
       const data = await res.json().catch(() => null);
       if (!data?.ok) {
         setComments(prevComments =>

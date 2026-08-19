@@ -26,24 +26,49 @@ export function bpsToPct(bps: number | null | undefined): number | null {
 /** Convert BN / bigint lamports → human SOL string. e.g. 1000000000n → "1.000" */
 export function formatSol(lamports: BN | bigint | number | null | undefined, decimals = 3): string {
   if (lamports == null) return "0.000";
-  let n: number;
-  if (typeof lamports === "bigint") {
-    n = Number(lamports);
-  } else if (lamports instanceof BN) {
-    n = lamports.toNumber();
-  } else {
-    n = lamports;
+  let n: bigint;
+  try {
+    n = toBigIntLamports(lamports);
+  } catch {
+    return "0.000";
   }
-  if (isNaN(n)) return "0.000";
-  return (n / 1_000_000_000).toFixed(decimals);
+  if (n < 0n) return "0.000";
+
+  // Integer arithmetic only — converting a u64/bigint lamport value to a JS
+  // number would silently lose precision above 2^53 (9e15 lamports ≈ 9M SOL).
+  // Round half away from zero to match toFixed()'s rounding at the decimals.
+  // NOTE: scale is built by repeated multiplication, NOT the `**` operator —
+  // the root ts-mocha suite compiles with target es6, which transpiles `**`
+  // into Math.pow() and crashes on bigint operands.
+  const SOL = 1_000_000_000n;
+  const d = Math.max(0, Math.min(Math.trunc(decimals) || 0, 18));
+  let scale = 1n;
+  for (let i = 0; i < d; i++) scale *= 10n;
+  const scaled = (n * scale + SOL / 2n) / SOL;
+  const intPart = scaled / scale;
+  if (d === 0) return intPart.toString();
+  const fracPart = scaled % scale;
+  return `${intPart.toString()}.${fracPart.toString().padStart(d, "0")}`;
 }
 
 /** Convert lamports → number (SOL). Safe for math. */
 export function lamportsToSol(lamports: BN | bigint | number | null | undefined): number {
   if (lamports == null) return 0;
+  // Below 2^53 a plain division is exact; above it, converting to number is
+  // lossy by nature — callers needing exactness must use BigInt throughout.
   if (typeof lamports === "bigint") return Number(lamports) / 1_000_000_000;
-  if (lamports instanceof BN) return lamports.toNumber() / 1_000_000_000;
+  if (lamports instanceof BN) return Number(lamports.toString()) / 1_000_000_000;
   return Number(lamports) / 1_000_000_000;
+}
+
+/** Normalize any accepted lamport input to a bigint (throws on NaN/negative). */
+function toBigIntLamports(lamports: BN | bigint | number): bigint {
+  if (typeof lamports === "bigint") return lamports;
+  if (BN.isBN(lamports)) return BigInt(lamports.toString());
+  if (typeof lamports === "number" && Number.isFinite(lamports)) {
+    return BigInt(Math.trunc(lamports));
+  }
+  throw new Error("Invalid lamports value");
 }
 
 export function bnToSol(lamports: BN | number | null | undefined): number {

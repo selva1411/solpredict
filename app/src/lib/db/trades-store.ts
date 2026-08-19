@@ -17,7 +17,18 @@ export async function recordTradeInDb(data: {
   if (!db) return null;
 
   try {
-    const price = data.pricePerToken ? data.pricePerToken.toString() : '0.50';
+    // Never fabricate a price: derive it from the real cost/shares, and reject
+    // the write when it cannot be derived (a 0.50 placeholder would corrupt
+    // avgPriceBps / PnL everywhere it is consumed).
+    const price = data.pricePerToken !== undefined && data.pricePerToken > 0
+      ? data.pricePerToken.toString()
+      : data.lamportsIn !== 0 && data.tokensOut !== 0
+        ? (Math.abs(data.lamportsIn) / 1e9 / Math.abs(data.tokensOut)).toString()
+        : null;
+    if (price === null) {
+      logger.warn("recordTradeInDb: cannot derive a real price; refusing to write a fabricated trade", data);
+      return null;
+    }
     const [result] = await db.insert(trades).values({
       signature: data.signature,
       marketPubkey: data.marketPubkey,

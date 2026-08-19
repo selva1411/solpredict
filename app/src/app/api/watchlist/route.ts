@@ -1,12 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
-import { db } from "@/lib/db/client";
-import { watchlist } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { badRequest, ok } from "@/lib/api-response";
+import { getWatchlistKeys, toggleWatch, removeWatch } from "@/lib/data/watchlist";
+import { badRequest, ok, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
-import { toError } from "@/lib/errors";
 import { watchlistGetSchema, watchlistPostSchema } from "@/lib/schemas";
+import { requireUser } from "@/lib/user-guard";
 
 export const GET = apiHandler(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
@@ -16,18 +14,15 @@ export const GET = apiHandler(async (req: NextRequest) => {
   const parsed = watchlistGetSchema.safeParse({ wallet });
   if (!parsed.success) return badRequest("Invalid wallet format");
 
+  const auth = await requireUser(req, parsed.data.wallet);
+  if (!auth.ok) return auth.response;
+
   try {
-    if (db) {
-      const items = await db
-        .select({ marketPubkey: watchlist.marketPubkey })
-        .from(watchlist)
-        .where(eq(watchlist.wallet, wallet));
-      return ok({ ok: true, keys: items.map(i => i.marketPubkey) });
-    }
-  } catch (e) {
-    console.warn("Watchlist GET error:", e);
+    const keys = await getWatchlistKeys(auth.identity.wallet);
+    return ok({ ok: true, keys });
+  } catch (err) {
+    return serverError(err);
   }
-  return ok({ ok: true, keys: [] });
 });
 
 export const POST = apiHandler(async (req: NextRequest) => {
@@ -37,29 +32,16 @@ export const POST = apiHandler(async (req: NextRequest) => {
   const parsed = watchlistPostSchema.safeParse(body);
   if (!parsed.success) return badRequest("Invalid request data");
 
-  const { wallet, marketPubkey } = parsed.data;
+  const auth = await requireUser(req, parsed.data.wallet);
+  if (!auth.ok) return auth.response;
 
   try {
-    if (db) {
-      const existing = await db
-        .select()
-        .from(watchlist)
-        .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-
-      if (existing.length > 0) {
-        await db
-          .delete(watchlist)
-          .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-        return ok({ ok: true, action: "removed", isWatched: false });
-      }
-
-      await db.insert(watchlist).values({ wallet, marketPubkey, createdAt: new Date() });
-      return ok({ ok: true, action: "added", isWatched: true });
-    }
-  } catch (e) {
-    console.warn("Watchlist POST error:", e);
+    const { marketPubkey } = parsed.data;
+    const isWatched = await toggleWatch(auth.identity.wallet, marketPubkey);
+    return ok({ ok: true, action: isWatched ? "added" : "removed", isWatched });
+  } catch (err) {
+    return serverError(err);
   }
-  return ok({ ok: true, action: "error", isWatched: false, error: "Database unavailable" });
 });
 
 // DELETE removes a specific watchlist entry unconditionally (used by the
@@ -72,17 +54,14 @@ export const DELETE = apiHandler(async (req: NextRequest) => {
   const parsed = watchlistPostSchema.safeParse(body);
   if (!parsed.success) return badRequest("Invalid request data");
 
-  const { wallet, marketPubkey } = parsed.data;
+  const auth = await requireUser(req, parsed.data.wallet);
+  if (!auth.ok) return auth.response;
 
   try {
-    if (db) {
-      await db
-        .delete(watchlist)
-        .where(and(eq(watchlist.wallet, wallet), eq(watchlist.marketPubkey, marketPubkey)));
-      return ok({ ok: true, action: "removed", isWatched: false });
-    }
-  } catch (e) {
-    console.warn("Watchlist DELETE error:", e);
+    const { marketPubkey } = parsed.data;
+    await removeWatch(auth.identity.wallet, marketPubkey);
+    return ok({ ok: true, action: "removed", isWatched: false });
+  } catch (err) {
+    return serverError(err);
   }
-  return ok({ ok: true, action: "error", isWatched: false, error: "Database unavailable" });
 });

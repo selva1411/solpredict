@@ -39,7 +39,7 @@ import { getWatchlist, pruneWatchlist, toggleWatchlist, fetchWatchlistFromDb } f
 import { useQueryClient } from "@tanstack/react-query";
 import { keys } from "@/lib/api/keys";
 import { getMarketStatusString } from "@/lib/events";
-import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda, getEmergencyPausePda } from "@/lib/pda";
+import { getConfigPda, getMarketPda, getYesMintPda, getNoMintPda, getTreasuryPda, getUserPositionPda, getEmergencyPausePda, getOrderEscrowPda } from "@/lib/pda";
 import { txAccounts, buildSignSendConfirm } from "@/lib/anchor-utils";
 import { FlipCountdown } from "@/components/FlipCountdown";
 import { feedIdBytesToHex, isOracleCategory } from "@/lib/pyth-feeds";
@@ -50,6 +50,9 @@ import { LoadingState, EmptyState, ErrorState, LiveIndicator } from "@/component
 import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
+import { TradingPanel } from "@/components/market/TradingPanel";
+import { ActivityFeedSection } from "@/components/market/ActivityFeedSection";
+import { TrustSignalsSection } from "@/components/market/TrustSignalsSection";
 
 const CATEGORIES = ["Crypto", "Sports", "Politics", "Tech", "Other"];
 
@@ -340,6 +343,19 @@ export default function MarketDetailPage({
   const [limitPriceSol, setLimitPriceSol] = useState<number>(0.5);
   const [isLimitOrder, setIsLimitOrder] = useState<boolean>(false);
   const [userOrders, setUserOrders] = useState<any[]>([]);
+  // DB-backed LP data for THIS market (the same liquidity_positions /
+  // lp_pool_stats rows the portfolio page reads), so the LP tab reflects
+  // what's actually recorded — not just a deposit form.
+  const [userLp, setUserLp] = useState<{
+    lpShares: number;
+    deposited: string | number;
+    feesEarned: string | number;
+  } | null>(null);
+  const [marketLpStats, setMarketLpStats] = useState<{
+    totalLiquiditySol: string | number | null;
+    totalLpTokens: number | null;
+    feeEarnedSol: string | number | null;
+  } | null>(null);
 
   // Sparkline history — stores probability snapshots. When the server
   // prefetched the DB price history, seed it (no /api/markets/[id] fetch).
@@ -434,6 +450,22 @@ export default function MarketDetailPage({
     }
     throw new Error("unreachable");
   };
+
+  // Fetch this market's LP pool stats + the connected wallet's LP position
+  // in this market from the DB (same source as the portfolio page).
+  const fetchLpInfo = useCallback(async () => {
+    const walletStr = wallet?.publicKey?.toBase58();
+    const q = walletStr ? `?wallet=${walletStr}` : "";
+    try {
+      const res = await fetch(`/api/markets/${marketPda.toBase58()}/liquidity${q}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.ok) {
+        setMarketLpStats(data.lpPoolStats ?? null);
+        setUserLp(data.userLp ?? null);
+      }
+    } catch { /* non-critical — LP tab degrades to the deposit form */ }
+  }, [marketPda, wallet?.publicKey]);
 
   const fetchUserBalances = async () => {
     if (!wallet?.publicKey) return;
@@ -550,6 +582,20 @@ export default function MarketDetailPage({
       queryClient.invalidateQueries({ queryKey: keys.markets.list() });
     } catch {
       /* ignore */
+    }
+    // Push a WS refresh so EVERY connected client (other tabs/sessions, the
+    // leaderboard, activity feed, markets list) re-reads fresh DB data
+    // immediately — genuine push instead of waiting for a poll.
+    try {
+      await fetch("/api/realtime/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wallet: wallet?.publicKey?.toBase58(),
+        }),
+      });
+    } catch {
+      /* ws server down; pages fall back to polling */
     }
   };
 
@@ -718,7 +764,10 @@ export default function MarketDetailPage({
         // longer exists, so keeping it would let users click into a dead board).
         const staleKey = marketPda.toBase58();
         if (getWatchlist().includes(staleKey)) {
-          toggleWatchlist(staleKey, wallet?.publicKey?.toBase58());
+          toggleWatchlist(staleKey, wallet?.publicKey?.toBase58(), {
+            publicKey: wallet?.publicKey ?? null,
+            signMessage: wallet?.signMessage,
+          });
         }
         return;
       }
@@ -799,7 +848,16 @@ export default function MarketDetailPage({
     try {
       setSubmitting(true);
       setTxState("signing");
-      const orderId = new anchor.BN(Date.now() % 1_000_000_000 + Math.floor(Math.random() * 1000));
+      // Cryptographically random u64 order id (never Math.random) — the order
+      // id is a PDA seed and must be unguessable/collision-free per wallet.
+      // NOTE: keep the value within u64 (8 bytes): the raw Date.now() << 32 is
+      // 73 bits and toArrayLike(..., "le", 8) throws, failing every limit
+      // order before the tx is built. Mask the timestamp to 32 bits and OR in
+      // 32 random bits — 64 bits total, collision odds negligible.
+      const orderId = new anchor.BN(
+        (((BigInt(Date.now()) & 0xffffffffn) << 32n) | BigInt(crypto.getRandomValues(new Uint32Array(1))[0]))
+          .toString(10)
+      );
       const priceBps = new anchor.BN(Math.round(limitPriceSol * 10000));
       const qtyBN = new anchor.BN(targetQty);
 
@@ -846,6 +904,7 @@ export default function MarketDetailPage({
             order: orderPda,
             makerTokenAta,
             orderTokenEscrow,
+            orderEscrow: getOrderEscrowPda(marketPda, wallet.publicKey, orderId, program.programId),
             emergencyPause: getEmergencyPausePda(program.programId),
           }))
       );
@@ -890,6 +949,7 @@ export default function MarketDetailPage({
             takerTokenAta,
             makerTokenAta,
             orderTokenEscrow,
+            orderEscrow: getOrderEscrowPda(marketPda, ord.maker, new anchor.BN(ord.orderId), program.programId),
             emergencyPause: getEmergencyPausePda(program.programId),
           }))
       );
@@ -923,6 +983,7 @@ export default function MarketDetailPage({
             order: orderAccount.publicKey,
             makerTokenAta,
             orderTokenEscrow,
+            orderEscrow: getOrderEscrowPda(marketPda, wallet.publicKey, new anchor.BN(orderAccount.account.orderId), program.programId),
             emergencyPause: getEmergencyPausePda(program.programId),
           }))
       );
@@ -964,7 +1025,7 @@ export default function MarketDetailPage({
 
   const fetchActivity = async () => {
     try {
-      const sigs = await connection.getSignaturesForAddress(marketPda, { limit: 15 });
+      const sigs = await connection.getSignaturesForAddress(marketPda, { limit: 15 }, "confirmed");
       const items: ActivityItem[] = [];
       const tempHistory: number[] = [];
 
@@ -1099,6 +1160,7 @@ export default function MarketDetailPage({
 
     fetchMarket();
     fetchActivity();
+    fetchLpInfo();
 
     // Throttled real-time market data stream
     const accountSub = connection.onAccountChange(
@@ -1142,7 +1204,7 @@ export default function MarketDetailPage({
       connection.removeAccountChangeListener(accountSub);
       connection.removeOnLogsListener(logSub);
     };
-  }, [id, program, connection, recordProbabilitySnapshot, syncMarketToDb, initialMarket, initialHistory]);
+  }, [id, program, connection, recordProbabilitySnapshot, syncMarketToDb, initialMarket, initialHistory, fetchLpInfo]);
 
   // Keep the watchlist star in sync with the wallet's DB watchlist. AppContext
   // loads the DB keys asynchronously after connect, so the initial read inside
@@ -1150,7 +1212,7 @@ export default function MarketDetailPage({
   useEffect(() => {
     if (!wallet?.publicKey) return;
     let cancelled = false;
-    fetchWatchlistFromDb(wallet.publicKey.toBase58())
+    fetchWatchlistFromDb(wallet.publicKey.toBase58(), { publicKey: wallet.publicKey, signMessage: wallet.signMessage })
       .then((keys) => {
         if (!cancelled) setIsWatched(keys.includes(marketPda.toBase58()));
       })
@@ -1158,7 +1220,7 @@ export default function MarketDetailPage({
         if (!cancelled) setIsWatched(getWatchlist().includes(marketPda.toBase58()));
       });
     return () => { cancelled = true; };
-  }, [wallet?.publicKey, marketPda]);
+  }, [wallet?.publicKey, wallet?.signMessage, marketPda]);
 
   // (Live SOL price chart state is managed inside LivePriceChartPanel component)
 
@@ -1191,7 +1253,10 @@ export default function MarketDetailPage({
   }
 
   const handleWatchlistToggle = () => {
-    const next = toggleWatchlist(marketPda.toBase58(), wallet?.publicKey?.toBase58());
+    const next = toggleWatchlist(marketPda.toBase58(), wallet?.publicKey?.toBase58(), {
+      publicKey: wallet?.publicKey ?? null,
+      signMessage: wallet?.signMessage,
+    });
     setIsWatched(next.includes(marketPda.toBase58()));
     toast.success(
       next.includes(marketPda.toBase58())
@@ -1383,9 +1448,13 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
       setTxState("confirming");
       const emergencyPause = getEmergencyPausePda(program.programId);
       const tSend = performance.now();
+      // Slippage guard: quoteValueBI is the exact expected cost for this
+      // quantity; allow 5% headroom so a small adverse price move fails the
+      // tx instead of silently overcharging, while normal execution passes.
+      const maxCostLamports = new anchor.BN((quoteValueBI * 105n) / 100n);
       const sig = await sendTxWithBlockhashRetry(
         program.methods
-          .buyShares(sideParam, new anchor.BN(quantity))
+          .buyShares(sideParam, new anchor.BN(quantity), maxCostLamports)
           .accounts(txAccounts({
             buyer: wallet.publicKey,
             market: marketPda,
@@ -1478,9 +1547,13 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
       const userPositionPda = getUserPositionPda(marketPda, wallet.publicKey, program.programId);
 
       const emergencyPause = getEmergencyPausePda(program.programId);
+      // Slippage guard: sellRefundTreasuryCapBI is the exact expected refund
+      // (already treasury-capped); require at least 95% of it so a small
+      // adverse price move fails the tx instead of silently underpaying.
+      const minProceedsLamports = new anchor.BN((sellRefundTreasuryCapBI * 95n) / 100n);
       const sig = await sendTxWithBlockhashRetry(
         program.methods
-          .sellShares(sideParam, new anchor.BN(sellQuantity))
+          .sellShares(sideParam, new anchor.BN(sellQuantity), minProceedsLamports)
           .accounts(txAccounts({
             seller: wallet.publicKey,
             market: marketPda,
@@ -1614,11 +1687,19 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
         async () => {
           // Record the LP position (liquidityPositions + lpPoolStats). This is
           // the ONLY DB write for LP — no fake trade row, no volume inflation.
+          // The server verifies the add_liquidity tx on-chain before recording
+          // (never trusts the body) — so WAIT for confirmation first. Without
+          // this, the POST races the block and the server's getParsedTransaction
+          // returns null → 400, silently dropping the LP record.
+          await connection.confirmTransaction(sig, "confirmed");
           await fetch(`/api/markets/${marketPda.toBase58()}/liquidity`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               walletAddress,
+              // Confirmed add_liquidity tx — the server verifies it on-chain
+              // before recording the LP position (never trusts the body).
+              signature: sig,
               amountSol: lpDepositAmount,
               action: "add",
               option: lpOption,
@@ -1632,6 +1713,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
         () => {
           fetchMarket();
           fetchActivity();
+          fetchLpInfo();
         }
       );
     } catch (err: unknown) {
@@ -1647,525 +1729,6 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
     const divider = Math.pow(10, Math.abs(expo));
     const normalized = raw / divider;
     return `$${normalized.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-  };
-
-  const renderTradingDashboard = () => {
-    // Probability prices as cents (0-100)
-    const yesPrice = yesProb; // e.g. 67¢
-    const noPrice = noProb;   // e.g. 33¢
-
-    // Dynamic cost with current price
-    const effectivePrice = isLimitOrder ? limitPriceSol : sharePriceSol;
-    const totalCost = quantity * effectivePrice;
-    const avgPricePct = tradeSide === "YES" ? yesPrice : noPrice;
-    const potReturn = totalCost > 0 ? (quantity / (totalCost / 1)) : 0;
-
-    return (
-    <div className="space-y-0">
-      {status !== "Open" ? (
-        <div className="py-8 text-center space-y-4">
-          <div className="mx-auto w-12 h-12 bg-gold/10 text-gold rounded flex items-center justify-center border border-gold/25">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-[13px] font-bold text-ivory uppercase">
-              {status === "Cancelled" ? "BOARD CANCELLED" : status === "Ended" ? "TRADING ENDED" : "TRADING TERMINATED"}
-            </h4>
-            <p className="text-xs text-ash">
-              {status === "Cancelled" ? (
-                "This board was cancelled. Deposited funds are being returned to traders — no action needed."
-              ) : status === "Ended" ? (
-                "Trading for this board has ended. It will be resolved by the oracle shortly — check back for settlement."
-              ) : (
-                <>This board has settled. Go to your <Link href="/dashboard" className="text-gold hover:underline font-bold">Dashboard</Link> to withdraw payout.</>
-              )}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-0">
-
-          {/* ── Buy / Sell / Liquidity Tabs — mono uppercase, underline active only ── */}
-          <div className="flex border-b border-hairline">
-            {(["buy", "sell", "liquidity"] as const).map((tab) => (
-              <button
-                key={tab}
-                data-testid={`tab-${tab}`}
-                onClick={() => setTradeTab(tab)}
-                className={`flex-1 py-3 font-mono text-[11px] uppercase tracking-[.16em] transition-colors cursor-pointer ${
-                  tradeTab === tab
-                    ? "text-gold-lite border-b border-gold -mb-px"
-                    : "text-ash-dim hover:text-ivory"
-                }`}
-              >
-                {tab === "liquidity" ? "LP Pool" : tab}
-              </button>
-            ))}
-          </div>
-
-          {tradeTab === "buy" ? (
-            <div className="space-y-4 pt-4">
-
-              {/* Position selector — Outcome-style YES/NO, 2px surfaces */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setTradeSide("YES")}
-                  className={`sheen group flex flex-col items-start justify-between p-4 rounded-[2px] border transition-colors cursor-pointer ${
-                    tradeSide === "YES"
-                      ? "border-gold bg-panel-2"
-                      : "border-hairline bg-panel hover:border-ash-dim"
-                  }`}
-                >
-                  <span className={`label-lux ${tradeSide === "YES" ? "!text-verdigris" : ""}`}>Yes</span>
-                  <span className={`mt-2 font-mono tnum text-[28px] ${
-                    tradeSide === "YES" ? "text-verdigris" : "text-ivory"
-                  }`}>{yesProb}¢</span>
-                  <span className="mt-1 font-mono text-[10px] text-ash-dim">{yesSharePriceSol.toFixed(4)} SOL · {yesPool.toFixed(2)} SOL</span>
-                </button>
-                <button
-                  onClick={() => setTradeSide("NO")}
-                  className={`sheen group flex flex-col items-start justify-between p-4 rounded-[2px] border transition-colors cursor-pointer ${
-                    tradeSide === "NO"
-                      ? "border-gold bg-panel-2"
-                      : "border-hairline bg-panel hover:border-ash-dim"
-                  }`}
-                >
-                  <span className={`label-lux ${tradeSide === "NO" ? "!text-bordeaux" : ""}`}>No</span>
-                  <span className={`mt-2 font-mono tnum text-[28px] ${
-                    tradeSide === "NO" ? "text-bordeaux" : "text-ivory"
-                  }`}>{noProb}¢</span>
-                  <span className="mt-1 font-mono text-[10px] text-ash-dim">{noSharePriceSol.toFixed(4)} SOL · {noPool.toFixed(2)} SOL</span>
-                </button>
-              </div>
-
-              {/* Amount input */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-ash uppercase tracking-wider">Amount (Shares)</label>
-                  {wallet?.publicKey && (
-                    <span className="text-[10px] font-mono text-ash">
-                      {tradeSide === "YES" ? `${userYesBalance.toFixed(1)} YES` : `${userNoBalance.toFixed(1)} NO`} held
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 10))}
-                    className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 hover:border-hairline/60 text-ivory font-mono font-bold text-[15px] cursor-pointer transition-all"
-                  >−</button>
-                  <input
-                    type="number"
-                    data-testid="buy-quantity"
-                    value={quantity}
-                    min={1}
-                    onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 bg-panel border border-hairline/40 rounded-[2px] px-3 py-2 text-center text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60"
-                  />
-                  <button
-                    onClick={() => setQuantity(quantity + 10)}
-                    className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 hover:border-hairline/60 text-ivory font-mono font-bold text-[15px] cursor-pointer transition-all"
-                  >+</button>
-                </div>
-                <div className="grid grid-cols-5 gap-1">
-                  {[10, 25, 50, 100, 250].map((v) => (
-                    <button key={v} onClick={() => setQuantity(v)}
-                      className={`py-1 rounded text-[10px] font-mono cursor-pointer transition-all border ${
-                        quantity === v
-                          ? "border-gold/60 bg-gold/10 text-gold"
-                          : "border-hairline/20 bg-panel text-ash hover:text-ivory hover:border-hairline/40"
-                      }`}>{v}</button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1">
-                  {[0.1, 0.5, 1, 5].map((sol) => {
-                    const shares = Math.max(1, Math.floor(sol / Math.max(0.0005, activeSharePriceSol)));
-                    return (
-                      <button
-                        key={sol}
-                        onClick={() => setQuantity(shares)}
-                        className="flex-1 py-1 rounded text-[9px] font-mono cursor-pointer transition-all border border-hairline/20 bg-panel text-gold/80 hover:text-gold hover:border-gold/40"
-                      >
-                        {sol} SOL
-                      </button>
-                    );
-                  })}
-                  <span className="flex-1 py-1 text-center text-[9px] text-ash/60 font-mono truncate">one-click</span>
-                </div>
-              </div>
-
-              {/* Advanced: Limit Order toggle */}
-              <div className="border border-hairline/20 rounded-[2px] overflow-hidden">
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-ash hover:text-ash cursor-pointer transition-colors bg-panel"
-                >
-                  <span>Advanced: Limit Order</span>
-                  <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
-                </button>
-                {showAdvanced && (
-                  <div className="px-3 pb-3 pt-2 bg-panel space-y-3 border-t border-hairline/15">
-                    <div className="flex items-center gap-2">
-                      <button
-                        data-testid="limit-toggle"
-                        onClick={() => setIsLimitOrder(!isLimitOrder)}
-                        className={`relative w-8 h-4 rounded-[2px] transition-colors cursor-pointer ${
-                          isLimitOrder ? "bg-gold" : "bg-[#353534]"
-                        }`}
-                      >
-                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-[2px] transition-all ${
-                          isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
-                        }`} />
-                      </button>
-                      <span className="text-[11px] text-ash">Place as limit order</span>
-                    </div>
-                    {isLimitOrder && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-[10px] text-ash uppercase tracking-wider">
-                          <span>Limit Price (SOL/share)</span>
-                          <button
-                            type="button"
-                            onClick={() => setLimitPriceSol(Number(activeSharePriceSol.toFixed(4)))}
-                            className="text-gold hover:underline font-mono"
-                          >
-                            Use Current ({activeSharePriceSol.toFixed(4)})
-                          </button>
-                        </div>
-                        <input
-                          data-testid="limit-price"
-                          type="number" step="0.0001" min="0.0001" max="10"
-                          value={limitPriceSol}
-                          onChange={(e) => setLimitPriceSol(Math.max(0.0001, Math.min(10, Number(e.target.value))))}
-                          className="w-full bg-panel border border-hairline/40 rounded px-3 py-1.5 text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Order Summary */}
-              <div className="bg-panel rounded-[2px] border border-hairline/20 p-3 space-y-2 text-[11px] font-mono">
-                <div className="flex justify-between text-ash">
-                  <span>Price per share</span>
-                  <span className="text-ivory">{isLimitOrder ? `${limitPriceSol.toFixed(4)} SOL` : `${activeSharePriceSol.toFixed(4)} SOL`}</span>
-                </div>
-                <div className="flex justify-between text-ash">
-                  <span>Quantity</span>
-                  <span className="text-ivory">{quantity} shares</span>
-                </div>
-                <div className="flex justify-between text-ivory font-bold border-t border-hairline/15 pt-2">
-                  <span>Total Investment Amount</span>
-                  <span className="text-gold font-mono text-xs">{isLimitOrder ? (quantity * limitPriceSol).toFixed(4) : tradeCost.toFixed(4)} SOL</span>
-                </div>
-                <div className="flex justify-between border-t border-hairline/15 pt-2">
-                  <span className="text-ash">Est. Payout on Win</span>
-                  <span className={`font-bold ${
-                    tradeSide === "YES" ? "text-verdigris" : "text-bordeaux"
-                  }`}>{potentialPayout.toFixed(4)} SOL</span>
-                </div>
-                {potentialPayout > 0 && (
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-ash">Est. Net Profit</span>
-                    <span className="text-verdigris font-bold">
-                      +{(potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)).toFixed(4)} SOL
-                      {" "}(+{(((potentialPayout - (isLimitOrder ? quantity * limitPriceSol : tradeCost)) / Math.max(0.0001, (isLimitOrder ? quantity * limitPriceSol : tradeCost))) * 100).toFixed(0)}% return)
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-ash">Est. Price Impact</span>
-                  <span className={priceImpactPct >= 5 ? "text-bordeaux font-bold" : "text-ash"}>
-                    {priceImpactPct.toFixed(2)}%
-                  </span>
-                </div>
-                {slippageWarning && (
-                  <div className="flex items-start gap-1.5 p-2 rounded bg-bordeaux/10 border border-bordeaux/30 text-[10px] text-bordeaux">
-                    
-                    <span>
-                      High price impact (≥5%). This large order may move the market price significantly. Consider splitting it into smaller orders.
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* CTA Button — gold, square, mono */}
-              <button
-                data-testid="buy-submit"
-                disabled={submitting}
-                onClick={isLimitOrder ? () => handlePlaceLimitOrder(true) : handleBuy}
-                className={`sheen w-full h-11 rounded-[2px] bg-gold text-void font-mono text-[11px] uppercase tracking-[.16em] cursor-pointer transition-colors flex items-center justify-center gap-2 hover:bg-gold-lite disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-[2px] animate-spin" />}
-                {isLimitOrder
-                  ? `Place Limit ${tradeSide} Order`
-                  : `Buy ${tradeSide}`
-                }
-              </button>
-
-              {/* Tx status */}
-              {txState === "signing" && <p className="text-center text-xs font-mono text-gold-lite animate-pulse">Approve in wallet...</p>}
-              {txState === "confirming" && <p className="text-center text-xs font-mono text-gold animate-pulse">Confirming on-chain...</p>}
-              {txState === "success" && txSig && (
-                <p className="text-center text-xs font-mono text-verdigris">
-                  ✓ Done —{" "}
-                  <a href={`https://solscan.io/tx/${txSig}?cluster=localnet`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a>
-                </p>
-              )}
-              {txState === "error" && <p className="text-center text-xs font-mono text-bordeaux">Transaction failed</p>}
-
-              {/* Active limit orders */}
-              {userOrders.length > 0 && (
-                <div className="pt-2 border-t border-hairline/20 space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-ash">Your Open Orders</p>
-                  {userOrders.map((ordAcc, idx) => {
-                    const ord = ordAcc.account;
-                    const sideStr = "yes" in ord.side ? "YES" : "NO";
-                    const priceSol = (ord.priceBps.toNumber() / 10000).toFixed(2);
-                    const qty2 = ord.quantity.toNumber();
-                    const filled = ord.filledQuantity.toNumber();
-                    return (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-[2px] bg-panel border border-hairline/20 text-[10px] font-mono">
-                        <div>
-                          <span className={ord.isBuy ? "text-verdigris font-bold" : "text-bordeaux font-bold"}>
-                            {ord.isBuy ? "BUY" : "SELL"} {sideStr}
-                          </span>
-                          <span className="text-ash ml-2">@ {priceSol} SOL</span>
-                          <span className="text-ash ml-2">{filled}/{qty2} filled</span>
-                        </div>
-                        <button
-                          onClick={() => handleCancelOrder(ordAcc)}
-                          className="text-bordeaux hover:text-[#ff6b6b] cursor-pointer underline"
-                        >Cancel</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : tradeTab === "sell" ? (
-            /* ── Sell Tab ── */
-            <div className="space-y-4 pt-4">
-              {/* User balances */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-3 rounded-[2px] bg-panel border border-verdigris/20 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-ash font-bold">YES Shares</div>
-                  <div className="text-[21px] font-black font-mono text-verdigris mt-0.5">{userYesBalance.toFixed(1)}</div>
-                </div>
-                <div className="p-3 rounded-[2px] bg-panel border border-bordeaux/20 text-center">
-                  <div className="text-[9px] uppercase tracking-wider text-ash font-bold">NO Shares</div>
-                  <div className="text-[21px] font-black font-mono text-bordeaux mt-0.5">{userNoBalance.toFixed(1)}</div>
-                </div>
-              </div>
-
-              {/* Which side to sell */}
-              <div className="grid grid-cols-2 gap-2">
-                {(["YES", "NO"] as const).map((s) => (
-                  <button key={s} onClick={() => setSellSide(s)}
-                    className={`py-2.5 rounded-[2px] border-2 text-[13px] font-bold uppercase tracking-wide cursor-pointer transition-all ${
-                      sellSide === s
-                        ? s === "YES"
-                          ? "border-verdigris bg-verdigris/10 text-verdigris"
-                          : "border-bordeaux bg-bordeaux/10 text-bordeaux"
-                        : "border-hairline/25 bg-panel text-ash"
-                    }`}
-                  >{s}</button>
-                ))}
-              </div>
-
-              {/* Amount */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-ash uppercase tracking-wider">Sell Quantity</label>
-                  <button
-                    onClick={() => setSellQuantity(Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance))}
-                    className="text-[10px] text-gold hover:underline cursor-pointer font-mono font-bold"
-                  >
-                    MAX ({Math.floor(sellSide === "YES" ? userYesBalance : userNoBalance)})
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
-                    className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">−</button>
-                  <input type="number" data-testid="sell-quantity" value={sellQuantity} min={1}
-                    onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
-                    className="flex-1 bg-panel border border-hairline/40 rounded-[2px] px-3 py-2 text-center text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60" />
-                  <button onClick={() => setSellQuantity(sellQuantity + 5)}
-                    className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">+</button>
-                </div>
-              </div>
-
-              {/* Advanced: Limit Sell Ask toggle */}
-              <div className="border border-hairline/20 rounded-[2px] overflow-hidden">
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-mono text-ash hover:text-ash cursor-pointer transition-colors bg-panel"
-                >
-                  <span>Advanced: Limit Sell (Ask)</span>
-                  <span className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}>▾</span>
-                </button>
-                {showAdvanced && (
-                  <div className="px-3 pb-3 pt-2 bg-panel space-y-3 border-t border-hairline/15">
-                    <div className="flex items-center gap-2">
-                      <button
-                        data-testid="limit-toggle"
-                        onClick={() => setIsLimitOrder(!isLimitOrder)}
-                        className={`relative w-8 h-4 rounded-[2px] transition-colors cursor-pointer ${
-                          isLimitOrder ? "bg-gold" : "bg-[#353534]"
-                        }`}
-                      >
-                        <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-[2px] transition-all ${
-                          isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
-                        }`} />
-                      </button>
-                      <span className="text-[11px] text-ash">Place as limit sell (ask)</span>
-                    </div>
-                    {isLimitOrder && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-[10px] text-ash uppercase tracking-wider">
-                          <span>Min Sell Price (SOL/share)</span>
-                          <button
-                            type="button"
-                            onClick={() => setLimitPriceSol(Number(activeSharePriceSol.toFixed(4)))}
-                            className="text-gold hover:underline font-mono"
-                          >
-                            Use Current ({activeSharePriceSol.toFixed(4)})
-                          </button>
-                        </div>
-                        <input
-                          data-testid="limit-price"
-                          type="number" step="0.0001" min="0.0001" max="10"
-                          value={limitPriceSol}
-                          onChange={(e) => setLimitPriceSol(Math.max(0.0001, Math.min(10, Number(e.target.value))))}
-                          className="w-full bg-panel border border-hairline/40 rounded px-3 py-1.5 text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Summary */}
-              <div className="bg-panel rounded-[2px] border border-hairline/20 p-3 space-y-2 text-[11px] font-mono">
-                <div className="flex justify-between">
-                  <span className="text-ash">Shares to sell</span>
-                  <span className="text-ivory">{sellQuantity} {sellSide}</span>
-                </div>
-                <div className="flex justify-between border-t border-hairline/15 pt-2">
-                  <span className="text-ash">Est. payout</span>
-                  <span className="text-verdigris font-bold">
-                    {isLimitOrder ? (sellQuantity * limitPriceSol).toFixed(4) : sellRefundSol.toFixed(4)} SOL
-                  </span>
-                </div>
-              </div>
-
-              {!isLimitOrder && sellQuantity > 0 && sellUnavailable && (
-                <div className="bg-bordeaux/10 border border-bordeaux/40 rounded-[2px] p-2.5 text-[10px] font-mono text-bordeaux leading-snug">
-                  The treasury can&apos;t cover this payout — the on-chain sell would revert. Reduce the quantity or wait for the pool to refill before selling.
-                </div>
-              )}
-
-              <button
-                data-testid="sell-submit"
-                disabled={
-                  submitting ||
-                  (sellSide === "YES" ? userYesBalance < sellQuantity : userNoBalance < sellQuantity) ||
-                  (!isLimitOrder && sellUnavailable)
-                }
-                onClick={isLimitOrder ? () => handlePlaceLimitOrder(false) : handleSell}
-                className={`sheen w-full h-11 rounded-[2px] font-mono text-[11px] uppercase tracking-[.16em] cursor-pointer transition-colors ${
-                  sellSide === "YES"
-                    ? "bg-verdigris text-void hover:bg-verdigris/80"
-                    : "bg-bordeaux text-ivory hover:bg-bordeaux/80"
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {submitting ? "Processing..." : isLimitOrder ? `Place Limit Sell Ask (${sellQuantity} ${sellSide})` : `Instant Sell ${sellQuantity} ${sellSide} Shares`}
-              </button>
-            </div>
-          ) : (
-            /* ── Custom Liquidity (LP) Tab ── */
-            <div className="space-y-4 pt-4">
-              <div className="space-y-1 bg-gold/5 border border-gold/20 p-3 rounded font-mono text-[10px] text-ash leading-normal">
-                <span className="text-gold font-bold">Liquidity Provision (LP)</span>: 
-                Provide custom seed reserves directly to outcome pools to support larger trading volume and earn fees.
-              </div>
-
-              {/* LP Allocation Mode */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-ash uppercase tracking-wider">LP Pool Allocation</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(["balanced", "yes", "no"] as const).map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setLpOption(opt)}
-                      className={`py-2 px-1 rounded-[2px] text-[10px] font-bold uppercase tracking-wide cursor-pointer transition-all border ${
-                        lpOption === opt
-                          ? "border-gold bg-gold/10 text-gold"
-                          : "border-hairline bg-panel text-ash"
-                      }`}
-                    >
-                      {opt === "balanced" ? "Balanced 50:50" : opt === "yes" ? "YES Pool" : "NO Pool"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* LP Amount */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-ash uppercase tracking-wider">Liquidity to Deposit (SOL)</label>
-                <input
-                  type="number"
-                  data-testid="lp-amount"
-                  step="0.5"
-                  min={0.1}
-                  value={lpDepositAmount}
-                  onChange={(e) => setLpDepositAmount(Math.max(0.1, Number(e.target.value)))}
-                  className="w-full bg-panel border border-hairline rounded-[2px] px-3 py-2 text-ivory focus:outline-none focus:border-gold font-mono text-[13px]"
-                />
-              </div>
-
-              {/* LP Impact summary — mirrors add_liquidity.rs: LP tokens minted
-                  1:1 with lamports (yes+no), pools grow by exactly the deposit */}
-              <div className="bg-panel rounded-[2px] border border-hairline p-3 space-y-2 text-[10px] font-mono text-ash">
-                <div className="flex justify-between">
-                  <span>Current YES Pool:</span>
-                  <span className="text-ivory">{yesPool.toFixed(2)} SOL</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Current NO Pool:</span>
-                  <span className="text-ivory">{noPool.toFixed(2)} SOL</span>
-                </div>
-                <div className="flex justify-between border-t border-hairline pt-2 text-gold">
-                  <span>New YES Pool:</span>
-                  <span>{lpNewYesPoolSol.toFixed(2)} SOL</span>
-                </div>
-                <div className="flex justify-between text-gold">
-                  <span>New NO Pool:</span>
-                  <span>{lpNewNoPoolSol.toFixed(2)} SOL</span>
-                </div>
-                <div className="flex justify-between border-t border-hairline pt-2">
-                  <span>LP Tokens Minted:</span>
-                  <span className="text-gold-lite">{lpTokensMinted.toLocaleString()} LP</span>
-                </div>
-                <div className="text-[9px] text-ash-dim leading-snug">
-                  1:1 with deposited SOL ({lp.yesAddSol.toFixed(2)} YES + {lp.noAddSol.toFixed(2)} NO). No fee, no curve — exactly what <span className="text-ash">add_liquidity</span> mints on-chain.
-                </div>
-              </div>
-
-              <button
-                data-testid="lp-submit"
-                disabled={submitting}
-                onClick={handleProvideLiquidity}
-                className="sheen w-full h-11 rounded-[2px] bg-gold text-void font-mono text-[11px] uppercase tracking-[.16em] cursor-pointer transition-colors hover:bg-gold-lite disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {submitting ? "Processing..." : `Deposit ${lpDepositAmount} SOL Liquidity`}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-    );
   };
 
   return (
@@ -2368,120 +1931,14 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
           <MarketComments marketPubkey={marketPda.toBase58()} />
 
           {/* Decoded On-chain Activity logs */}
-          <div className="surface p-6 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-ash flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-gold" />
-              <span>Decoded On-Chain Transactions</span>
-              <div className="ml-auto flex items-center gap-2">
-                <LiveIndicator isLive={activity.length > 0} label={activity.length > 0 ? "Streaming" : "Idle"} />
-              </div>
-            </h3>
-            
-            <div className="space-y-2 font-mono text-xs max-h-96 overflow-y-auto scrollbar-thin">
-              {activity.length === 0 ? (
-                <EmptyState
-                  icon={Activity}
-                  title="No Transactions Yet"
-                  description="No matching transaction logs decoded. New activity will appear here in real-time."
-                />
-              ) : (
-                activity.map((item, index) => {
-                  const isSettle = item.side === "SETTLE";
-                  const isClaim = item.side === "CLAIM";
-                  const isYes = item.side === "YES";
-                  const isNo = item.side === "NO";
-                  const isNew = index < 3;
-
-                  let badgeColor = "bg-panel-2 text-ivory";
-                  if (isYes) badgeColor = "bg-verdigris/10 text-verdigris border border-verdigris/20";
-                  if (isNo) badgeColor = "bg-bordeaux/10 text-bordeaux border border-bordeaux/20";
-                  if (isSettle) badgeColor = "bg-gold/10 text-gold border border-gold/20";
-
-                  return (
-                    <div
-                      key={item.signature + "-" + index}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-hairline/10 hover:bg-ivory/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-gold/3 border-l-2 border-l-verdigris" : ""}`}
-                    >
-                      <div className="flex items-center space-x-2.5 min-w-0">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>
-                          {item.side}
-                        </span>
-                        <span className="text-ivory text-[11px] truncate">
-                          {isSettle ? (
-                            <span>BOARD FINALIZED (OUTCOME {item.quantity === 1 ? "YES" : "NO"})</span>
-                          ) : isClaim ? (
-                            <span>REWARD WITHDRAWAL: {item.cost.toFixed(2)} SOL</span>
-                          ) : (
-                            <span>{item.quantity} SHARES AT {item.cost.toFixed(2)} SOL</span>
-                          )}
-                        </span>
-                        {isNew && (
-                          <span className="text-[8px] font-mono font-bold text-verdigris bg-verdigris/10 px-1 py-0.5 rounded border border-verdigris/20 shrink-0">
-                            NEW
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-ash text-[10px] flex items-center space-x-2 ml-7 sm:ml-0">
-                        <span className="hidden sm:inline">@{item.buyer.slice(0, 4)}...</span>
-                        <span>{item.time}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+          <ActivityFeedSection activity={activity} />
 
           {/* Trust Signals & Settlement Explainer Card */}
-          <div className="surface p-6 sm:p-8 space-y-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider font-display text-gold flex items-center space-x-2">
-              <Award className="w-4 h-4" />
-              <span>Trader Safety & Trust Signals</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
-              <div className="p-4 bg-panel rounded border border-hairline/30">
-                <div className="text-ash text-[9px] uppercase tracking-wider font-display font-bold">Treasury Balance</div>
-                <div className="font-bold text-ivory text-[13px] pt-1">
-                  {lamportsToSol(treasuryBalance).toFixed(3)} SOL
-                </div>
-                <div className="text-[8px] text-ash/60 pt-0.5">Secure Escrow PDA</div>
-              </div>
-
-              <div className="p-4 bg-panel rounded border border-hairline/30">
-                <div className="text-ash text-[9px] uppercase tracking-wider font-display font-bold">Protocol Fee BPS</div>
-                <div className="font-bold text-ivory text-[13px] pt-1">
-                  {feeBps !== null ? `${(feeBps / 100).toFixed(1)}%` : "— BPS"}
-                </div>
-                <div className="text-[8px] text-ash/60 pt-0.5">Max capped at 10%</div>
-              </div>
-
-              <div className="p-4 bg-panel rounded border border-board-border/30">
-                <div className="text-ash text-[9px] uppercase tracking-wider font-display font-bold">Resolution Oracle</div>
-                <div className="font-bold text-verdigris text-[13px] pt-1">
-                  {isOracleCategory(market.category) ? "Pyth Pull Oracle" : "Manual Settle"}
-                </div>
-                <div className="text-[8px] text-ash/60 pt-0.5">Automated on-chain feed</div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-panel rounded border border-board-border/30 space-y-2 text-xs font-sans text-text-muted leading-relaxed">
-              <h4 className="font-display font-bold text-text-primary text-[10px] uppercase tracking-wider">How Settlement Works</h4>
-              <p>
-                This prediction board is secured by a decentralized smart contract treasury. 
-                {isOracleCategory(market.category) ? (
-                  <span>
-                    {" "}For price-backed boards (Crypto, Tech, or Other assets), anyone can trigger settlement once the resolution timestamp has passed. The contract retrieves the target price directly from the Pyth Network pull oracle, validates the feed signature to verify it is not stale, and settles the board based on the comparison rule.
-                  </span>
-                ) : (
-                  <span>
-                    {" "}For non-price-backed boards (such as Sports and Politics), the administrator posts the official winning outcome (YES or NO) under a multi-signature verified authority once the event completes.
-                  </span>
-                )}
-                {" "}If the settled side has zero winning shares (meaning nobody bet on the winner), the market auto-cancels and permits all participants to withdraw their full stakes without protocol fees.
-              </p>
-            </div>
-          </div>
+          <TrustSignalsSection
+            treasuryBalance={treasuryBalance}
+            feeBps={feeBps}
+            marketCategory={market.category}
+          />
 
           {/* Related markets from same category (DB cache) */}
           <RelatedMarkets category={categoryStr} excludePubkey={marketPda.toBase58()} />
@@ -2501,7 +1958,61 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
                 </div>
               </div>
             </div>
-            {renderTradingDashboard()}
+            <TradingPanel
+              status={status}
+              marketPdaB58={marketPda.toBase58()}
+              yesProb={yesProb}
+              noProb={noProb}
+              yesPool={yesPool}
+              noPool={noPool}
+              sharePriceSol={sharePriceSol}
+              activeSharePriceSol={activeSharePriceSol}
+              yesSharePriceSol={yesSharePriceSol}
+              noSharePriceSol={noSharePriceSol}
+              tradeCost={tradeCost}
+              potentialPayout={potentialPayout}
+              priceImpactPct={priceImpactPct}
+              slippageWarning={slippageWarning}
+              sellRefundSol={sellRefundSol}
+              sellUnavailable={sellUnavailable}
+              lp={lp}
+              lpTokensMinted={lpTokensMinted}
+              lpNewYesPoolSol={lpNewYesPoolSol}
+              lpNewNoPoolSol={lpNewNoPoolSol}
+              userYesBalance={userYesBalance}
+              userNoBalance={userNoBalance}
+              userOrders={userOrders}
+              userLp={userLp}
+              marketLpStats={marketLpStats}
+              tradeTab={tradeTab}
+              tradeSide={tradeSide}
+              quantity={quantity}
+              sellSide={sellSide}
+              sellQuantity={sellQuantity}
+              isLimitOrder={isLimitOrder}
+              limitPriceSol={limitPriceSol}
+              showAdvanced={showAdvanced}
+              lpOption={lpOption}
+              lpDepositAmount={lpDepositAmount}
+              submitting={submitting}
+              txState={txState}
+              txSig={txSig}
+              setTradeTab={setTradeTab}
+              setTradeSide={setTradeSide}
+              setQuantity={setQuantity}
+              setSellSide={setSellSide}
+              setSellQuantity={setSellQuantity}
+              setIsLimitOrder={setIsLimitOrder}
+              setLimitPriceSol={setLimitPriceSol}
+              setShowAdvanced={setShowAdvanced}
+              setLpOption={setLpOption}
+              setLpDepositAmount={setLpDepositAmount}
+              handleBuy={handleBuy}
+              handleSell={handleSell}
+              handleProvideLiquidity={handleProvideLiquidity}
+              handlePlaceLimitOrder={handlePlaceLimitOrder}
+              handleCancelOrder={handleCancelOrder}
+            />
           </div>
         </section>
       </div>
@@ -2548,7 +2059,61 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
                   CLOSE
                 </button>
               </div>
-              {renderTradingDashboard()}
+              <TradingPanel
+                status={status}
+                marketPdaB58={marketPda.toBase58()}
+                yesProb={yesProb}
+                noProb={noProb}
+                yesPool={yesPool}
+                noPool={noPool}
+                sharePriceSol={sharePriceSol}
+                activeSharePriceSol={activeSharePriceSol}
+                yesSharePriceSol={yesSharePriceSol}
+                noSharePriceSol={noSharePriceSol}
+                tradeCost={tradeCost}
+                potentialPayout={potentialPayout}
+                priceImpactPct={priceImpactPct}
+                slippageWarning={slippageWarning}
+                sellRefundSol={sellRefundSol}
+                sellUnavailable={sellUnavailable}
+                lp={lp}
+                lpTokensMinted={lpTokensMinted}
+                lpNewYesPoolSol={lpNewYesPoolSol}
+                lpNewNoPoolSol={lpNewNoPoolSol}
+                userYesBalance={userYesBalance}
+                userNoBalance={userNoBalance}
+                userOrders={userOrders}
+                userLp={userLp}
+                marketLpStats={marketLpStats}
+                tradeTab={tradeTab}
+                tradeSide={tradeSide}
+                quantity={quantity}
+                sellSide={sellSide}
+                sellQuantity={sellQuantity}
+                isLimitOrder={isLimitOrder}
+                limitPriceSol={limitPriceSol}
+                showAdvanced={showAdvanced}
+                lpOption={lpOption}
+                lpDepositAmount={lpDepositAmount}
+                submitting={submitting}
+                txState={txState}
+                txSig={txSig}
+                setTradeTab={setTradeTab}
+                setTradeSide={setTradeSide}
+                setQuantity={setQuantity}
+                setSellSide={setSellSide}
+                setSellQuantity={setSellQuantity}
+                setIsLimitOrder={setIsLimitOrder}
+                setLimitPriceSol={setLimitPriceSol}
+                setShowAdvanced={setShowAdvanced}
+                setLpOption={setLpOption}
+                setLpDepositAmount={setLpDepositAmount}
+                handleBuy={handleBuy}
+                handleSell={handleSell}
+                handleProvideLiquidity={handleProvideLiquidity}
+                handlePlaceLimitOrder={handlePlaceLimitOrder}
+                handleCancelOrder={handleCancelOrder}
+              />
             </motion.div>
           </>
         )}

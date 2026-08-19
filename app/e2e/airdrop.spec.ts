@@ -1,5 +1,6 @@
 import { test, expect, Page } from "@playwright/test";
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { ed25519 } from "@noble/curves/ed25519";
 
 /**
  * Verifies the header "🪂 Airdrop SOL" button (localnet only):
@@ -21,6 +22,11 @@ test.beforeAll(async () => {
 
 /** Install a mock Phantom injected-wallet before the app bundle runs. */
 async function installMockWallet(page: Page, kp: Keypair) {
+  // Chromium's WebCrypto does not support Ed25519, so sign messages in Node
+  // (@noble/curves) and hand the signature to the page via an exposed binding.
+  await page.exposeFunction("__edSign", (msg: number[]) =>
+    Array.from(ed25519.sign(Uint8Array.from(msg), kp.secretKey.slice(0, 32)))
+  );
   await page.addInitScript(
     ({ pubB58, pub32, secret64, seed32 }) => {
       const PUB_B58 = pubB58 as string;
@@ -90,18 +96,7 @@ async function installMockWallet(page: Page, kp: Keypair) {
           return txs;
         },
         async signMessage(message: Uint8Array) {
-          const key = await crypto.subtle.importKey(
-            "raw",
-            SEED as BufferSource,
-            { name: "Ed25519" },
-            false,
-            ["sign"]
-          );
-          const signature = await crypto.subtle.sign(
-            { name: "Ed25519" },
-            key,
-            message as BufferSource
-          );
+          const signature = await (window as any).__edSign(Array.from(message));
           return { signature: new Uint8Array(signature), publicKey: pubDuck };
         },
       };

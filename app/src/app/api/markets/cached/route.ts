@@ -29,7 +29,8 @@ export const GET = apiHandler(async (req: NextRequest) => {
         openMarkets: platformStats.openMarkets,
         totalVolume: (platformStats.totalVolume || 0).toString(),
         totalLiquidity: (platformStats.totalLiquidity || 0).toString(),
-        volume24h: "0",
+        // Real 24h volume aggregated from the trades table (never a hardcoded 0).
+        volume24h: (platformStats.volume24h || 0).toString(),
         totalTraders: platformStats.totalTraders || 0,
       },
       pagination: {

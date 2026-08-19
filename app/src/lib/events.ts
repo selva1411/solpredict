@@ -14,7 +14,7 @@ export async function fetchProgramTransactions(
   address: PublicKey,
   limit = 30
 ): Promise<ParsedTxEvents[]> {
-  const sigs = await connection.getSignaturesForAddress(address, { limit });
+  const sigs = await connection.getSignaturesForAddress(address, { limit }, "confirmed");
 
   const txs = await Promise.all(
     sigs.map(async (sig) => {
@@ -67,10 +67,13 @@ export function formatEventTime(blockTime: number | null | undefined): string {
 
 export function findMarketQuestion(
   marketId: anchor.BN,
-  markets: Array<{ account: { marketId: anchor.BN; question: string } }>
+  markets: Array<{ account: { marketId?: anchor.BN | null; question: string } }>
 ): string {
-  const match = markets.find((m) => m.account.marketId.toNumber() === marketId.toNumber());
-  return match ? match.account.question : `Market #${marketId.toString()}`;
+  const id = marketId?.toNumber?.() ?? -1;
+  const match = markets.find(
+    (m) => m.account.marketId?.toNumber?.() === id
+  );
+  return match ? match.account.question : `Market #${id}`;
 }
 
 export type MarketStatus = "Open" | "Ended" | "Settled" | "Cancelled";

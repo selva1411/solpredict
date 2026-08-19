@@ -45,6 +45,8 @@ test.describe("API health", () => {
     const resp = await request.get("/api/health");
     expect(resp.status()).toBe(200);
     const body = await resp.json();
+
+    
     expect(body.ok).toBe(true);
     expect(body.db).toBeDefined();
     expect(body.db.connected).toBe(true);

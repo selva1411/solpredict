@@ -96,7 +96,22 @@ export function invalidatePlatformStats(): void {
   platformStatsCache = null;
 }
 
-export async function getLeaderboard(
+/**
+ * Request-scoped leaderboard.
+ *
+ * Same multi-pass guarantee as getPlatformStats above: a single page load
+ * renders the tree in MULTIPLE passes (streaming shell + RSC payload). If a
+ * concurrent trade sync updates user_stats between those passes, the shell
+ * HTML and the client-seeded payload would render a DIFFERENT top-traders
+ * order — producing a React hydration mismatch on /discover ("server rendered
+ * text didn't match the client"). React `cache()` memoizes for the duration
+ * of the request so every pass sees one consistent snapshot.
+ *
+ * NOTE: request-scope only. Do NOT call from background jobs (cron/indexer/
+ * ws) — outside a request scope it pins a stale snapshot. Same rule as
+ * getPlatformStats.
+ */
+export const getLeaderboard = cache(async function getLeaderboard(
   sortBy: 'volume' | 'profit' | 'winRate' = 'volume',
   period: 'daily' | 'weekly' | 'monthly' | 'all' = 'all',
   category?: string,
@@ -169,4 +184,4 @@ export async function getLeaderboard(
       losses,
     };
   });
-}
+});

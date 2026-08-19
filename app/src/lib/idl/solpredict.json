@@ -8,6 +8,86 @@
   },
   "instructions": [
     {
+      "name": "add_guardian",
+      "docs": [
+        "Register a new distinct guardian for the emergency-unpause multisig",
+        "(admin-only). Up to 3 guardians can be registered."
+      ],
+      "discriminator": [
+        167,
+        189,
+        170,
+        27,
+        74,
+        240,
+        201,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_pause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_guardian",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "add_liquidity",
       "docs": [
         "Add liquidity to a market and receive YES/NO tokens + LP position."
@@ -1008,6 +1088,10 @@
         {
           "name": "quantity",
           "type": "u64"
+        },
+        {
+          "name": "max_cost_lamports",
+          "type": "u64"
         }
       ]
     },
@@ -1163,6 +1247,48 @@
         {
           "name": "order_token_escrow",
           "writable": true
+        },
+        {
+          "name": "order_escrow",
+          "docs": [
+            "Data-less SOL escrow for limit BUY orders — refunded to the maker on",
+            "cancel. Unused for sell orders."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "account",
+                "path": "order.order_id",
+                "account": "Order"
+              }
+            ]
+          }
         },
         {
           "name": "emergency_pause",
@@ -1873,7 +1999,8 @@
     {
       "name": "emergency_unpause",
       "docs": [
-        "Unpause the program (requires guardian confirmations)."
+        "Unpause the program (requires verified guardian signers passed as",
+        "remaining accounts)."
       ],
       "discriminator": [
         83,
@@ -1942,14 +2069,7 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "confirmations",
-          "type": {
-            "vec": "pubkey"
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "emergency_withdraw",
@@ -2164,6 +2284,49 @@
         {
           "name": "order_token_escrow",
           "writable": true
+        },
+        {
+          "name": "order_escrow",
+          "docs": [
+            "Data-less SOL escrow for limit BUY orders — the source of the maker's",
+            "payment. For sell orders this account is unused (tokens are escrowed in",
+            "order_token_escrow instead)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "account",
+                "path": "order.order_id",
+                "account": "Order"
+              }
+            ]
+          }
         },
         {
           "name": "emergency_pause",
@@ -2470,6 +2633,92 @@
       ]
     },
     {
+      "name": "mock_create_price_update",
+      "docs": [
+        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
+      ],
+      "discriminator": [
+        103,
+        162,
+        52,
+        4,
+        77,
+        138,
+        211,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "price_update",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  99,
+                  107,
+                  95,
+                  112,
+                  114,
+                  105,
+                  99,
+                  101,
+                  95,
+                  102,
+                  101,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feed_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "type": "i64"
+        },
+        {
+          "name": "conf",
+          "type": "u64"
+        },
+        {
+          "name": "exponent",
+          "type": "i32"
+        },
+        {
+          "name": "publish_time",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "place_order",
       "docs": [
         "Place an on-chain limit order (Bid or Ask) for a prediction outcome."
@@ -2551,6 +2800,49 @@
         {
           "name": "order_token_escrow",
           "writable": true
+        },
+        {
+          "name": "order_escrow",
+          "docs": [
+            "Data-less SOL escrow for limit BUY orders (seeds: [\"order_escrow\",",
+            "market, maker, order_id]). Holds the escrowed lamports so fill/cancel",
+            "can pay out with a CPI system transfer. Created implicitly by the",
+            "maker's transfer in the handler."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  100,
+                  101,
+                  114,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "arg",
+                "path": "order_id"
+              }
+            ]
+          }
         },
         {
           "name": "emergency_pause",
@@ -2743,6 +3035,195 @@
         {
           "name": "share_price_lamports",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "reject_market",
+      "docs": [
+        "Reject a pending market proposal: close it on-chain and slash its bond (admin-only)."
+      ],
+      "discriminator": [
+        214,
+        108,
+        186,
+        227,
+        122,
+        62,
+        61,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "docs": [
+            "MarketProposal PDA — closed and rent sent back to the admin."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "MarketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal.proposal_id",
+                "account": "MarketProposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "remove_guardian",
+      "docs": [
+        "Remove a guardian from the emergency-unpause multisig (admin-only).",
+        "Rejected if the removal would leave fewer guardians than the required",
+        "confirmations threshold."
+      ],
+      "discriminator": [
+        72,
+        117,
+        160,
+        244,
+        155,
+        185,
+        71,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_pause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "guardian",
+          "type": "pubkey"
         }
       ]
     },
@@ -3455,6 +3936,90 @@
         {
           "name": "quantity",
           "type": "u64"
+        },
+        {
+          "name": "min_proceeds_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_guardian_threshold",
+      "docs": [
+        "Set how many distinct guardian signatures are required to unpause",
+        "(admin-only). Must be between 1 and the number of registered guardians."
+      ],
+      "discriminator": [
+        85,
+        225,
+        97,
+        126,
+        126,
+        73,
+        15,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "emergency_pause",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  101,
+                  114,
+                  103,
+                  101,
+                  110,
+                  99,
+                  121,
+                  95,
+                  112,
+                  97,
+                  117,
+                  115,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_threshold",
+          "type": "u8"
         }
       ]
     },
@@ -3474,6 +4039,14 @@
         217
       ],
       "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Program admin — the only party allowed to settle. Prevents third",
+            "parties from front-running settlement with a stale oracle price."
+          ],
+          "signer": true
+        },
         {
           "name": "market",
           "writable": true,
@@ -4514,6 +5087,36 @@
       "code": 6069,
       "name": "ProposalBondTooLow",
       "msg": "Proposal bond is below the minimum required"
+    },
+    {
+      "code": 6070,
+      "name": "InvalidGuardian",
+      "msg": "Guardian pubkey is invalid (cannot be the zero address)"
+    },
+    {
+      "code": 6071,
+      "name": "GuardianAlreadyExists",
+      "msg": "Guardian is already registered"
+    },
+    {
+      "code": 6072,
+      "name": "MaxGuardiansReached",
+      "msg": "Maximum number of guardians reached (3)"
+    },
+    {
+      "code": 6073,
+      "name": "GuardianNotFound",
+      "msg": "Guardian not found in the set"
+    },
+    {
+      "code": 6074,
+      "name": "InvalidThreshold",
+      "msg": "Threshold must be between 1 and the number of registered guardians"
+    },
+    {
+      "code": 6075,
+      "name": "ThresholdExceedsGuardians",
+      "msg": "Cannot remove guardian: required confirmations exceed remaining guardians"
     }
   ],
   "types": [

@@ -41,6 +41,11 @@ test.describe("All pages render without console errors", () => {
           !e.includes("AbortError") &&
           !e.includes("Blockhash") &&
           !e.includes("failed, attempting database fallback") &&
+          // dev-mode artifact: instant redirect() on /dashboard races
+          // Next.js instrumentation, which calls performance.measure with a
+          // negative timestamp ("DashboardPage cannot have a negative time
+          // stamp"). Production builds do not run this instrumentation.
+          !e.includes("cannot have a negative time stamp") &&
           // expected for settled/DB-only boards in the directory
           !e.includes("fetchNull")
       );

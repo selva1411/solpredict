@@ -25,6 +25,12 @@ pub const NO_MINT_SEED: &[u8] = b"no_mint";
 
 #[constant]
 pub const ORDER_SEED: &[u8] = b"order";
+/// Seed for the data-less SOL escrow PDA backing limit BUY orders. Buy orders
+/// escrow lamports on a plain system account (no data) so fill/cancel can move
+/// them with a CPI system transfer — the system program refuses to debit a
+/// data-carrying account, and a program cannot directly credit a system-owned
+/// one.
+pub const ORDER_ESCROW_SEED: &[u8] = b"order_escrow";
 
 #[constant]
 pub const LP_SEED: &[u8] = b"lp";

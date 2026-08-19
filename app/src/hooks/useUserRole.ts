@@ -16,7 +16,7 @@ export function useUserRole() {
     let cancelled = false;
 
     async function determineRole() {
-      const adminEnvWallets = (process.env.NEXT_PUBLIC_ADMIN_WALLET || "2zPRxYVxFDUZn6QEYU2m6bzyZcN7pCCJ4E25gc2EQcCS")
+      const adminEnvWallets = (process.env.NEXT_PUBLIC_ADMIN_WALLET || "dad8hrG9n3xoJcUVSZcVcoQQxbBhMS7CEypM2HR3wqf")
         .split(",").map((w) => w.trim()).filter(Boolean);
 
       // Development (localnet): mirror the server-side `requireAdmin` dev

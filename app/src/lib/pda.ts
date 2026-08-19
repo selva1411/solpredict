@@ -93,6 +93,29 @@ export function getOrderPda(
   return pda;
 }
 
+/**
+ * Data-less SOL escrow PDA backing limit BUY orders (seeds: ["order_escrow",
+ * market, maker, order_id]). Buy orders escrow lamports here so fill/cancel
+ * can move them with a CPI system transfer.
+ */
+export function getOrderEscrowPda(
+  marketPda: PublicKey,
+  makerPubkey: PublicKey,
+  orderId: anchor.BN,
+  programId: PublicKey
+): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("order_escrow"),
+      marketPda.toBuffer(),
+      makerPubkey.toBuffer(),
+      orderId.toArrayLike(Buffer, "le", 8),
+    ],
+    programId
+  );
+  return pda;
+}
+
 export function getProposalPda(proposalId: anchor.BN, programId: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from("proposal"), proposalId.toArrayLike(Buffer, "le", 8)],
