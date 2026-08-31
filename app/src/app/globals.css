@@ -194,8 +194,8 @@
 @utility edge-glow {
   transition: border-color .22s var(--ease-lux), box-shadow .22s var(--ease-lux), transform .22s var(--ease-lux);
   &:hover {
-    border-color: rgba(34,211,238,.4);
-    box-shadow: 0 8px 32px -16px rgba(34,211,238,.22);
+    border-color: color-mix(in oklab, var(--color-gold) 40%, transparent);
+    box-shadow: 0 8px 32px -16px color-mix(in oklab, var(--color-gold) 22%, transparent);
   }
 }
 
@@ -271,7 +271,7 @@
   &::after {
     content: "";
     position: absolute; inset: 0;
-    background: linear-gradient(105deg, transparent 40%, rgba(140,240,255,.07) 50%, transparent 60%);
+    background: linear-gradient(105deg, transparent 40%, color-mix(in oklab, var(--color-gold-lite) 7%, transparent) 50%, transparent 60%);
     transform: translateX(-120%);
     transition: transform .9s var(--ease-lux);
     pointer-events: none;
@@ -291,8 +291,8 @@
 @utility lux-bloom {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(58% 44% at 82% -6%, rgba(34,211,238,.06), transparent 68%),
-    radial-gradient(52% 40% at -8% 102%, rgba(200,180,134,.03), transparent 66%);
+    radial-gradient(58% 44% at 82% -6%, color-mix(in oklab, var(--color-gold) 6%, transparent), transparent 68%),
+    radial-gradient(52% 40% at -8% 102%, color-mix(in oklab, var(--color-leaf) 3%, transparent), transparent 66%);
 }
 
 @utility tnum { font-variant-numeric: tabular-nums; }
@@ -310,7 +310,7 @@
   background: var(--color-gold);
   &::before {
     content: ""; position: absolute; inset: -4px; border-radius: 9999px;
-    background: rgba(34,211,238,.35);
+    background: color-mix(in oklab, var(--color-gold) 35%, transparent);
     animation: livePing 1.8s cubic-bezier(0,0,.2,1) infinite;
   }
 }
@@ -355,7 +355,7 @@
   --input: var(--color-hairline);
   --ring: var(--color-gold);
   --color-border: var(--color-hairline);
-  --color-border-subtle: rgba(237,242,251,0.06);
+  --color-border-subtle: color-mix(in oklab, var(--color-ivory) 6%, transparent);
   --color-primary: var(--color-gold);
   --color-primary-foreground: var(--color-void);
   --color-destructive: var(--color-bordeaux);
@@ -418,7 +418,7 @@
     border-radius: var(--radius-data, 4px);
     transition: border-color 0.2s ease;
   }
-  .holo-card:hover { border-color: rgba(34,211,238,0.45); }
+  .holo-card:hover { border-color: color-mix(in oklab, var(--color-gold) 45%, transparent); }
   .holo-card-3d { perspective: 900px; }
 
   .board-panel {
@@ -427,7 +427,7 @@
     border-radius: var(--radius-data, 4px);
   }
   .glass-panel-hover { transition: border-color 0.18s ease; }
-  .glass-panel-hover:hover { border-color: rgba(34,211,238,0.35); }
+  .glass-panel-hover:hover { border-color: color-mix(in oklab, var(--color-gold) 35%, transparent); }
 
   .btn-terminal-primary, .btn-royale, .btn-primary, .btn-amber {
     display: inline-flex;
@@ -445,11 +445,7 @@
   }
   .btn-terminal-primary:hover, .btn-royale:hover, .btn-primary:hover, .btn-amber:hover {
     filter: brightness(1.12);
-    box-shadow: 0 6px 24px -8px rgba(34,211,238,.5);
-  }
-  .btn-terminal-primary:hover, .btn-royale:hover, .btn-primary:hover, .btn-amber:hover {
-    filter: brightness(1.12);
-    box-shadow: 0 6px 24px -8px rgba(34,211,238,.5);
+    box-shadow: 0 6px 24px -8px color-mix(in oklab, var(--color-gold) 50%, transparent);
   }
   .btn-outline-royale, .btn-terminal-secondary {
     display: inline-flex;
@@ -466,7 +462,7 @@
     cursor: pointer;
     transition: border-color .18s ease;
   }
-  .btn-outline-royale:hover, .btn-terminal-secondary:hover { border-color: rgba(34,211,238,0.4); }
+  .btn-outline-royale:hover, .btn-terminal-secondary:hover { border-color: color-mix(in oklab, var(--color-gold) 40%, transparent); }
 
 
   .text-gradient-gold, .text-gradient {
@@ -499,16 +495,16 @@
   }
   .flash-up { animation: flash-green 0.4s ease-out; }
   @keyframes flash-green {
-    0% { background-color: rgba(52,211,153,0.18); }
+    0% { background-color: color-mix(in oklab, var(--color-verdigris) 18%, transparent); }
     100% { background-color: transparent; }
   }
   .flash-down { animation: flash-red 0.4s ease-out; }
   @keyframes flash-red {
-    0% { background-color: rgba(251,113,133,0.18); }
+    0% { background-color: color-mix(in oklab, var(--color-bordeaux) 18%, transparent); }
     100% { background-color: transparent; }
   }
   .hover-lift { transition: border-color 0.18s ease, transform .18s ease; }
-  .hover-lift:hover { border-color: rgba(34,211,238,0.35); }
+  .hover-lift:hover { border-color: color-mix(in oklab, var(--color-gold) 35%, transparent); }
 
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
@@ -525,8 +521,8 @@
   --wallet-adapter-bg: transparent !important;
 }
 .wallet-adapter-button:not([class*="trigger"]):not([data-variant]) {
-  background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(11,95,114,.14)) !important;
-  border: 1px solid rgba(34,211,238,.4) !important;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-gold) 16%, transparent), color-mix(in oklab, var(--color-gold-deep) 14%, transparent)) !important;
+  border: 1px solid color-mix(in oklab, var(--color-gold) 40%, transparent) !important;
   color: var(--color-ivory) !important;
   font-family: var(--font-mono) !important;
   font-size: 12px !important;
@@ -537,14 +533,11 @@
   transition: border-color .15s ease !important;
 }
 .wallet-adapter-button:not([class*="trigger"]):not([data-variant]):hover {
-  border-color: rgba(34,211,238,.8) !important;
-  box-shadow: 0 0 24px -6px rgba(34,211,238,.45) !important;
-}.wallet-adapter-button:not([class*="trigger"]):not([data-variant]):hover {
-  border-color: rgba(34,211,238,.8) !important;
-  box-shadow: 0 0 24px -6px rgba(34,211,238,.45) !important;
+  border-color: color-mix(in oklab, var(--color-gold) 80%, transparent) !important;
+  box-shadow: 0 0 24px -6px color-mix(in oklab, var(--color-gold) 45%, transparent) !important;
 }
 .wallet-adapter-modal-wrapper { background: var(--color-obsidian) !important; }
-.wallet-adapter-modal { background: rgba(4,6,13,.86) !important; backdrop-filter: blur(8px); }
+.wallet-adapter-modal { background: color-mix(in oklab, var(--color-void) 86%, transparent) !important; backdrop-filter: blur(8px); }
 
 /* Custom scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
