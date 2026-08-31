@@ -28,13 +28,13 @@ export default function GatewayPage() {
   const Icon = current.icon;
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 min-h-screen flex items-center justify-center">
-      <div className="holo-card p-8 sm:p-12 max-w-lg w-full text-center">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14 min-h-screen flex items-center justify-center">
+      <div className="surface p-8 sm:p-12 max-w-lg w-full text-center">
         <div className="w-16 h-16 rounded-[2px] bg-gradient-to-br from-gold to-gold-deep flex items-center justify-center mx-auto mb-6">
-          <Icon className="w-8 h-8 text-ivory" />
+          <Icon className="w-8 h-8 text-void" />
         </div>
 
-        <h1 className="font-display text-2xl sm:text-3xl font-bold mb-4 text-ivory">
+        <h1 className="font-display text-3xl font-semibold uppercase mb-4 text-ivory">
           {current.title}
         </h1>
         <p className="text-ash mb-8 leading-relaxed">
@@ -46,7 +46,7 @@ export default function GatewayPage() {
             <div
               key={i}
               className={`w-2 h-2 rounded-[2px] transition-all ${
-                i === slide ? "bg-gold w-6" : "bg-white/20"
+                i === slide ? "bg-gold w-6" : "bg-hairline-2"
               }`}
             />
           ))}
