@@ -94,7 +94,7 @@ export default function MarketsDirectory({ initialMarkets }: { initialMarkets: M
               <button
                 key={key}
                 onClick={() => setSortBy(key)}
-                className={`relative cursor-pointer px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.12em] rounded transition-colors ${
+                className={`relative cursor-pointer inline-flex items-center min-h-[40px] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.12em] rounded transition-colors ${
                   sortBy === key ? "text-void" : "text-ash hover:text-ivory"
                 }`}
               >

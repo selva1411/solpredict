@@ -118,7 +118,7 @@ function LeaderboardPage() {
             <button
               key={opt.key}
               onClick={() => setSortBy(opt.key as any)}
-              className={`relative cursor-pointer px-4 py-2 font-mono text-[10px] uppercase tracking-[.12em] rounded transition-colors ${
+              className={`relative cursor-pointer inline-flex items-center min-h-[40px] px-4 py-2 font-mono text-[10px] uppercase tracking-[.12em] rounded transition-colors ${
                 sortBy === opt.key ? "text-void" : "text-ash hover:text-ivory"
               }`}
             >

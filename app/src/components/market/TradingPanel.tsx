@@ -214,7 +214,7 @@ export function TradingPanel(p: TradingPanelProps) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setQuantity(Math.max(1, quantity - 10))}
-                className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 hover:border-hairline/60 text-ivory font-mono font-bold text-[15px] cursor-pointer transition-all"
+                className="w-10 h-10 rounded-[2px] bg-panel border border-hairline/30 hover:border-hairline/60 text-ivory font-mono font-bold text-[15px] cursor-pointer transition-all"
               >−</button>
               <input
                 type="number"
@@ -226,7 +226,7 @@ export function TradingPanel(p: TradingPanelProps) {
               />
               <button
                 onClick={() => setQuantity(quantity + 10)}
-                className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 hover:border-hairline/60 text-ivory font-mono font-bold text-[15px] cursor-pointer transition-all"
+                className="w-10 h-10 rounded-[2px] bg-panel border border-hairline/30 hover:border-hairline/60 text-ivory font-mono font-bold text-[15px] cursor-pointer transition-all"
               >+</button>
             </div>
             <div className="grid grid-cols-5 gap-1">
@@ -450,12 +450,12 @@ export function TradingPanel(p: TradingPanelProps) {
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
-                className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">−</button>
+                className="w-10 h-10 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">−</button>
               <input type="number" data-testid="sell-quantity" step={1} value={sellQuantity} min={1}
                 onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
                 className="flex-1 bg-panel border border-hairline/40 rounded-[2px] px-3 py-2 text-center text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60" />
               <button onClick={() => setSellQuantity(sellQuantity + 5)}
-                className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">+</button>
+                className="w-10 h-10 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">+</button>
             </div>
           </div>
 

@@ -405,7 +405,7 @@ export default function PortfolioPage() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-className={`cursor-pointer px-3 py-1.5 rounded transition-all ${
+className={`cursor-pointer inline-flex items-center min-h-[40px] px-3 py-1.5 rounded transition-all ${
                   selectedCategory === cat
                     ? "bg-gold/15 text-gold-lite border border-gold/40"
                     : "text-ash hover:text-ivory border border-transparent hover:border-hairline"
@@ -499,7 +499,7 @@ className={`cursor-pointer px-3 py-1.5 rounded transition-all ${
                     <td className="py-4 text-right">
                       <a
                         href={`/market/${lp.marketPubkey}`}
-                        className="inline-block px-3 py-1.5 rounded-[2px] border border-gold/40 text-gold-lite hover:bg-gold/10 font-mono text-[10px] uppercase tracking-[.16em] transition-colors"
+                        className="inline-flex items-center min-h-[40px] px-3 py-1.5 rounded-[2px] border border-gold/40 text-gold-lite hover:bg-gold/10 font-mono text-[10px] uppercase tracking-[.16em] transition-colors"
                       >
                         Manage
                       </a>
