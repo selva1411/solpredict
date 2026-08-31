@@ -76,20 +76,20 @@ export function StatTile3D({
       />
 
       <div className="flex items-start justify-between relative z-10" style={{ transform: "translateZ(12px)" }}>
-        <div className="text-[10px] uppercase font-display tracking-widest text-[#d6c4ac] font-bold">
+        <div className="text-[10px] uppercase font-display tracking-widest text-graphite font-bold">
           {label}
         </div>
         {Icon && (
           <Icon
             className={`w-4 h-4 transition-colors duration-300 ${
-              hovering ? "text-gold-lite" : "text-[#d6c4ac]"
+              hovering ? "text-gold-lite" : "text-graphite"
             }`}
           />
         )}
       </div>
 
       <div className="flex items-end justify-between relative z-10" style={{ transform: "translateZ(18px)" }}>
-        <span className="text-xs font-mono text-[#d6c4ac]">{unit}</span>
+        <span className="text-xs font-mono text-graphite">{unit}</span>
         {useSplitFlap ? (
           <SplitFlapText text={value} charClassName="w-[18px] h-[28px] text-xs text-gold-lite" />
         ) : (

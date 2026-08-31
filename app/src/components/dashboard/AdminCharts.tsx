@@ -26,7 +26,7 @@ interface StatsResponse {
   };
 }
 
-const COLORS = ["#FFA500", "#8b5cf6", "#f59e0b", "#ef4444", "#22c55e", "#f472b6", "#38bdf8", "#a3e635"];
+const COLORS = ["var(--color-gold)", "var(--color-violet)", "var(--color-amber)", "var(--color-bordeaux)", "var(--color-verdigris)", "var(--color-gold-lite)", "var(--color-hairline-2)", "var(--color-ash)"];
 
 export function AdminCharts() {
   const [data, setData] = useState<StatsResponse | null>(null);
@@ -69,14 +69,14 @@ export function AdminCharts() {
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={dailyVolume}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="date" stroke="#808495" fontSize={10} tickFormatter={(v: string) => v.slice(5)} />
-              <YAxis stroke="#808495" fontSize={10} tickFormatter={(v: number) => v.toFixed(1)} />
+              <XAxis dataKey="date" stroke="var(--color-ash-dim)" fontSize={10} tickFormatter={(v: string) => v.slice(5)} />
+              <YAxis stroke="var(--color-ash-dim)" fontSize={10} tickFormatter={(v: number) => v.toFixed(1)} />
               <Tooltip
-                contentStyle={{ background: "#1A1C22", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: 12 }}
+                contentStyle={{ background: "var(--color-obsidian)", border: "1px solid var(--color-hairline)", borderRadius: "8px", fontSize: 12 }}
                 labelFormatter={(l) => `Date: ${String(l)}`}
                 formatter={(value) => [`${Number(value).toFixed(2)} SOL`, "Volume"]}
               />
-              <Line type="monotone" dataKey="volume" stroke="#FFA500" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="volume" stroke="var(--color-gold)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -106,7 +106,7 @@ export function AdminCharts() {
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "#1A1C22", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", fontSize: 12 }}
+                contentStyle={{ background: "var(--color-obsidian)", border: "1px solid var(--color-hairline)", borderRadius: "8px", fontSize: 12 }}
                 formatter={(value, name) => [`${Number(value).toFixed(2)} SOL`, String(name)]}
               />
             </PieChart>

@@ -46,7 +46,7 @@ export function DashboardSection({
           {count !== undefined && count > 0 ? ` (${count})` : ""}
         </h2>
       </div>
-      {subtitle && <p className="text-[#d6c4ac] text-xs -mt-2 font-bold">{subtitle}</p>}
+      {subtitle && <p className="text-graphite text-xs -mt-2 font-bold">{subtitle}</p>}
       {children}
     </motion.section>
   );
@@ -74,7 +74,7 @@ export function DashboardHero({
       <div className="absolute -top-4 -left-4 w-24 h-24 bg-gold-lite/5 rounded-[2px] blur-3xl pointer-events-none" />
       <div className="space-y-1 relative">
         <h1 className="text-3xl font-bold font-display text-ivory uppercase tracking-wide">{title}</h1>
-        <p className="text-[#d6c4ac] text-[13px]">{subtitle}</p>
+        <p className="text-graphite text-[13px]">{subtitle}</p>
       </div>
       {badge && (
         <motion.div
@@ -84,7 +84,7 @@ export function DashboardHero({
           className="flex items-center space-x-2 bg-panel border border-hairline px-3 py-1.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
         >
           {badgeLabel && (
-            <span className="text-xs font-mono text-[#d6c4ac] font-bold">{badgeLabel}</span>
+            <span className="text-xs font-mono text-graphite font-bold">{badgeLabel}</span>
           )}
           <span className="text-xs font-mono font-bold text-gold-lite">{badge}</span>
         </motion.div>

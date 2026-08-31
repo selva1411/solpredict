@@ -8,16 +8,16 @@ import type { LucideIcon } from "lucide-react";
 function GateScene() {
   return (
     <svg viewBox="0 0 120 100" className="w-full h-full" aria-hidden="true">
-      <circle cx="60" cy="50" r="34" fill="none" stroke="#2D3142" strokeWidth="2" strokeDasharray="2 3" />
-      <circle cx="60" cy="50" r="26" fill="none" stroke="#9E6600" strokeWidth="2" />
+      <circle cx="60" cy="50" r="34" fill="none" stroke="var(--color-hairline-2)" strokeWidth="2" strokeDasharray="2 3" />
+      <circle cx="60" cy="50" r="26" fill="none" stroke="var(--color-gold-deep)" strokeWidth="2" />
       <path
         d="M 60 50 L 60 26 A 24 24 0 0 1 83 41"
         fill="none"
-        stroke="#FFA500"
+        stroke="var(--color-gold)"
         strokeWidth="5"
         strokeLinecap="round"
       />
-      <circle cx="60" cy="50" r="3.5" fill="#FFA500" />
+      <circle cx="60" cy="50" r="3.5" fill="var(--color-gold)" />
       {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
         const rad = (deg * Math.PI) / 180;
         const x1 = 60 + Math.cos(rad) * 30;
@@ -25,7 +25,7 @@ function GateScene() {
         const x2 = 60 + Math.cos(rad) * 38;
         const y2 = 50 + Math.sin(rad) * 38;
         return (
-          <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#FFA500" strokeWidth="1.5" />
+          <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--color-gold)" strokeWidth="1.5" />
         );
       })}
     </svg>
@@ -67,14 +67,14 @@ export function ConnectWalletGate({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mx-auto w-14 h-14 bg-panel border border-hairline/40 rounded flex items-center justify-center text-gold shadow-[0_0_20px_rgba(255,165,0,0.15)]"
+          className="mx-auto w-14 h-14 bg-panel border border-hairline/40 rounded flex items-center justify-center text-gold shadow-[0_0_20px_color-mix(in_oklab,var(--color-gold)_15%,transparent)]"
         >
           <Icon className="w-7 h-7" />
         </motion.div>
 
         <div className="space-y-3">
           <h2 className="text-2xl font-bold font-display text-ivory uppercase tracking-wide">{title}</h2>
-          <p className="text-[#d6c4ac] text-[13px] max-w-sm mx-auto leading-relaxed">{description}</p>
+          <p className="text-graphite text-[13px] max-w-sm mx-auto leading-relaxed">{description}</p>
           <p className="text-[10px] font-mono uppercase tracking-widest text-gold/70 pt-2 font-bold">
             Connect wallet above — routing is automatic by authority role
           </p>
