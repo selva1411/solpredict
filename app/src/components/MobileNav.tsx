@@ -56,7 +56,7 @@ export function MobileNav() {
                       className="flex items-center justify-between px-4 py-3 font-mono text-[11px] uppercase tracking-[.14em] text-ash hover:text-ivory hover:bg-panel rounded-[2px] transition-colors duration-150"
                     >
                       {tab.label}
-                      <span className="text-gold-deep">→</span>
+                      <span className="text-gold">→</span>
                     </Link>
                   </motion.div>
                 ))}
@@ -123,7 +123,7 @@ export function MobileBottomNav() {
               <motion.span
                 layoutId="mobile-nav-active"
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-gold"
-                style={{ boxShadow: "0 0 10px rgba(34,211,238,.7)" }}
+                style={{ boxShadow: "0 0 10px color-mix(in oklab, var(--color-gold) 70%, transparent)" }}
               />
             )}
           </Link>

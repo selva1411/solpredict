@@ -47,7 +47,7 @@ export default async function DocPage({ params }: { params: Promise<{ slug: stri
                 </h2>
               </div>
               <p className="text-xs text-ash leading-relaxed">{article.summary}</p>
-              <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-gold-deep">
+              <div className="mt-4 font-mono text-[10px] uppercase tracking-widest text-gold">
                 Open guide →
               </div>
             </Link>
@@ -89,7 +89,7 @@ export default async function DocPage({ params }: { params: Promise<{ slug: stri
             <span className="font-mono text-gold text-xs w-6">{String(i + 1).padStart(2, "0")}</span>
             <h2 className="font-display text-[21px] font-semibold text-ivory">{section.heading}</h2>
           </div>
-          <p className="text-[13px] text-[#A5A8B8] leading-relaxed pl-9">{section.body}</p>
+          <p className="text-[13px] text-graphite leading-relaxed pl-9">{section.body}</p>
         </section>
       ))}
     </div>

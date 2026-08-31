@@ -179,7 +179,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <header className="lg:hidden flex items-center gap-4 px-4 py-3 border-b border-hairline bg-panel/80  sticky top-0 z-10">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-[2px] hover:bg-ivory/5 text-gray-400"
+            className="p-2 rounded-[2px] hover:bg-ivory/5 text-ash"
           >
             <Menu className="w-5 h-5" />
           </button>

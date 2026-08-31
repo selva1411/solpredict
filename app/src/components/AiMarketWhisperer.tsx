@@ -48,7 +48,7 @@ export function AiMarketWhisperer({
   };
 
   return (
-    <div className="border border-gold-lite/30 rounded-[2px] bg-gradient-to-br from-panel to-void overflow-hidden shadow-[0_4px_20px_rgba(255,216,156,0.06)]">
+    <div className="border border-gold-lite/30 rounded-[2px] bg-gradient-to-br from-panel to-void overflow-hidden shadow-[0_4px_20px_color-mix(in_oklab,var(--color-gold)_6%25,transparent)]">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-ivory/5 transition-colors"
@@ -59,12 +59,12 @@ export function AiMarketWhisperer({
           </div>
           <div>
             <h3 className="text-xs font-bold font-display uppercase tracking-wider text-gold-lite flex items-center gap-1.5">
-              <span>AI Market Whisperer</span>
+              <span>Market Whisperer</span>
               <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-gold-lite/20 border border-gold-lite/40 text-gold-lite">
-                POWERED BY CLAUDE
+                RULE-BASED
               </span>
             </h3>
-            <p className="text-[10px] text-ash">Instant ML conviction synthesis, swinging factors & base rates</p>
+            <p className="text-[10px] text-ash">Deterministic read of pool depth, volume & oracle distance</p>
           </div>
         </div>
         <ChevronDown className={`w-4 h-4 text-gold-lite transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -75,14 +75,14 @@ export function AiMarketWhisperer({
           {!summary && !loading && (
             <div className="flex flex-col items-center justify-center py-4 space-y-3">
               <p className="text-ash text-center text-[11px]">
-                Click below to generate real-time AI probability breakdown and swinging factor analysis.
+                Generate a transparent, rule-based breakdown of this market’s pricing signals.
               </p>
               <button
                 onClick={handleFetchAiAnalysis}
                 className="px-4 py-2 rounded-[2px] bg-gold-lite/15 hover:bg-gold-lite/25 border border-gold-lite/40 text-gold-lite font-bold text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all"
               >
                 <Sparkles className="w-4 h-4" />
-                Generate AI Intelligence Report
+                Run Market Analysis
               </button>
             </div>
           )}
@@ -90,7 +90,7 @@ export function AiMarketWhisperer({
           {loading && (
             <div className="py-6 text-center space-y-2">
               <div className="w-6 h-6 border-2 border-gold-lite border-t-transparent rounded-[2px] animate-spin mx-auto" />
-              <p className="text-[10px] text-gold-lite animate-pulse">Analyzing liquidity pools & Pyth oracle base rates...</p>
+              <p className="text-[10px] text-gold-lite animate-pulse">Reading liquidity pools & Pyth oracle base rates...</p>
             </div>
           )}
 
@@ -98,7 +98,7 @@ export function AiMarketWhisperer({
             <div className="space-y-3 animate-fade-in">
               <div className="p-3 rounded-[2px] bg-panel border border-gold-lite/20 space-y-1">
                 <div className="text-[9px] uppercase tracking-wider font-bold text-ash flex items-center justify-between">
-                  <span>AI Verdict</span>
+                  <span>Verdict</span>
                   <span className="text-verdigris">{summary.confidenceLevel}</span>
                 </div>
                 <p className="text-xs text-ivory leading-relaxed font-sans">{summary.verdict}</p>
@@ -110,7 +110,7 @@ export function AiMarketWhisperer({
                     <span>On-Chain Trading Activity</span>
                     <span className="text-verdigris">{summary.tradingActivity.direction}</span>
                   </div>
-                  <div className="flex items-center justify-between text-[10px] font-mono text-[#d6c4ac]">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-graphite">
                     <span>{summary.tradingActivity.trades24h} trades</span>
                     <span className="text-verdigris">{summary.tradingActivity.yesVolume24h.toFixed(2)} SOL YES</span>
                     <span className="text-bordeaux">{summary.tradingActivity.noVolume24h.toFixed(2)} SOL NO</span>
@@ -131,7 +131,7 @@ export function AiMarketWhisperer({
 
               <div className="space-y-1 pt-1">
                 <div className="text-[9px] uppercase tracking-wider font-bold text-ash">Key Swinging Factors</div>
-                <ul className="space-y-1 text-[11px] text-[#d6c4ac]">
+                <ul className="space-y-1 text-[11px] text-graphite">
                   {summary.swingingFactors.map((factor: string, i: number) => (
                     <li key={i} className="flex items-start gap-1.5">
                       <Zap className="w-3 h-3 text-gold-lite shrink-0 mt-0.5" />

@@ -126,7 +126,7 @@ function LeaderboardPage() {
                 <motion.span
                   layoutId="lb-sort-pill"
                   className="absolute inset-0 bg-gradient-to-r from-gold to-gold-deep rounded"
-                  style={{ boxShadow: "0 0 16px -4px rgba(34,211,238,.6)" }}
+                  style={{ boxShadow: "0 0 16px -4px color-mix(in oklab, var(--color-gold) 60%, transparent)" }}
                 />
               )}
               <span className="relative z-10">{opt.label}</span>

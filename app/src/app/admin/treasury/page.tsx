@@ -79,7 +79,7 @@ export default function AdminTreasuryPage() {
         </div>
         <button
           onClick={load}
-          className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-ivory transition-colors"
+          className="inline-flex items-center gap-2 text-xs text-ash hover:text-ivory transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
@@ -122,7 +122,7 @@ export default function AdminTreasuryPage() {
           <div className="rounded-[2px] bg-panel border border-hairline p-6">
             <h3 className="text-[13px] font-semibold text-ivory mb-2">Fee Withdrawal</h3>
             <p className="text-xs text-ash mb-3">
-              Fee data source: <span className="text-gray-300 font-mono">{data?.feeSource ?? '—'}</span>
+              Fee data source: <span className="text-ash font-mono">{data?.feeSource ?? '—'}</span>
             </p>
             <p className="text-xs text-ash mb-4">
               Execute the on-chain withdraw (Admin Console → Markets → Withdraw Fees), then record it here so the

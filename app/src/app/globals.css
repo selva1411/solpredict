@@ -27,7 +27,7 @@
   /* text ramp */
   --color-ivory:     #ECF1FA;
   --color-ash:       #8D97AE;
-  --color-ash-dim:   #59637C;
+  --color-ash-dim:   #6E7D9C;
 
   /* outcomes */
   --color-verdigris: #2FD8A0;
@@ -48,10 +48,10 @@
   --radius-panel: 8px;
 
   /* elevation: hairline + top highlight + long soft shadow */
-  --shadow-flat:  inset 0 1px 0 rgba(255,255,255,.035);
-  --shadow-panel: inset 0 1px 0 rgba(255,255,255,.045), 0 1px 0 rgba(0,0,0,.6), 0 24px 60px -32px rgba(0,0,0,.9);
-  --shadow-lift:  inset 0 1px 0 rgba(255,255,255,.07),  0 1px 0 rgba(0,0,0,.6), 0 32px 80px -28px rgba(0,0,0,.95);
-  --shadow-signal:0 0 0 1px rgba(34,211,238,.22), 0 10px 44px -16px rgba(34,211,238,.30);
+  --shadow-flat:  inset 0 1px 0 color-mix(in oklab, var(--color-ivory) 3.5%, transparent);
+  --shadow-panel: inset 0 1px 0 color-mix(in oklab, var(--color-ivory) 4.5%, transparent), 0 1px 0 color-mix(in oklab, var(--color-void) 60%, transparent), 0 24px 60px -32px color-mix(in oklab, var(--color-void) 90%, transparent);
+  --shadow-lift:  inset 0 1px 0 color-mix(in oklab, var(--color-ivory) 7%, transparent),  0 1px 0 color-mix(in oklab, var(--color-void) 60%, transparent), 0 32px 80px -28px color-mix(in oklab, var(--color-void) 95%, transparent);
+  --shadow-signal:0 0 0 1px color-mix(in oklab, var(--color-gold) 22%, transparent), 0 10px 44px -16px color-mix(in oklab, var(--color-gold) 30%, transparent);
 
   --ease-lux: cubic-bezier(.22,.61,.36,1);
 
@@ -63,15 +63,15 @@
   html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
   body {
     background:
-      radial-gradient(90rem 48rem at 85% -12%, rgba(34,211,238,.055), transparent 62%),
-      radial-gradient(70rem 42rem at -18% 108%, rgba(200,180,134,.03), transparent 64%),
+      radial-gradient(90rem 48rem at 85% -12%, color-mix(in oklab, var(--color-gold) 5.5%, transparent), transparent 62%),
+      radial-gradient(70rem 42rem at -18% 108%, color-mix(in oklab, var(--color-leaf) 3%, transparent), transparent 64%),
       var(--color-void);
     color: var(--color-ivory);
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.55;
   }
-  ::selection { background: rgba(34,211,238,.28); color: var(--color-ivory); }
+  ::selection { background: color-mix(in oklab, var(--color-gold) 28%, transparent); color: var(--color-ivory); }
 
   /* universal keyboard focus — visible on every surface, unobtrusive */
   :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
@@ -95,8 +95,8 @@
     content: "";
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
     background-image:
-      linear-gradient(rgba(141,151,174,.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(141,151,174,.03) 1px, transparent 1px);
+      linear-gradient(color-mix(in oklab, var(--color-ash) 3%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, var(--color-ash) 3%, transparent) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: radial-gradient(75% 65% at 50% 38%, black 0%, transparent 100%);
   }
@@ -138,7 +138,7 @@
 
 @utility surface-feature {
   background:
-    radial-gradient(120% 110% at 0% 0%, rgba(34,211,238,.04), transparent 52%),
+    radial-gradient(120% 110% at 0% 0%, color-mix(in oklab, var(--color-gold) 4%, transparent), transparent 52%),
     var(--color-panel);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-panel);
@@ -244,11 +244,11 @@
 @utility odds-flash-up { animation: oddsFlashUp .55s ease-out; }
 @utility odds-flash-down { animation: oddsFlashDown .55s ease-out; }
 @keyframes oddsFlashUp {
-  0% { color: var(--color-verdigris); text-shadow: 0 0 20px rgba(47,216,160,.5); }
+  0% { color: var(--color-verdigris); text-shadow: 0 0 20px color-mix(in oklab, var(--color-verdigris) 50%, transparent); }
   100% { color: var(--color-ivory); text-shadow: none; }
 }
 @keyframes oddsFlashDown {
-  0% { color: var(--color-bordeaux); text-shadow: 0 0 20px rgba(255,107,132,.5); }
+  0% { color: var(--color-bordeaux); text-shadow: 0 0 20px color-mix(in oklab, var(--color-bordeaux) 50%, transparent); }
   100% { color: var(--color-ivory); text-shadow: none; }
 }
 

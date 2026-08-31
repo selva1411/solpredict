@@ -81,7 +81,7 @@ export function DashboardHero({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15 }}
-          className="flex items-center space-x-2 bg-panel border border-hairline px-3 py-1.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+          className="flex items-center space-x-2 bg-panel border border-hairline px-3 py-1.5 rounded shadow-[inset_0_1px_0_color-mix(in_oklab,var(--color-ivory)_5%25,transparent)]"
         >
           {badgeLabel && (
             <span className="text-xs font-mono text-graphite font-bold">{badgeLabel}</span>

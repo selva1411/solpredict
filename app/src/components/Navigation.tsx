@@ -83,7 +83,7 @@ function NotificationBell() {
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute right-0 top-full mt-2 w-80 surface z-50 overflow-hidden shadow-[0_24px_60px_-20px_rgba(0,0,0,.7)]"
+            className="absolute right-0 top-full mt-2 w-80 surface z-50 overflow-hidden shadow-[0_24px_60px_-20px_color-mix(in_oklab,var(--color-void)_70%25,transparent)]"
           >
             <div className="p-3 border-b border-hairline flex items-center justify-between">
               <span className="label-lux">Notifications</span>
@@ -148,7 +148,7 @@ export function Navigation() {
                     <motion.span
                       layoutId="nav-active"
                       className="absolute left-0 -bottom-[21px] h-[2px] w-full bg-gold"
-                      style={{ boxShadow: "0 0 12px rgba(34,211,238,.55)" }}
+                      style={{ boxShadow: "0 0 12px color-mix(in oklab, var(--color-gold) 55%, transparent)" }}
                     />
                   )}
                 </Link>
@@ -166,7 +166,7 @@ export function Navigation() {
                     <motion.span
                       layoutId="nav-active"
                       className="absolute left-0 -bottom-[21px] h-[2px] w-full bg-gold"
-                      style={{ boxShadow: "0 0 12px rgba(34,211,238,.55)" }}
+                      style={{ boxShadow: "0 0 12px color-mix(in oklab, var(--color-gold) 55%, transparent)" }}
                     />
                   )}
                 </Link>
@@ -182,7 +182,7 @@ export function Navigation() {
                   <motion.span
                     layoutId="nav-active"
                     className="absolute left-0 -bottom-[21px] h-[2px] w-full bg-gold"
-                    style={{ boxShadow: "0 0 12px rgba(34,211,238,.55)" }}
+                    style={{ boxShadow: "0 0 12px color-mix(in oklab, var(--color-gold) 55%, transparent)" }}
                   />
                 )}
               </Link>

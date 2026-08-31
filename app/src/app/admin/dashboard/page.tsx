@@ -36,10 +36,10 @@ interface StatCardProps {
 }
 
 const colorMap = {
-  gold:     { bg: 'bg-gold/10',  border: 'border-gold/20',  icon: 'text-gold',  wash: 'rgba(245,158,11,0.08)' },
-  verdigris:{ bg: 'bg-gold/10',  border: 'border-gold/20',  icon: 'text-gold',  wash: 'rgba(245,158,11,0.08)' },
-  amber:    { bg: 'bg-gold/10',  border: 'border-gold/20',  icon: 'text-gold',  wash: 'rgba(232,178,58,0.08)' },
-  green:    { bg: 'bg-verdigris/10',  border: 'border-verdigris/20',  icon: 'text-verdigris',  wash: 'rgba(59,160,107,0.08)' },
+  gold:     { bg: 'bg-gold/10',  border: 'border-gold/20',  icon: 'text-gold',  wash: 'color-mix(in oklab, var(--color-gold) 8%, transparent)' },
+  verdigris:{ bg: 'bg-gold/10',  border: 'border-gold/20',  icon: 'text-gold',  wash: 'color-mix(in oklab, var(--color-gold) 8%, transparent)' },
+  amber:    { bg: 'bg-gold/10',  border: 'border-gold/20',  icon: 'text-gold',  wash: 'color-mix(in oklab, var(--color-gold) 8%, transparent)' },
+  green:    { bg: 'bg-verdigris/10',  border: 'border-verdigris/20',  icon: 'text-verdigris',  wash: 'color-mix(in oklab, var(--color-verdigris) 8%, transparent)' },
 };
 
 function StatCard({ title, value, sub, icon: Icon, color, delay = 0 }: StatCardProps) {
@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
         </div>
         <button
           onClick={fetchData}
-          className="flex items-center gap-2 text-xs px-3 py-2 rounded-[2px] bg-panel border border-hairline text-gray-400 hover:text-ivory hover:bg-ivory/5 transition-all"
+          className="flex items-center gap-2 text-xs px-3 py-2 rounded-[2px] bg-panel border border-hairline text-ash hover:text-ivory hover:bg-ivory/5 transition-all"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
@@ -238,7 +238,7 @@ export default function AdminDashboardPage() {
                 <div key={m.marketPubkey} className="flex items-start gap-3 p-3 rounded-[2px] hover:bg-panel transition-colors">
                   <span className={`mt-0.5 w-2 h-2 rounded-[2px] flex-shrink-0 ${
                     m.status === 'open' ? 'bg-verdigris' :
-                    m.status === 'settled' ? 'bg-gold' : 'bg-gray-600'
+                    m.status === 'settled' ? 'bg-gold' : 'bg-ash-dim'
                   }`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-ivory truncate">{m.question}</p>

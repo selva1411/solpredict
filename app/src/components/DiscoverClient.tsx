@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, Users } from "lucide-react";
@@ -30,6 +30,8 @@ interface DiscoverClientProps {
 
 export default function DiscoverClient({ initialMarkets, initialTopTraders }: DiscoverClientProps) {
   const [activeCategory, setActiveCategory] = useState("All");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   // Seed from server-prefetched rows so the SSR HTML renders the market cards
   // instantly; the background poll still enriches with on-chain data.
   const { markets: onChainMarkets, loading } = useMarkets(10_000, initialMarkets);
@@ -44,10 +46,13 @@ export default function DiscoverClient({ initialMarkets, initialTopTraders }: Di
       return [];
     },
     staleTime: 60_000,
-    initialData: initialTopTraders ?? [],
-    // Fresh from mount so the client first-paint matches the server exactly
-    // (avoids a hydration mismatch from an immediate background refetch).
-    initialDataUpdatedAt: () => Date.now(),
+    // The leaderboard is re-sorted in real time as trades land. Rendering the
+    // server-seeded rows during hydration would race a dev-mode streaming
+    // re-render (the RSC payload can be generated from a newer snapshot than
+    // the SSR HTML), tripping a React hydration mismatch. Gate the grid on
+    // `mounted` so the client paints a stable placeholder first and swaps in
+    // live data after hydration — same API, same data flow, no mismatch.
+    enabled: mounted,
   });
 
   const markets = onChainMarketsToUi(onChainMarkets ?? []);
@@ -60,9 +65,9 @@ export default function DiscoverClient({ initialMarkets, initialTopTraders }: Di
     .slice(0, 8);
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
       <div className="mb-8">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
+        <h1 className="font-display text-[46px] font-semibold uppercase mb-2">
           <span className="text-gold-lite">Discover</span>
         </h1>
         <p className="text-ash">Trending traders and markets</p>
@@ -86,13 +91,13 @@ export default function DiscoverClient({ initialMarkets, initialTopTraders }: Di
 
       <section className="mb-10">
         <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-gold-deep" />
+          <TrendingUp className="w-5 h-5 text-gold" />
           <h2 className="font-display text-[21px] font-bold text-ivory">Trending Markets</h2>
         </div>
         {loading ? (
-          <div className="holo-card p-12 text-center text-ash">Loading...</div>
+          <div className="surface p-12 text-center text-ash">Loading...</div>
         ) : trendingMarkets.length === 0 ? (
-          <div className="holo-card p-12 text-center text-ash">
+          <div className="surface p-12 text-center text-ash">
             No markets yet. <Link href="/create" className="text-gold">Create one</Link>.
           </div>
         ) : (
@@ -111,13 +116,25 @@ export default function DiscoverClient({ initialMarkets, initialTopTraders }: Di
           <Users className="w-5 h-5 text-gold" />
           <h2 className="font-display text-[21px] font-bold text-ivory">Top Traders</h2>
         </div>
-        {topTraders.length === 0 ? (
-          <div className="holo-card p-12 text-center text-ash">No trader data yet.</div>
+        {!mounted ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="surface p-4 flex items-center gap-3">
+                <div className="w-12 h-12 rounded-[2px] bg-hairline/60 animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-24 bg-hairline/60 animate-pulse rounded-[2px]" />
+                  <div className="h-2.5 w-32 bg-hairline/40 animate-pulse rounded-[2px]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : topTraders.length === 0 ? (
+          <div className="surface p-12 text-center text-ash">No trader data yet.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {topTraders.map((t) => (
               <Link key={t.wallet} href={`/profile/${t.wallet}`}>
-                <div className="holo-card p-4 flex items-center gap-3">
+                <div className="surface p-4 flex items-center gap-3 hover:border-gold-deep/60 transition-colors">
                   <div className="w-12 h-12 rounded-[2px] bg-gold/20 flex items-center justify-center text-[21px] font-bold text-gold">
                     {(t.username || t.wallet)[0].toUpperCase()}
                   </div>

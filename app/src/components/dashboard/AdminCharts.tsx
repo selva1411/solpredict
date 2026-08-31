@@ -68,7 +68,7 @@ export function AdminCharts() {
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={dailyVolume}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in oklab, var(--color-ivory) 8%, transparent)" />
               <XAxis dataKey="date" stroke="var(--color-ash-dim)" fontSize={10} tickFormatter={(v: string) => v.slice(5)} />
               <YAxis stroke="var(--color-ash-dim)" fontSize={10} tickFormatter={(v: number) => v.toFixed(1)} />
               <Tooltip
