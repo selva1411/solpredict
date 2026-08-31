@@ -43,7 +43,7 @@ export default function ProbabilityOrb3D({ yesProb, size = 120 }: ProbabilityOrb
             bottom: 0, 
             left: 16 
           }} 
-          className="absolute rounded-[2px] bg-[#131313] border-t border-l border-r border-gold-deep/40 flex items-end justify-center pb-1"
+          className="absolute rounded-[2px] bg-void border-t border-l border-r border-gold-deep/40 flex items-end justify-center pb-1"
         >
           {/* Numeric Readout */}
           <span className="text-xs font-mono font-bold text-gold-lite tracking-wider">
@@ -67,7 +67,7 @@ export default function ProbabilityOrb3D({ yesProb, size = 120 }: ProbabilityOrb
       </div>
 
       {/* Under Label */}
-      <span className="text-[10px] uppercase font-display tracking-widest text-[#d6c4ac] mt-1.5 font-bold">
+      <span className="text-[10px] uppercase font-display tracking-widest text-graphite mt-1.5 font-bold">
         PROBABILITY
       </span>
     </div>

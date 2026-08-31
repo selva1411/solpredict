@@ -258,34 +258,34 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <Settings className="w-5 h-5 text-amber-400" />
+        <Settings className="w-5 h-5 text-gold" />
         <h2 className="text-[21px] font-bold text-ivory">Platform Settings</h2>
       </div>
 
-      <div className="rounded-[2px] bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
-        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-300">
+      <div className="rounded-[2px] bg-gold/10 border border-gold/20 p-4 flex items-start gap-3">
+        <AlertTriangle className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-gold-lite">
           Changes take effect immediately. Fee changes apply to new trades only.
         </p>
       </div>
 
       <div className={`rounded-[2px] border p-5 ${
         paused
-          ? "bg-red-500/10 border-red-500/30"
+          ? "bg-bordeaux/10 border-bordeaux/30"
           : "bg-panel border-hairline"
       }`}>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <Power className={`w-4 h-4 ${paused ? "text-red-400" : "text-gray-500"}`} />
+              <Power className={`w-4 h-4 ${paused ? "text-bordeaux" : "text-ash"}`} />
               <label className="text-[13px] font-semibold text-ivory block">On-Chain Emergency Pause</label>
               {paused && (
-                <span className="text-[10px] font-mono uppercase tracking-widest text-red-400 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-bordeaux bg-bordeaux/10 border border-bordeaux/30 rounded px-1.5 py-0.5">
                   PAUSED
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-600 mb-3">
+            <p className="text-xs text-ash-dim mb-3">
               Halts all non-admin trading on-chain. This is separate from the DB-only maintenanceMode flag above.
             </p>
           </div>
@@ -293,7 +293,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={() => handleEmergencyPause(true)}
               disabled={pauseLoading || paused}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-red-500/10 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-bordeaux/10 border border-bordeaux/30 text-bordeaux text-xs hover:bg-bordeaux/20 transition-colors disabled:opacity-50"
             >
               <Power className="w-3.5 h-3.5" />
               Pause Program
@@ -301,7 +301,7 @@ export default function AdminSettingsPage() {
             <button
               onClick={() => handleEmergencyPause(false)}
               disabled={pauseLoading || !paused}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-green-500/10 border border-green-500/30 text-green-400 text-xs hover:bg-green-500/20 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-verdigris/10 border border-verdigris/30 text-verdigris text-xs hover:bg-verdigris/20 transition-colors disabled:opacity-50"
             >
               <PowerOff className="w-3.5 h-3.5" />
               Unpause
@@ -313,11 +313,11 @@ export default function AdminSettingsPage() {
       {/* Guardian multisig — who can unpause, and how many signatures are needed */}
       <div className="rounded-[2px] bg-panel border border-hairline p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <ShieldCheck className="w-4 h-4 text-verdigris" />
           <label className="text-[13px] font-semibold text-ivory block">Unpause Guardians (Multisig)</label>
         </div>
-        <p className="text-xs text-gray-600">
-          Unpausing requires <span className="text-emerald-400 font-mono">{requiredConfirmations}</span> distinct guardian
+        <p className="text-xs text-ash-dim">
+          Unpausing requires <span className="text-verdigris font-mono">{requiredConfirmations}</span> distinct guardian
           signature(s). The admin is automatically the first guardian; add up to 3 total.
         </p>
 
@@ -330,7 +330,7 @@ export default function AdminSettingsPage() {
                   <button
                     onClick={() => handleRemoveGuardian(g)}
                     disabled={guardianLoading}
-                    className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 disabled:opacity-50 flex-shrink-0"
+                    className="flex items-center gap-1 text-[10px] text-bordeaux hover:text-bordeaux disabled:opacity-50 flex-shrink-0"
                     title="Remove guardian (lowers threshold first if needed)"
                   >
                     <UserX className="w-3 h-3" />
@@ -357,7 +357,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={handleAddGuardian}
             disabled={guardianLoading || !newGuardian.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-verdigris/10 border border-verdigris/30 text-verdigris text-xs hover:bg-verdigris/20 transition-colors disabled:opacity-50 flex-shrink-0"
           >
             <UserPlus className="w-3.5 h-3.5" />
             Add
@@ -379,7 +379,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={() => handleSetThreshold(guardianThreshold)}
             disabled={guardianLoading || guardianThreshold === requiredConfirmations}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-verdigris/10 border border-verdigris/30 text-verdigris text-xs hover:bg-verdigris/20 transition-colors disabled:opacity-50 flex-shrink-0"
           >
             <Save className="w-3.5 h-3.5" />
             Set Threshold
@@ -402,7 +402,7 @@ export default function AdminSettingsPage() {
                   {setting.label}
                 </label>
                 {setting.description && (
-                  <p className="text-xs text-gray-600 mb-3">{setting.description}</p>
+                  <p className="text-xs text-ash-dim mb-3">{setting.description}</p>
                 )}
                 {setting.type === 'boolean' ? (
                   <div className="flex items-center gap-3">
@@ -410,8 +410,8 @@ export default function AdminSettingsPage() {
                       onClick={() => updateValue(setting.key, 'true')}
                       className={`px-3 py-1.5 text-xs rounded-[2px] border transition-all ${
                         setting.value === 'true'
-                          ? 'bg-green-500/20 border-green-500/40 text-green-400'
-                          : 'bg-panel border-hairline text-gray-500'
+                          ? 'bg-verdigris/20 border-verdigris/40 text-verdigris'
+                          : 'bg-panel border-hairline text-ash'
                       }`}
                     >
                       true
@@ -420,8 +420,8 @@ export default function AdminSettingsPage() {
                       onClick={() => updateValue(setting.key, 'false')}
                       className={`px-3 py-1.5 text-xs rounded-[2px] border transition-all ${
                         setting.value === 'false'
-                          ? 'bg-red-500/20 border-red-500/40 text-red-400'
-                          : 'bg-panel border-hairline text-gray-500'
+                          ? 'bg-bordeaux/20 border-bordeaux/40 text-bordeaux'
+                          : 'bg-panel border-hairline text-ash'
                       }`}
                     >
                       false
@@ -439,7 +439,7 @@ export default function AdminSettingsPage() {
               <button
                 onClick={() => saveSetting(setting.key, setting.value)}
                 disabled={saving === setting.key}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors disabled:opacity-50 flex-shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-[2px] bg-gold/10 border border-gold/20 text-gold text-xs hover:bg-gold/20 transition-colors disabled:opacity-50 flex-shrink-0"
               >
                 {saving === setting.key ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />

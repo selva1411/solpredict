@@ -63,8 +63,8 @@ export function LivePriceBar({
 
   if (liveLoading) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[#d6c4ac] animate-pulse">
-        <span className="w-3 h-3 rounded-[2px] border border-[#d6c4ac]/40 border-t-transparent animate-spin" />
+      <span className="inline-flex items-center gap-1 text-[10px] font-mono text-graphite animate-pulse">
+        <span className="w-3 h-3 rounded-[2px] border border-graphite/40 border-t-transparent animate-spin" />
         Loading price...
       </span>
     );
@@ -102,12 +102,12 @@ export function LivePriceBar({
     <div className="space-y-1.5 font-mono">
       <div className="flex items-center justify-between text-[11px]">
         <div className="flex items-center gap-2">
-          <span className="text-[#d6c4ac] text-[10px] uppercase tracking-wider font-display font-bold">Live Price</span>
+          <span className="text-graphite text-[10px] uppercase tracking-wider font-display font-bold">Live Price</span>
           <span className="text-gold font-bold">{entry?.symbol ?? "Feed"}</span>
           <span className="text-ivory text-[13px] font-bold">{formatPrice(livePrice)}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-[#d6c4ac]">
+          <span className="text-[10px] text-graphite">
             Target: {formatTarget(targetPrice, targetExpo)}
           </span>
           <span className={`text-xs font-bold px-2 py-0.5 rounded ${yesWinning ? "bg-verdigris/20 text-verdigris" : "bg-bordeaux/20 text-bordeaux"}`}>
@@ -121,8 +121,8 @@ export function LivePriceBar({
           style={{
             width: `${barPct}%`,
             background: yesWinning
-              ? "linear-gradient(90deg, #a1d494, #6cb660)"
-              : "linear-gradient(90deg, #ffb4ab, #e57373)",
+              ? "linear-gradient(90deg, var(--color-verdigris), var(--color-gold-deep))"
+              : "linear-gradient(90deg, var(--color-bordeaux), var(--color-bordeaux))",
           }}
         />
         <div
@@ -131,7 +131,7 @@ export function LivePriceBar({
           title="Target price"
         />
       </div>
-      <div className="flex justify-between text-[9px] text-[#d6c4ac]/70">
+      <div className="flex justify-between text-[9px] text-graphite/70">
         <span>{comparison === 0 ? "Below target (NO winning)" : "Below target (YES winning)"}</span>
         <span className="font-bold">{deltaPct >= 0 ? "+" : ""}{deltaPct.toFixed(1)}% from target</span>
         <span>{comparison === 0 ? "Above target (YES winning)" : "Above target (NO winning)"}</span>

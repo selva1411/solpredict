@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useProgram } from "@/hooks/useProgram";
 import { useUserRole } from "@/hooks/useUserRole";
 import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
 import { txAccounts, sendWithRetry } from "@/lib/anchor-utils";
@@ -256,7 +256,7 @@ function AdminPage() {
           marketCount: configAcc.marketCount.toNumber(),
         });
       } catch (configErr) {
-        console.log("Config PDA not initialized yet:", configErr);
+        // Config not initialized yet — first-boot path, not an error.
         setConfig(null);
       }
 
@@ -417,7 +417,7 @@ function AdminPage() {
           }
         });
       } catch (err) {
-        console.log("Error loading on-chain admin activity logs:", err);
+        // On-chain activity unavailable (RPC) — DB audit log below still renders.
       }
 
       // Fall back to the persistent DB audit log when the on-chain signature
@@ -453,13 +453,13 @@ function AdminPage() {
             });
           }
         } catch (err) {
-          console.log("Error loading DB audit logs:", err);
+          // DB audit log unavailable — on-chain logs above still render.
         }
       }
 
       setAdminActivity(items);
     } catch (err) {
-      console.log("Error loading admin activity logs:", err);
+      // Both activity sources failed — panel renders empty state.
     } finally {
       setActivityLoading(false);
     }
@@ -546,13 +546,31 @@ function AdminPage() {
    * 3. Flips the proposal row to approved with the market pubkey so it leaves
    *    the review queue.
    */
-  const handleApproveProposal = async (proposal: { id: string; proposalPubkey: string }) => {
+  const handleApproveProposal = async (
+    proposal: { id: string; proposalPubkey: string },
+    liquidity?: { yesSol: number; noSol: number },
+  ) => {
     if (!wallet?.publicKey || !program) throw new Error("Connect your admin wallet first");
 
     let onChainProposal;
     try {
       onChainProposal = await program.account.marketProposal.fetch(new PublicKey(proposal.proposalPubkey));
     } catch {
+      // Fallback for demo/seeded proposals or already-processed accounts: update DB status directly
+      const dbRes = await adminFetch("/api/admin/proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: proposal.id,
+          action: "approve",
+          reviewer: wallet.publicKey.toBase58(),
+        }),
+      });
+      if (dbRes.ok) {
+        toast.info("Proposal was not found on-chain — marked as approved in DB.");
+        fetchConfigAndMarkets();
+        return;
+      }
       throw new Error("Proposal account not found on-chain — it may have already been approved or rejected.");
     }
     if ((onChainProposal.status as { approved?: unknown })?.approved) {
@@ -594,6 +612,54 @@ function AdminPage() {
       await new Promise((r) => setTimeout(r, 2000));
     }
 
+    // 1.5) Seed initial liquidity if the admin provided it at approval time.
+    // approve_market only creates the Market + mints + treasury — the pools
+    // start EMPTY, so a freshly approved market has nothing for traders to buy
+    // into. add_liquidity moves SOL into the treasury and mints YES/NO tokens
+    // 1:1; the provider ATAs and liquidity-position account are created
+    // init_if_needed. (Follows the market-page LP deposit flow exactly.)
+    let seeded = false;
+    let seededTotalSol = 0;
+    if (liquidity && (liquidity.yesSol > 0 || liquidity.noSol > 0)) {
+      const yesMintPda = getYesMintPda(marketPda, program.programId);
+      const noMintPda = getNoMintPda(marketPda, program.programId);
+      const treasuryPda = getTreasuryPda(marketPda, program.programId);
+      const providerYesAta = getAssociatedTokenAddressSync(yesMintPda, wallet.publicKey);
+      const providerNoAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
+      const [liquidityPositionPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("lp"), marketPda.toBuffer(), wallet.publicKey.toBuffer()],
+        program.programId
+      );
+
+      const lpSig = await sendWithRetry(
+        program,
+        program.methods
+          .addLiquidity(
+            new anchor.BN(Math.round(liquidity.yesSol * 1e9)),
+            new anchor.BN(Math.round(liquidity.noSol * 1e9))
+          )
+          .accounts(txAccounts({
+            provider: wallet.publicKey,
+            market: marketPda,
+            treasury: treasuryPda,
+            yesMint: yesMintPda,
+            noMint: noMintPda,
+            providerYesAta,
+            providerNoAta,
+            liquidityPosition: liquidityPositionPda,
+            emergencyPause: getEmergencyPausePda(program.programId),
+          }))
+      );
+
+      try {
+        await connection.confirmTransaction(lpSig, "confirmed");
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      seeded = true;
+      seededTotalSol = liquidity.yesSol + liquidity.noSol;
+    }
+
     // 2) Record the newly-created market in the DB (verified on-chain).
     const syncRes = await fetch("/api/sync/market", {
       method: "POST",
@@ -627,7 +693,11 @@ function AdminPage() {
     });
     if (!dbRes.ok) throw new Error(`Proposal approved on-chain but DB status update failed (HTTP ${dbRes.status})`);
 
-    toast.success("Proposal approved on-chain — market is now tradable!");
+    toast.success(
+      seeded
+        ? `Proposal approved — market seeded with ${seededTotalSol.toFixed(2)} SOL and is now tradable!`
+        : "Proposal approved on-chain — market is tradable but has empty pools. Add liquidity via the market page.",
+    );
     fetchConfigAndMarkets();
   };
 
@@ -646,6 +716,21 @@ function AdminPage() {
     try {
       onChainProposal = await program.account.marketProposal.fetch(new PublicKey(proposal.proposalPubkey));
     } catch {
+      // Fallback for demo/seeded proposals or already-processed accounts: update DB status directly
+      const dbRes = await adminFetch("/api/admin/proposals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: proposal.id,
+          action: "reject",
+          reviewer: wallet.publicKey.toBase58(),
+        }),
+      });
+      if (dbRes.ok) {
+        toast.info("Proposal was not found on-chain — marked as rejected in DB.");
+        fetchConfigAndMarkets();
+        return;
+      }
       throw new Error("Proposal account not found on-chain — it may have already been approved or rejected.");
     }
     if ((onChainProposal.status as { rejected?: unknown })?.rejected) {
@@ -1389,7 +1474,7 @@ function AdminPage() {
                         await handleManualSettle(m, outcome);
                       }
                     }}
-                    className="flex-1 btn-royale text-xs py-2 bg-bordeaux hover:bg-[#ffc9c2] text-[#131313] uppercase cursor-pointer disabled:opacity-50 font-bold"
+                    className="flex-1 btn-royale text-xs py-2 bg-bordeaux hover:bg-gold-lite text-void uppercase cursor-pointer disabled:opacity-50 font-bold"
                   >
                     {settlingId ? "Settling..." : "Confirm"}
                   </button>
@@ -1429,17 +1514,17 @@ function AdminPage() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          className="p-4 sm:p-5 rounded-[2px] bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2 font-mono text-xs shadow-lg"
+          className="p-4 sm:p-5 rounded-[2px] bg-gold/10 border border-gold/30 text-gold-lite space-y-2 font-mono text-xs shadow-lg"
         >
-          <div className="flex items-center space-x-2 text-amber-400 font-bold text-[13px]">
-            <AlertTriangle className="w-5 h-5 shrink-0 animate-pulse text-amber-400" />
+          <div className="flex items-center space-x-2 text-gold font-bold text-[13px]">
+            <AlertTriangle className="w-5 h-5 shrink-0 animate-pulse text-gold" />
             <span>ADMIN KEY MISMATCH</span>
           </div>
-          <p className="text-amber-200/90 leading-relaxed font-sans text-xs">
+          <p className="text-gold-lite/90 leading-relaxed font-sans text-xs">
             Your connected browser wallet <code className="bg-black/50 px-1.5 py-0.5 rounded text-ivory font-mono">{wallet.publicKey.toBase58()}</code> is not the on-chain Administrator authority.
-            The on-chain Config PDA was initialized by key <code className="bg-black/50 px-1.5 py-0.5 rounded text-amber-300 font-mono">{config.admin.toBase58()}</code>.
+            The on-chain Config PDA was initialized by key <code className="bg-black/50 px-1.5 py-0.5 rounded text-gold-lite font-mono">{config.admin.toBase58()}</code>.
           </p>
-          <div className="text-[11px] text-amber-300/80 pt-1 font-sans">
+          <div className="text-[11px] text-gold-lite/80 pt-1 font-sans">
             <strong>To execute admin actions (Create Market, Settle, Cancel, Withdraw Fees):</strong>
             <ul className="list-disc list-inside mt-1 space-y-0.5">
               <li>Connect your wallet using authority key <code className="font-mono bg-black/50 px-1.5 py-0.5 text-ivory rounded">{config.admin.toBase58()}</code> (or import <code className="font-mono bg-black/50 px-1.5 py-0.5 text-ivory rounded">~/.config/solana/id.json</code> into Phantom/Solflare).</li>
@@ -1591,7 +1676,7 @@ function AdminPage() {
                   <tbody className="divide-y divide-hairline/10 font-mono text-xs">
                     {adminActivity.map((item, idx) => {
                       let tagClass = "";
-                      if (item.type === "CREATE") tagClass = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+                      if (item.type === "CREATE") tagClass = "bg-ash/10 text-ash border border-ash/20";
                       else if (item.type === "SETTLE") tagClass = "bg-verdigris/10 text-verdigris border border-verdigris/20";
                       else if (item.type === "CANCEL") tagClass = "bg-bordeaux/10 text-bordeaux border border-bordeaux/20";
                       else tagClass = "bg-gold-lite/10 text-gold border border-gold-lite/20";
@@ -1895,13 +1980,13 @@ function AdminPage() {
                                     <button
                                       disabled={settlingId !== null}
                                       onClick={() => handleSettleButtonClick(m)}
-                                      className="px-2.5 py-1 bg-verdigris hover:bg-[#b7e4ac] text-[#131313] border border-hairline rounded text-[9px] cursor-pointer font-bold"
+                                      className="px-2.5 py-1 bg-verdigris hover:bg-verdigris/70 text-void border border-hairline rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Settle
                                     </button>
                                     <button
                                       onClick={() => setCancelModal({ isOpen: true, marketPda: m.publicKey })}
-                                      className="px-2.5 py-1 bg-bordeaux hover:bg-[#ffc9c2] text-[#131313] border border-hairline rounded text-[9px] cursor-pointer font-bold"
+                                      className="px-2.5 py-1 bg-bordeaux hover:bg-gold-lite text-void border border-hairline rounded text-[9px] cursor-pointer font-bold"
                                     >
                                       Cancel
                                     </button>
@@ -1964,8 +2049,8 @@ function AdminPage() {
               <h2 className="text-[21px] font-bold font-display uppercase tracking-wider text-ivory">Platform Configuration</h2>
               <div className="flex items-center gap-3">
                 {paused && (
-                  <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-red-400 bg-red-500/10 border border-red-500/30 rounded-[2px] px-3 py-1.5">
-                    <span className="h-1.5 w-1.5 rounded-[2px] bg-red-500 animate-pulse" />
+                  <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-bordeaux bg-bordeaux/10 border border-bordeaux/30 rounded-[2px] px-3 py-1.5">
+                    <span className="h-1.5 w-1.5 rounded-[2px] bg-bordeaux animate-pulse" />
                     Emergency Paused
                   </span>
                 )}
@@ -2029,7 +2114,7 @@ function AdminPage() {
                 </button>
               </div>
               {!isWalletAdmin && (
-                <p className="text-[11px] text-amber-400/90">
+                <p className="text-[11px] text-gold/90">
                   Only the current admin can transfer authority.
                 </p>
               )}
@@ -2038,14 +2123,14 @@ function AdminPage() {
               <button
                 onClick={() => handleEmergencyPause(true)}
                 disabled={pausing || paused}
-                className="flex-1 text-xs py-2 px-4 rounded-[2px] border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 text-xs py-2 px-4 rounded-[2px] border border-bordeaux/40 text-bordeaux hover:bg-bordeaux/10 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Emergency Pause
               </button>
               <button
                 onClick={() => handleEmergencyPause(false)}
                 disabled={pausing || !paused}
-                className="flex-1 text-xs py-2 px-4 rounded-[2px] border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 text-xs py-2 px-4 rounded-[2px] border border-verdigris/40 text-verdigris hover:bg-verdigris/10 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Unpause Program
               </button>

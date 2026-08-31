@@ -174,7 +174,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                 onClick={() => setSelectedSideFilter(tab)}
                 className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
                   selectedSideFilter === tab
-                    ? "bg-gold-lite text-[#131313] font-bold"
+                    ? "bg-gold-lite text-void font-bold"
                     : "text-ash hover:text-ivory"
                 }`}
               >
@@ -182,7 +182,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
               </button>
             ))}
           </div>
-          <span className="text-[10px] font-mono text-[#d6c4ac] flex items-center gap-1 pl-2">
+          <span className="text-[10px] font-mono text-graphite flex items-center gap-1 pl-2">
             <span className="w-1.5 h-1.5 rounded-[2px] bg-verdigris animate-pulse inline-block" />
             <span>LIVE</span>
           </span>
@@ -192,7 +192,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
       {/* Order Book Table */}
       <div className="space-y-1">
         {/* Column Headers */}
-        <div className="grid grid-cols-5 text-[9px] uppercase tracking-wider font-display text-[#d6c4ac] border-b border-hairline/20 pb-1 font-semibold">
+        <div className="grid grid-cols-5 text-[9px] uppercase tracking-wider font-display text-graphite border-b border-hairline/20 pb-1 font-semibold">
           <div className="text-left">Side</div>
           <div className="text-center">Price</div>
           <div className="text-center">Qty</div>
@@ -213,7 +213,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                     <span className="text-bordeaux font-bold text-[10px]">ASK {ask.side}</span>
                   </div>
                   <div className="text-center text-ivory font-bold">{(ask.priceBps / 10000).toFixed(2)} SOL</div>
-                  <div className="text-center text-[#d6c4ac]">{remaining}</div>
+                  <div className="text-center text-graphite">{remaining}</div>
                   <div className="text-center text-ash text-[10px]">{isUserOrder ? "You" : `${ask.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
@@ -236,7 +236,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
             })}
           </div>
         ) : (
-          <div className="py-2 text-center text-[10px] font-mono text-[#d6c4ac]/50 border-b border-hairline/10">
+          <div className="py-2 text-center text-[10px] font-mono text-ash border-b border-hairline/10">
             No active ask orders
           </div>
         )}
@@ -261,7 +261,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
                     <span className="text-verdigris font-bold text-[10px]">BID {bid.side}</span>
                   </div>
                   <div className="text-center text-ivory font-bold">{(bid.priceBps / 10000).toFixed(2)} SOL</div>
-                  <div className="text-center text-[#d6c4ac]">{remaining}</div>
+                  <div className="text-center text-graphite">{remaining}</div>
                   <div className="text-center text-ash text-[10px]">{isUserOrder ? "You" : `${bid.maker}…`}</div>
                   <div className="text-right z-10">
                     {onFillOrder && !isUserOrder ? (
@@ -284,7 +284,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
             })}
           </div>
         ) : (
-          <div className="py-2 text-center text-[10px] font-mono text-[#d6c4ac]/50">
+          <div className="py-2 text-center text-[10px] font-mono text-ash">
             No active bid orders
           </div>
         )}

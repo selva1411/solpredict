@@ -74,7 +74,7 @@ export default function AdminTreasuryPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
-          <DollarSign className="w-5 h-5 text-green-400" />
+          <DollarSign className="w-5 h-5 text-verdigris" />
           <h2 className="text-[21px] font-bold text-ivory">Treasury Dashboard</h2>
         </div>
         <button
@@ -96,10 +96,10 @@ export default function AdminTreasuryPage() {
         <>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: 'Fees Collected', value: `${(data?.totalFeeCollectedSol || 0).toFixed(4)} SOL`, icon: DollarSign, color: 'text-green-400', bg: 'bg-green-500/10' },
-              { label: 'Fees Withdrawn', value: `${(data?.totalFeeWithdrawnSol || 0).toFixed(4)} SOL`, icon: ArrowDownRight, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-              { label: 'Pending Fees', value: `${(data?.pendingFeesSol || 0).toFixed(4)} SOL`, icon: Wallet, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-              { label: 'Trade Volume', value: `${(data?.totalTradeVolume || 0).toFixed(2)} SOL`, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { label: 'Fees Collected', value: `${(data?.totalFeeCollectedSol || 0).toFixed(4)} SOL`, icon: DollarSign, color: 'text-verdigris', bg: 'bg-verdigris/10' },
+              { label: 'Fees Withdrawn', value: `${(data?.totalFeeWithdrawnSol || 0).toFixed(4)} SOL`, icon: ArrowDownRight, color: 'text-gold', bg: 'bg-gold/10' },
+              { label: 'Pending Fees', value: `${(data?.pendingFeesSol || 0).toFixed(4)} SOL`, icon: Wallet, color: 'text-gold', bg: 'bg-gold/10' },
+              { label: 'Trade Volume', value: `${(data?.totalTradeVolume || 0).toFixed(2)} SOL`, icon: TrendingUp, color: 'text-gold', bg: 'bg-gold/10' },
             ].map((card, i) => (
               <motion.div
                 key={card.label}
@@ -109,7 +109,7 @@ export default function AdminTreasuryPage() {
                 className="rounded-[2px] bg-panel border border-hairline p-5"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">{card.label}</p>
+                  <p className="text-xs text-ash uppercase tracking-wider">{card.label}</p>
                   <div className={`p-2 rounded-[2px] ${card.bg}`}>
                     <card.icon className={`w-4 h-4 ${card.color}`} />
                   </div>
@@ -121,16 +121,16 @@ export default function AdminTreasuryPage() {
 
           <div className="rounded-[2px] bg-panel border border-hairline p-6">
             <h3 className="text-[13px] font-semibold text-ivory mb-2">Fee Withdrawal</h3>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-ash mb-3">
               Fee data source: <span className="text-gray-300 font-mono">{data?.feeSource ?? '—'}</span>
             </p>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-ash mb-4">
               Execute the on-chain withdraw (Admin Console → Markets → Withdraw Fees), then record it here so the
               ledger stays accurate.
             </p>
             <div className="flex items-center gap-3">
               <div className="flex-1 px-4 py-3 rounded-[2px] bg-panel border border-hairline">
-                <p className="text-xs text-gray-500">Available for withdrawal</p>
+                <p className="text-xs text-ash">Available for withdrawal</p>
                 <p className="text-[21px] font-bold font-mono text-ivory mt-0.5">
                   {(data?.pendingFeesSol || 0).toFixed(4)} SOL
                 </p>
@@ -148,7 +148,7 @@ export default function AdminTreasuryPage() {
           <div className="rounded-[2px] bg-panel border border-hairline p-6">
             <h3 className="text-[13px] font-semibold text-ivory mb-4">Withdrawal History</h3>
             {!data?.recentWithdrawals?.length ? (
-              <p className="text-xs text-gray-500">No withdrawals recorded yet.</p>
+              <p className="text-xs text-ash">No withdrawals recorded yet.</p>
             ) : (
               <div className="space-y-2">
                 {data.recentWithdrawals.map((w, i) => (
@@ -160,15 +160,15 @@ export default function AdminTreasuryPage() {
                           href={`https://explorer.solana.com/tx/${w.signature}${process.env.NEXT_PUBLIC_CLUSTER === 'devnet' ? '?cluster=devnet' : ''}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-400 hover:text-amber-300"
+                          className="inline-flex items-center gap-1 text-[10px] font-mono text-gold hover:text-gold-lite"
                         >
                           {w.signature.slice(0, 12)}… <ExternalLink className="w-2.5 h-2.5" />
                         </a>
                       ) : (
-                        <span className="text-[10px] font-mono text-gray-600">no sig</span>
+                        <span className="text-[10px] font-mono text-ash-dim">no sig</span>
                       )}
                     </div>
-                    <span className="text-[10px] font-mono text-gray-500">
+                    <span className="text-[10px] font-mono text-ash">
                       {new Date(w.createdAt).toLocaleString()}
                     </span>
                   </div>

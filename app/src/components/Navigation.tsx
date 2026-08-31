@@ -94,7 +94,7 @@ function NotificationBell() {
                 <div className="p-6 text-center text-[10px] text-ash-dim font-mono">No notifications yet</div>
               ) : (
                 notifications.slice(0, 20).map((n) => (
-                  <div key={n.id} className={`px-3 py-2.5 border-b border-hairline last:border-0 ${!n.read ? "bg-gold/5 border-l-2 border-l-cyan-400/60" : ""}`}>
+                  <div key={n.id} className={`px-3 py-2.5 border-b border-hairline last:border-0 ${!n.read ? "bg-gold/5 border-l-2 border-l-gold/60" : ""}`}>
                     <div className="text-[11px] text-ivory font-medium">{n.message}</div>
                     <div className="text-[9px] text-ash-dim font-mono mt-0.5">{new Date(n.createdAt).toLocaleString()}</div>
                   </div>

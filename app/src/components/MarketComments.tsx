@@ -161,6 +161,7 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
         <div className="p-3 rounded-[2px] bg-panel border border-hairline space-y-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
+              {/* eslint-disable-next-line @next/next/no-img-element -- external avatar URLs; next/image would need remotePatterns config */}
               <img
                 src={comment.authorAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${comment.authorWallet}`}
                 alt="avatar"
@@ -208,7 +209,7 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
                   }
                 }}
                 placeholder="Write a reply..."
-                className="flex-1 bg-panel border border-hairline rounded-[2px] px-3 py-2 text-xs text-ivory placeholder-ash/50 focus:outline-none focus:border-gold/60 font-mono"
+                className="flex-1 bg-panel border border-hairline rounded-[2px] px-3 py-2 text-xs text-ivory placeholder-ash focus:outline-none focus:border-gold/60 font-mono"
               />
               <button
                 onClick={() => handlePostReply(comment.id as number)}
@@ -246,12 +247,12 @@ export function MarketComments({ marketPubkey }: { marketPubkey: string }) {
             value={newCommentText}
             disabled={!wallet?.publicKey || submitting}
             onChange={(e) => setNewCommentText(e.target.value)}
-            className="flex-1 bg-panel border border-hairline rounded-[2px] px-4 py-2.5 text-xs text-ivory placeholder-ash/50 focus:outline-none focus:border-gold/60 font-mono disabled:opacity-50"
+            className="flex-1 bg-panel border border-hairline rounded-[2px] px-4 py-2.5 text-xs text-ivory placeholder-ash focus:outline-none focus:border-gold/60 font-mono disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!wallet?.publicKey || !newCommentText.trim() || submitting}
-            className="px-4 py-2.5 bg-gold-lite text-[#131313] font-bold text-xs uppercase tracking-wider rounded-[2px] hover:bg-[#ffe3b8] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
+            className="px-4 py-2.5 bg-gold-lite text-void font-bold text-xs uppercase tracking-wider rounded-[2px] hover:bg-gold-lite transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Post</span>

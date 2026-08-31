@@ -138,7 +138,7 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
 
   return (
     <div className="glass-panel p-6 sm:p-8 space-y-4">
-      <h3 className="text-xs font-bold uppercase tracking-wider font-display text-[#d6c4ac] flex items-center space-x-2">
+      <h3 className="text-xs font-bold uppercase tracking-wider font-display text-graphite flex items-center space-x-2">
         <TrendingUp className="w-4 h-4 text-gold" />
         <span>Live Price Chart</span>
       </h3>
@@ -177,26 +177,26 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
       </div>
 
       {priceStatus === "error" ? (
-        <div className="flex items-center justify-center h-64 border border-[#353534] rounded font-mono text-[13px] text-ash">
-          Could not connect to price feed.
-        </div>
+<div className="flex items-center justify-center h-64 border border-hairline rounded font-mono text-[13px] text-ash">
+            Could not connect to price feed.
+          </div>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ffd89c" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#ffd89c" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--color-gold)" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="var(--color-gold)" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#252525" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-hairline-2)" vertical={false} />
             <XAxis
               dataKey="time"
               tickFormatter={(t: unknown) =>
                 new Date(Number(t)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
               }
-              stroke="#808495"
-              tick={{ fill: "#808495", fontSize: 10, fontFamily: "JetBrains Mono" }}
+              stroke="var(--color-ash-dim)"
+              tick={{ fill: "var(--color-ash-dim)", fontSize: 10, fontFamily: "JetBrains Mono" }}
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
@@ -204,8 +204,8 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
             />
             <YAxis
               domain={["auto", "auto"]}
-              stroke="#808495"
-              tick={{ fill: "#808495", fontSize: 10, fontFamily: "JetBrains Mono" }}
+              stroke="var(--color-ash-dim)"
+              tick={{ fill: "var(--color-ash-dim)", fontSize: 10, fontFamily: "JetBrains Mono" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v: unknown) => `$${Number(v).toFixed(2)}`}
@@ -213,28 +213,28 @@ export const LivePriceChartPanel = React.memo(function LivePriceChartPanel() {
             />
             <Tooltip
               contentStyle={{
-                background: "#1a1a1a",
-                border: "1px solid #808495",
+                background: "var(--color-obsidian)",
+                border: "1px solid var(--color-hairline)",
                 borderRadius: 2,
                 fontFamily: "JetBrains Mono",
                 fontSize: 11,
-                color: "#F4F4F9",
+                color: "var(--color-ivory)",
                 padding: "6px 10px",
               }}
               labelFormatter={(t: unknown) =>
                 new Date(Number(t)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
               }
               formatter={(v: unknown) => [`$${Number(v).toFixed(4)}`, "SOL/USD"]}
-              cursor={{ stroke: "#9e8e78", strokeWidth: 1 }}
+              cursor={{ stroke: "var(--color-gold-deep)", strokeWidth: 1 }}
             />
             <Area
               type="monotone"
               dataKey="price"
-              stroke="#ffd89c"
+              stroke="var(--color-gold)"
               strokeWidth={1.5}
               fill="url(#priceGradient)"
               dot={false}
-              activeDot={{ r: 3, fill: "#ffd89c", stroke: "#131313", strokeWidth: 1 }}
+              activeDot={{ r: 3, fill: "var(--color-gold)", stroke: "var(--color-void)", strokeWidth: 1 }}
               isAnimationActive={false}
             />
           </AreaChart>

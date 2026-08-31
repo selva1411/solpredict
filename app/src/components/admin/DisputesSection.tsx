@@ -82,7 +82,7 @@ export function DisputesSection() {
   return (
     <motion.section variants={cardVariants} initial="hidden" animate="visible" className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 text-[#FFB454]">
+        <div className="flex items-center gap-2 text-gold">
           <Scale className="w-5 h-5" />
           <h2 className="text-[21px] font-bold font-display uppercase tracking-wider text-ivory">
             Disputes ({disputes.length})
@@ -114,10 +114,10 @@ export function DisputesSection() {
                     <span
                       className={`text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded ${
                         d.status === "pending"
-                          ? "bg-amber-500/10 text-[#FFB454] border border-amber-500/20"
+                          ? "bg-gold/10 text-gold border border-gold/20"
                           : d.status === "resolved"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-red-500/10 text-bordeaux border border-red-500/20"
+                          ? "bg-verdigris/10 text-verdigris border border-verdigris/20"
+                          : "bg-bordeaux/10 text-bordeaux border border-bordeaux/20"
                       }`}
                     >
                       {d.status}
@@ -135,7 +135,7 @@ export function DisputesSection() {
                 <p className="text-xs text-ash">Reason: {d.reason}</p>
                 {d.evidence && <p className="text-[10px] text-ash italic">Evidence: {d.evidence}</p>}
                 {d.resolution && (
-                  <p className="text-[10px] text-emerald-400 font-mono">
+                  <p className="text-[10px] text-verdigris font-mono">
                     Resolution: {d.resolution} — by {d.resolvedBy}
                   </p>
                 )}
@@ -144,14 +144,14 @@ export function DisputesSection() {
                     <button
                       onClick={() => resolveDispute(d.id, "resolved")}
                       disabled={resolvingId === d.id}
-                      className="text-[10px] py-1 px-3 rounded-[2px] border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                      className="text-[10px] py-1 px-3 rounded-[2px] border border-verdigris/40 text-verdigris hover:bg-verdigris/10 transition-colors disabled:opacity-50"
                     >
                       Resolve
                     </button>
                     <button
                       onClick={() => resolveDispute(d.id, "rejected")}
                       disabled={resolvingId === d.id}
-                      className="text-[10px] py-1 px-3 rounded-[2px] border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      className="text-[10px] py-1 px-3 rounded-[2px] border border-bordeaux/40 text-bordeaux hover:bg-bordeaux/10 transition-colors disabled:opacity-50"
                     >
                       Reject
                     </button>

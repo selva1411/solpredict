@@ -27,7 +27,7 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
   return (
     <div className="flex flex-col items-center">
       <div
-        className={`relative overflow-hidden rounded bg-[#131313] border border-gold-deep/40 font-mono font-bold text-gold-lite flex items-center justify-center ${
+        className={`relative overflow-hidden rounded bg-void border border-gold-deep/40 font-mono font-bold text-gold-lite flex items-center justify-center ${
           compact ? "w-8 h-8 text-xs" : "w-12 h-12 text-[21px]"
         }`}
         style={{ perspective: "200px" }}
@@ -37,7 +37,7 @@ function FlipUnit({ value, label, compact }: { value: number; label: string; com
         </span>
       </div>
       {!compact && (
-        <span className="text-[9px] uppercase tracking-wider text-[#d6c4ac] mt-1">{label}</span>
+        <span className="text-[9px] uppercase tracking-wider text-graphite mt-1">{label}</span>
       )}
     </div>
   );
@@ -74,7 +74,7 @@ export const FlipCountdown = React.memo(function FlipCountdown({ endTs, compact 
 
   if (parts.ended) {
     return (
-      <span className="text-xs font-mono font-semibold text-[#d6c4ac]">Trading ended</span>
+      <span className="text-xs font-mono font-semibold text-graphite">Trading ended</span>
     );
   }
 
