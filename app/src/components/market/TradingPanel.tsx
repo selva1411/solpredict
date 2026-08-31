@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
+import { ENV } from "@/lib/env";
 
 /**
  * TradingPanel — the buy / sell / liquidity panel extracted from MarketDetailClient.
@@ -181,7 +182,7 @@ export function TradingPanel(p: TradingPanelProps) {
               }`}
             >
               <span className={`label-lux ${tradeSide === "YES" ? "!text-verdigris" : ""}`}>Yes</span>
-              <span className={`mt-2 font-mono tnum text-[28px] ${
+              <span className={`mt-2 font-display font-bold tnum text-[30px] leading-none ${
                 tradeSide === "YES" ? "text-verdigris" : "text-ivory"
               }`}>{yesProb}¢</span>
               <span className="mt-1 font-mono text-[10px] text-ash-dim">{yesSharePriceSol.toFixed(4)} SOL · {yesPool.toFixed(2)} SOL</span>
@@ -195,7 +196,7 @@ export function TradingPanel(p: TradingPanelProps) {
               }`}
             >
               <span className={`label-lux ${tradeSide === "NO" ? "!text-bordeaux" : ""}`}>No</span>
-              <span className={`mt-2 font-mono tnum text-[28px] ${
+              <span className={`mt-2 font-display font-bold tnum text-[30px] leading-none ${
                 tradeSide === "NO" ? "text-bordeaux" : "text-ivory"
               }`}>{noProb}¢</span>
               <span className="mt-1 font-mono text-[10px] text-ash-dim">{noSharePriceSol.toFixed(4)} SOL · {noPool.toFixed(2)} SOL</span>
@@ -251,7 +252,7 @@ export function TradingPanel(p: TradingPanelProps) {
                   </button>
                 );
               })}
-              <span className="flex-1 py-1 text-center text-[9px] text-ash/60 font-mono truncate">one-click</span>
+              <span className="flex-1 py-1 text-center text-[9px] text-ash font-mono truncate">one-click</span>
             </div>
           </div>
 
@@ -268,13 +269,13 @@ export function TradingPanel(p: TradingPanelProps) {
               <div className="px-3 pb-3 pt-2 bg-panel space-y-3 border-t border-hairline/15">
                 <div className="flex items-center gap-2">
                   <button
-                    data-testid="limit-toggle"
+                    data-testid="buy-limit-toggle"
                     onClick={() => setIsLimitOrder(!isLimitOrder)}
                     className={`relative w-8 h-4 rounded-[2px] transition-colors cursor-pointer ${
-                      isLimitOrder ? "bg-gold" : "bg-[#353534]"
+                      isLimitOrder ? "bg-gold" : "bg-panel-2"
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-[2px] transition-all ${
+                    <span className={`absolute top-0.5 w-3 h-3 bg-ivory rounded-[2px] transition-all ${
                       isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
                     }`} />
                   </button>
@@ -354,7 +355,7 @@ export function TradingPanel(p: TradingPanelProps) {
             data-testid="buy-submit"
             disabled={submitting}
             onClick={isLimitOrder ? () => handlePlaceLimitOrder(true) : handleBuy}
-            className={`sheen w-full h-11 rounded-[2px] bg-gold text-void font-mono text-[11px] uppercase tracking-[.16em] cursor-pointer transition-colors flex items-center justify-center gap-2 hover:bg-gold-lite disabled:opacity-40 disabled:cursor-not-allowed`}
+            className={`w-full h-12 rounded-[2px] text-void font-mono text-[11px] uppercase tracking-[.14em] font-bold cursor-pointer transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-gold hover:bg-gold-lite shadow-[0_8px_28px_-10px_color-mix(in_oklab,var(--color-gold)_70%,transparent)] hover:shadow-[0_10px_34px_-8px_color-mix(in_oklab,var(--color-gold)_85%,transparent)] hover:-translate-y-[1px]`}
           >
             {submitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-[2px] animate-spin" />}
             {isLimitOrder
@@ -369,7 +370,7 @@ export function TradingPanel(p: TradingPanelProps) {
           {txState === "success" && txSig && (
             <p className="text-center text-xs font-mono text-verdigris">
               ✓ Done —{" "}
-              <a href={`https://solscan.io/tx/${txSig}?cluster=localnet`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a>
+              <a href={`https://solscan.io/tx/${txSig}${ENV.cluster === "mainnet-beta" ? "" : `?cluster=${ENV.cluster}`}`} target="_blank" rel="noopener noreferrer" className="underline">View tx</a>
             </p>
           )}
           {txState === "error" && <p className="text-center text-xs font-mono text-bordeaux">Transaction failed</p>}
@@ -395,7 +396,7 @@ export function TradingPanel(p: TradingPanelProps) {
                     </div>
                     <button
                       onClick={() => handleCancelOrder(ordAcc)}
-                      className="text-bordeaux hover:text-[#ff6b6b] cursor-pointer underline"
+                      className="text-bordeaux hover:text-bordeaux/80 cursor-pointer underline"
                     >Cancel</button>
                   </div>
                 );
@@ -413,11 +414,11 @@ export function TradingPanel(p: TradingPanelProps) {
           <div className="grid grid-cols-2 gap-2">
             <div className="p-3 rounded-[2px] bg-panel border border-verdigris/20 text-center">
               <div className="text-[9px] uppercase tracking-wider text-ash font-bold">YES Shares</div>
-              <div className="text-[21px] font-black font-mono text-verdigris mt-0.5">{userYesBalance.toFixed(1)}</div>
+              <div className="text-[22px] font-bold font-display tnum text-verdigris mt-0.5">{userYesBalance.toFixed(1)}</div>
             </div>
             <div className="p-3 rounded-[2px] bg-panel border border-bordeaux/20 text-center">
               <div className="text-[9px] uppercase tracking-wider text-ash font-bold">NO Shares</div>
-              <div className="text-[21px] font-black font-mono text-bordeaux mt-0.5">{userNoBalance.toFixed(1)}</div>
+              <div className="text-[22px] font-bold font-display tnum text-bordeaux mt-0.5">{userNoBalance.toFixed(1)}</div>
             </div>
           </div>
 
@@ -450,7 +451,7 @@ export function TradingPanel(p: TradingPanelProps) {
             <div className="flex items-center gap-2">
               <button onClick={() => setSellQuantity(Math.max(1, sellQuantity - 5))}
                 className="w-9 h-9 rounded-[2px] bg-panel border border-hairline/30 text-ivory font-mono font-bold cursor-pointer">−</button>
-              <input type="number" data-testid="sell-quantity" value={sellQuantity} min={1}
+              <input type="number" data-testid="sell-quantity" step={1} value={sellQuantity} min={1}
                 onChange={(e) => setSellQuantity(Math.max(1, Number(e.target.value)))}
                 className="flex-1 bg-panel border border-hairline/40 rounded-[2px] px-3 py-2 text-center text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60" />
               <button onClick={() => setSellQuantity(sellQuantity + 5)}
@@ -471,13 +472,13 @@ export function TradingPanel(p: TradingPanelProps) {
               <div className="px-3 pb-3 pt-2 bg-panel space-y-3 border-t border-hairline/15">
                 <div className="flex items-center gap-2">
                   <button
-                    data-testid="limit-toggle"
+                    data-testid="sell-limit-toggle"
                     onClick={() => setIsLimitOrder(!isLimitOrder)}
                     className={`relative w-8 h-4 rounded-[2px] transition-colors cursor-pointer ${
-                      isLimitOrder ? "bg-gold" : "bg-[#353534]"
+                      isLimitOrder ? "bg-gold" : "bg-panel-2"
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-[2px] transition-all ${
+                    <span className={`absolute top-0.5 w-3 h-3 bg-ivory rounded-[2px] transition-all ${
                       isLimitOrder ? "left-4.5 left-[18px]" : "left-0.5"
                     }`} />
                   </button>
@@ -653,7 +654,9 @@ export function TradingPanel(p: TradingPanelProps) {
               <span className="text-gold-lite">{lpTokensMinted.toLocaleString()} LP</span>
             </div>
             <div className="text-[9px] text-ash-dim leading-snug">
-              1:1 with deposited SOL ({lp.yesAddSol.toFixed(2)} YES + {lp.noAddSol.toFixed(2)} NO). No fee, no curve — exactly what <span className="text-ash">add_liquidity</span> mints on-chain.
+              {lpOption === "balanced"
+                ? `1:1 with deposited SOL (${lp.yesAddSol.toFixed(2)} YES + ${lp.noAddSol.toFixed(2)} NO). No fee, no curve — exactly what add_liquidity mints on-chain.`
+                : `All ${lpDepositAmount} SOL deposited to the ${lpOption.toUpperCase()} pool only.`}
             </div>
           </div>
 
@@ -661,7 +664,7 @@ export function TradingPanel(p: TradingPanelProps) {
             data-testid="lp-submit"
             disabled={submitting}
             onClick={handleProvideLiquidity}
-            className="sheen w-full h-11 rounded-[2px] bg-gold text-void font-mono text-[11px] uppercase tracking-[.16em] cursor-pointer transition-colors hover:bg-gold-lite disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full h-12 rounded-[2px] text-void font-mono text-[11px] uppercase tracking-[.14em] font-bold cursor-pointer transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-gold hover:bg-gold-lite shadow-[0_8px_28px_-10px_color-mix(in_oklab,var(--color-gold)_70%,transparent)] hover:shadow-[0_10px_34px_-8px_color-mix(in_oklab,var(--color-gold)_85%,transparent)] hover:-translate-y-[1px]"
           >
             {submitting ? "Processing..." : `Deposit ${lpDepositAmount} SOL Liquidity`}
           </button>

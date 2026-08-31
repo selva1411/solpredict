@@ -51,6 +51,7 @@ import { GlassPanel } from "@/components/GlassPanel";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { fadeInUp, staggerContainer } from "@/lib/motion-variants";
 import { TradingPanel } from "@/components/market/TradingPanel";
+import { DisputeMarketButton } from "@/components/market/DisputeMarketButton";
 import { ActivityFeedSection } from "@/components/market/ActivityFeedSection";
 import { TrustSignalsSection } from "@/components/market/TrustSignalsSection";
 
@@ -97,6 +98,9 @@ interface MarketDetails {
   noSupply: anchor.BN;
   totalPayoutPool: anchor.BN;
   sharePriceLamports: anchor.BN;
+  /** Unix seconds when the market settled (0 while open) — present on the
+   * decoded Anchor account; typed here because the dispute UI reads it. */
+  settledAt?: anchor.BN | number;
   /** Market-frozen fee (market.fee_bps on-chain / markets_cache.fee_bps). */
   feeBps?: number;
 }
@@ -186,13 +190,13 @@ function ProbabilityChart({ data }: { data: number[] }) {
           {[25, 50, 75].map((lvl) => {
             const y = height - padding - (lvl / 100) * (height - padding * 2);
             return (
-              <line
+<line
                 key={lvl}
                 x1={padding}
                 y1={y}
                 x2={width - padding}
                 y2={y}
-                stroke="#353534"
+                stroke="var(--color-hairline-2)"
                 strokeWidth="1"
                 strokeDasharray="4 4"
               />
@@ -202,7 +206,7 @@ function ProbabilityChart({ data }: { data: number[] }) {
           {/* Line Path */}
           <polyline
             fill="none"
-            stroke="#FFA500"
+            stroke="var(--color-gold)"
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -219,7 +223,7 @@ function ProbabilityChart({ data }: { data: number[] }) {
                 cx={x}
                 cy={y}
                 r="4"
-                className="fill-[#131313] stroke-gold"
+                className="fill-[var(--color-void)] stroke-gold"
                 strokeWidth="2"
               />
             );
@@ -850,14 +854,8 @@ export default function MarketDetailPage({
       setTxState("signing");
       // Cryptographically random u64 order id (never Math.random) — the order
       // id is a PDA seed and must be unguessable/collision-free per wallet.
-      // NOTE: keep the value within u64 (8 bytes): the raw Date.now() << 32 is
-      // 73 bits and toArrayLike(..., "le", 8) throws, failing every limit
-      // order before the tx is built. Mask the timestamp to 32 bits and OR in
-      // 32 random bits — 64 bits total, collision odds negligible.
-      const orderId = new anchor.BN(
-        (((BigInt(Date.now()) & 0xffffffffn) << 32n) | BigInt(crypto.getRandomValues(new Uint32Array(1))[0]))
-          .toString(10)
-      );
+      const orderIdBytes = crypto.getRandomValues(new Uint32Array(2));
+      const orderId = new anchor.BN(orderIdBytes[0]).shln(32).or(new anchor.BN(orderIdBytes[1]));
       const priceBps = new anchor.BN(Math.round(limitPriceSol * 10000));
       const qtyBN = new anchor.BN(targetQty);
 
@@ -1209,15 +1207,24 @@ export default function MarketDetailPage({
   // Keep the watchlist star in sync with the wallet's DB watchlist. AppContext
   // loads the DB keys asynchronously after connect, so the initial read inside
   // fetchMarket may have raced it — re-sync once the DB copy lands.
+  // IMPORTANT: the fetch resolves async. If the user toggles the star before it
+  // lands, a stale DB read (that predates the local toggle) must NOT overwrite
+  // their intent — local remove/add wins and the DB fetch result is discarded.
+  const watchlistTouchedAtRef = useRef<number>(0);
   useEffect(() => {
     if (!wallet?.publicKey) return;
     let cancelled = false;
+    const touchedAtStart = watchlistTouchedAtRef.current;
     fetchWatchlistFromDb(wallet.publicKey.toBase58(), { publicKey: wallet.publicKey, signMessage: wallet.signMessage })
       .then((keys) => {
-        if (!cancelled) setIsWatched(keys.includes(marketPda.toBase58()));
+        if (!cancelled && watchlistTouchedAtRef.current === touchedAtStart) {
+          setIsWatched(keys.includes(marketPda.toBase58()));
+        }
       })
       .catch(() => {
-        if (!cancelled) setIsWatched(getWatchlist().includes(marketPda.toBase58()));
+        if (!cancelled && watchlistTouchedAtRef.current === touchedAtStart) {
+          setIsWatched(getWatchlist().includes(marketPda.toBase58()));
+        }
       });
     return () => { cancelled = true; };
   }, [wallet?.publicKey, wallet?.signMessage, marketPda]);
@@ -1253,6 +1260,8 @@ export default function MarketDetailPage({
   }
 
   const handleWatchlistToggle = () => {
+    // Stamp the toggle so any in-flight (stale) DB re-sync can't override it.
+    watchlistTouchedAtRef.current = Date.now();
     const next = toggleWatchlist(marketPda.toBase58(), wallet?.publicKey?.toBase58(), {
       publicKey: wallet?.publicKey ?? null,
       signMessage: wallet?.signMessage,
@@ -1306,6 +1315,9 @@ export default function MarketDetailPage({
 
   const status = getMarketStatusString(market.status, market.endTs);
   const categoryStr = CATEGORIES[market.category] || "Other";
+  // ISO timestamp of settlement for the dispute-window check (null while open).
+  const settledAtNum = Number(market.settledAt ?? 0);
+  const settledAtStr = settledAtNum > 0 ? new Date(settledAtNum * 1000).toISOString() : null;
   
   const yesPool = lamportsToSol(market.yesPoolLamports);
   const noPool = lamportsToSol(market.noPoolLamports);
@@ -1412,10 +1424,11 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
   const lpNewNoPoolSol = lp.newNoPoolSol;
 
   const handleBuy = async () => {
-    if (!wallet || !wallet.publicKey) {
-      toast.error("Please connect your wallet first.");
+    if (!wallet.connected || !wallet.publicKey) {
+      toast.error("Please connect your wallet to trade");
       return;
     }
+    setTxState("idle");
 
     // Run balance + deployed checks in PARALLEL so the wallet popup opens as
     // fast as possible (previously they ran sequentially — two RTTs before
@@ -1517,11 +1530,12 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
     }
   };
 
-  const handleSell = async () => {
-    if (!wallet?.publicKey) {
-      toast.error("Please connect your wallet first.");
+const handleSell = async () => {
+    if (!wallet.connected || !wallet.publicKey) {
+      toast.error("Please connect your wallet to trade");
       return;
     }
+    setTxState("idle");
     // Selling returns SOL, but gas + rent still need a funded wallet.
     // Balance + deployed checks run in PARALLEL for a faster popup.
     const t0 = performance.now();
@@ -1606,10 +1620,11 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
   };
 
   const handleProvideLiquidity = async () => {
-    if (!wallet?.publicKey) {
-      toast.error("Please connect your wallet first.");
+    if (!wallet.connected || !wallet.publicKey) {
+      toast.error("Please connect your wallet to trade");
       return;
     }
+    setTxState("idle");
     // Balance + deployed checks run in PARALLEL for a faster popup.
     const t0 = performance.now();
     const [balOk, deployed] = await Promise.all([
@@ -1732,15 +1747,15 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
   };
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-10">
       <Link href="/markets" className="label-lux inline-flex items-center gap-2 hover:text-ivory transition-colors">
         <ArrowLeft className="w-3.5 h-3.5" />
         <span>Directory</span>
       </Link>
 
-      <div className="grid md:grid-cols-3 gap-12 items-start">
+      <div className="grid md:grid-cols-12 gap-8 items-start">
         {/* Left Column: Contract specs & visuals */}
-        <section className="md:col-span-2 space-y-8">
+        <section className="md:col-span-8 space-y-8">
           {/* Main info panel */}
           <div className="surface-feature p-6 sm:p-8 space-y-6">
             <div className="rule-gold absolute inset-x-0 top-0" />
@@ -1750,7 +1765,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <h1 className="text-[34px] sm:text-[44px] font-display text-ivory leading-[1.05] flex-1">
+              <h1 className="text-[32px] sm:text-[42px] font-display font-semibold text-ivory leading-[1.08] flex-1">
                 {market.question}
               </h1>
               <div className="flex items-center gap-2">
@@ -1945,9 +1960,9 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
         </section>
 
         {/* Right Column: Desktop Trading dashboard */}
-        <section className="hidden md:block">
+        <section className="hidden md:block md:col-span-4">
           <div
-            className={`surface-feature p-6 space-y-6 ${successFlip ? "animate-success-flip" : ""}`}
+            className={`surface-feature p-6 space-y-6 lg:sticky lg:top-20 ${successFlip ? "animate-success-flip" : ""}`}
           >
             <div className="border-b border-hairline pb-3">
               <div className="flex items-center justify-between">
@@ -1958,6 +1973,13 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
                 </div>
               </div>
             </div>
+            {status === "Settled" && (
+              <DisputeMarketButton
+                marketPubkey={marketPda.toBase58()}
+                status={status}
+                settledAt={settledAtStr}
+              />
+            )}
             <TradingPanel
               status={status}
               marketPdaB58={marketPda.toBase58()}
@@ -2027,7 +2049,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
           onClick={() => setIsMobileDrawerOpen(true)}
           className="btn-amber px-6 py-2.5 text-xs font-bold"
         >
-          Predict Outcome
+          Take the Line
         </button>
       </div>
 
@@ -2059,6 +2081,13 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
                   CLOSE
                 </button>
               </div>
+              {status === "Settled" && (
+                <DisputeMarketButton
+                  marketPubkey={marketPda.toBase58()}
+                  status={status}
+                  settledAt={settledAtStr}
+                />
+              )}
               <TradingPanel
                 status={status}
                 marketPdaB58={marketPda.toBase58()}
