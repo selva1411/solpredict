@@ -11,8 +11,37 @@ interface UserAuth {
 let cached: UserAuth | null = null;
 let signing: Promise<UserAuth | null> | null = null;
 
+const STORAGE_KEY = "solpredict-user-proofs:v1";
+
 function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
+}
+
+function loadStoredProofs(): Record<string, UserAuth> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, UserAuth>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Persist the signed proof per wallet so a page refresh / navigation does not
+ * re-trigger the wallet sign-message prompt. The proof stays cryptographically
+ * valid (server verifies prefix + ed25519 signature), so once signed it is
+ * reused until the connected wallet changes.
+ */
+function persistProof(proof: UserAuth): void {
+  if (typeof window === "undefined") return;
+  try {
+    const proofs = loadStoredProofs();
+    proofs[proof.wallet] = proof;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(proofs));
+  } catch {
+    // Storage unavailable/full — the in-memory cache still works for the session.
+  }
 }
 
 export interface UserSigner {
@@ -31,17 +60,27 @@ export async function signUserProof(
   signMessage: MessageSignerWalletAdapterProps["signMessage"] | undefined,
 ): Promise<UserAuth | null> {
   if (!wallet?.publicKey) return null;
-  if (cached && cached.wallet === wallet.publicKey.toBase58()) return cached;
+  const walletKey = wallet.publicKey.toBase58();
+  if (cached && cached.wallet === walletKey) return cached;
+
+  // Reuse a previously-signed proof for this wallet instead of re-prompting.
+  const stored = loadStoredProofs()[walletKey];
+  if (stored) {
+    cached = stored;
+    return stored;
+  }
+
   if (!signMessage) return null;
 
   if (!signing) {
     signing = (async () => {
       try {
-        const walletKey = wallet.publicKey!.toBase58();
         const message = buildUserMessage(String(Date.now()));
         const signature = await signMessage(new TextEncoder().encode(message));
-        cached = { wallet: walletKey, message, signature: toBase64(signature) };
-        return cached;
+        const proof = { wallet: walletKey, message, signature: toBase64(signature) };
+        cached = proof;
+        persistProof(proof);
+        return proof;
       } catch {
         return null;
       } finally {
@@ -54,6 +93,12 @@ export async function signUserProof(
 
 export function clearUserProof(): void {
   cached = null;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // noop
+  }
 }
 
 function applyHeaders(init?: RequestInit): RequestInit | undefined {
