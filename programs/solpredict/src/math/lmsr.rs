@@ -279,4 +279,91 @@ mod tests {
         let diff = if cost_yes > cost_no { cost_yes - cost_no } else { cost_no - cost_yes };
         assert!(diff < 1000, "Symmetric costs differ: {} vs {}", cost_yes, cost_no);
     }
+
+    #[test]
+    fn test_ln_scaled_zero_errors() {
+        // ln(0) is undefined; must return an error, not garbage.
+        assert!(matches!(
+            ln_scaled(0),
+            Err(SolPredictError::MathOverflow)
+        ));
+    }
+
+    #[test]
+    fn test_ln_scaled_one_is_zero() {
+        // ln(1.0) == 0.0
+        let result = ln_scaled(PRECISION).unwrap();
+        assert!(
+            result.abs() < PRECISION as i128 / 1000,
+            "ln(1.0) should be ~0, got {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_exp_scaled_large_negative_errors_not_clamps() {
+        // |x| >= 209 in PRECISION units makes the Taylor terms overflow the
+        // fixed-point accumulator; the implementation rejects rather than
+        // silently returning a clamped positive quantity.
+        let x = -300 * PRECISION as i128;
+        assert!(matches!(
+            exp_scaled(x),
+            Err(SolPredictError::MathOverflow)
+        ));
+    }
+
+    #[test]
+    fn test_exp_scaled_large_positive_errors() {
+        // Mirrors the negative-side boundary: |x| >= 209 overflows.
+        let x = 300 * PRECISION as i128;
+        assert!(matches!(
+            exp_scaled(x),
+            Err(SolPredictError::MathOverflow)
+        ));
+    }
+
+    #[test]
+    fn test_buy_zero_delta_costs_zero() {
+        let b = 100_000_000_000u128;
+        let q = 50_000_000_000u128;
+        assert_eq!(buy_cost_yes(b, q, q, 0).unwrap(), 0);
+        assert_eq!(buy_cost_no(b, q, q, 0).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_sell_more_than_held_is_insufficient_shares() {
+        let b = 100_000_000_000u128;
+        let q = 50_000_000_000u128;
+        assert!(matches!(
+            sell_return_yes(b, q, q, q + 1),
+            Err(SolPredictError::InsufficientShares)
+        ));
+        assert!(matches!(
+            sell_return_no(b, q, q, q + 1),
+            Err(SolPredictError::InsufficientShares)
+        ));
+    }
+
+    #[test]
+    fn test_cost_function_zero_b_errors() {
+        // Division by b=0 inside exp_scaled is a checked_div miss => error.
+        let q = 50_000_000_000u128;
+        assert!(cost_function(0, q, q).is_err());
+    }
+
+    #[test]
+    fn test_empty_pools_default_half_probability() {
+        let b = 100_000_000_000u128;
+        assert_eq!(probability_yes_bps(b, 0, 0).unwrap(), 5000);
+    }
+
+    #[test]
+    fn test_probability_bounds() {
+        let b = 100_000_000_000u128;
+        // Monotonic: YES probability must rise as the YES side is funded more.
+        let p_low = probability_yes_bps(b, 10_000_000_000, 90_000_000_000).unwrap();
+        let p_high = probability_yes_bps(b, 90_000_000_000, 10_000_000_000).unwrap();
+        assert!(p_low < p_high, "{} should be < {}", p_low, p_high);
+        assert!(p_low > 0 && p_low < 10_000, "YES bps out of range: {}", p_low);
+    }
 }

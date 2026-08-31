@@ -19,7 +19,7 @@ export const commentPostSchema = z.object({
   authorWallet: walletSchema,
   authorUsername: z.string().max(30).optional(),
   content: z.string().min(1).max(500),
-  parentId: z.number().int().positive().optional(),
+  parentId: z.number().int().positive().nullish(),
 });
 
 export const syncTradeSchema = z.object({
@@ -51,7 +51,7 @@ export const syncMarketSchema = z.object({
   description: z.string().max(2000).optional(),
   category: z.string().max(50).optional(),
   status: z.enum(["open", "closed", "resolved", "settled", "canceled", "cancelled"]).optional(),
-  winningOutcome: z.string().max(10).optional(),
+  winningOutcome: z.enum(["yes", "no", "YES", "NO"]).optional(),
   yesPoolSol: z.number().min(0).optional(),
   noPoolSol: z.number().min(0).optional(),
   yesPoolLamports: z.number().min(0).optional(),

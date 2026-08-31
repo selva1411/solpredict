@@ -40,7 +40,15 @@ const SLIPPAGE_MIN_PROCEEDS = new anchor.BN(0);
 async function ensureTimePassed(targetTs: number) {
   let currentSlotVal = await connection.getSlot();
   let currentTime = await connection.getBlockTime(currentSlotVal) || Math.floor(Date.now() / 1000);
+  // Bound the wait so a frozen/stalled validator clock fails fast instead of
+  // spinning forever on slow CI. 120s wall-clock cap is generous for localnet.
+  const startedAt = Date.now();
   while (currentTime < targetTs) {
+    if (Date.now() - startedAt > 120_000) {
+      throw new Error(
+        `ensureTimePassed timed out: validator clock stuck at ${currentTime}, target ${targetTs}`
+      );
+    }
     // Send a tiny transaction to force a block to be mined, which advances the clock
     await fundAccount(Keypair.generate().publicKey, 0.001);
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2845,6 +2853,205 @@ describe("SOLPredict Integration Suite", () => {
       } catch (err: any) {
         expect(err.message).to.include("GuardianNotFound");
       }
+    });
+  });
+
+  describe("Phase 16: close_position positive/negative paths", () => {
+    let marketPda: PublicKey;
+    let yesMintPda: PublicKey;
+    let noMintPda: PublicKey;
+    let treasuryPda: PublicKey;
+    let mockPriceUpdatePda: PublicKey;
+    let positionPda: PublicKey;
+    let feedId = Array(32).fill(0);
+    feedId[0] = 99; // Unique feed ID
+    let resolveTsVal: number;
+
+    before(async () => {
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      resolveTsVal = now + 65;
+
+      const result = await bootstrapMarket(
+        configPda,
+        "close_position coverage?",
+        "Negative + positive close_position paths",
+        0,
+        feedId,
+        new anchor.BN(150_00), // Target $150
+        -2,
+        0,
+        new anchor.BN(now + 65), // endTs
+        new anchor.BN(now + 65) // resolveTs
+      );
+      marketPda = result.marketPda;
+      yesMintPda = result.yesMintPda;
+      noMintPda = result.noMintPda;
+      treasuryPda = result.treasuryPda;
+      positionPda = getUserPositionPda(marketPda, buyer1.publicKey, program.programId);
+
+      // Buyer1 wins 5 YES; buyer2 holds 5 NO. Give BOTH an open (unclaimed) position
+      // so we can assert every close_position guard.
+      const b1YesAta = getAssociatedTokenAddressSync(yesMintPda, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(noMintPda, buyer1.publicKey);
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer1.publicKey, market: marketPda, treasury: treasuryPda,
+          yesMint: yesMintPda, noMint: noMintPda,
+          buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: positionPda,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      const b2YesAta = getAssociatedTokenAddressSync(yesMintPda, buyer2.publicKey);
+      const b2NoAta = getAssociatedTokenAddressSync(noMintPda, buyer2.publicKey);
+      const pos2 = getUserPositionPda(marketPda, buyer2.publicKey, program.programId);
+      await program.methods
+        .buyShares({ no: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer2.publicKey, market: marketPda, treasury: treasuryPda,
+          yesMint: yesMintPda, noMint: noMintPda,
+          buyerYesAta: b2YesAta, buyerNoAta: b2NoAta, userPosition: pos2,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer2])
+        .rpc();
+    });
+
+    it("close_position rejects while the market is still open (MarketNotEnded)", async () => {
+      try {
+        await program.methods
+          .closePosition()
+          .accounts({
+            user: buyer1.publicKey,
+            market: marketPda,
+            userPosition: positionPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([buyer1])
+          .rpc();
+        expect.fail("Should have failed with MarketNotEnded");
+      } catch (err: any) {
+        expect(err.message).to.include("MarketNotEnded");
+      }
+    });
+
+    it("close_position rejects a settled market with unclaimed rewards (PositionHasUnclaimedRewards)", async () => {
+      // Settle with price 160 > 150 → YES wins; both sides then hold supply.
+      await ensureTimePassed(resolveTsVal);
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const nowTime = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+
+      const mockPayer = Keypair.generate();
+      await fundAccount(mockPayer.publicKey, 1);
+      mockPriceUpdatePda = getMockPriceUpdatePda(mockPayer.publicKey, program.programId);
+      await program.methods
+        .mockCreatePriceUpdate(feedId, new anchor.BN(160_00), new anchor.BN(0), 0, new anchor.BN(nowTime))
+        .accounts({ payer: mockPayer.publicKey, priceUpdate: mockPriceUpdatePda } as any)
+        .signers([mockPayer])
+        .rpc();
+
+      await program.methods
+        .settleMarket()
+        .accounts({
+          admin: admin.publicKey, market: marketPda, config: configPda,
+          priceUpdate: mockPriceUpdatePda,
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const marketAcc = await program.account.market.fetch(marketPda);
+      expect(marketAcc.status).to.deep.equal({ settled: {} });
+
+      // Winner still holds unclaimed YES → closing must be blocked.
+      try {
+        await program.methods
+          .closePosition()
+          .accounts({
+            user: buyer1.publicKey,
+            market: marketPda,
+            userPosition: positionPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([buyer1])
+          .rpc();
+        expect.fail("Should have failed with PositionHasUnclaimedRewards");
+      } catch (err: any) {
+        expect(err.message).to.include("PositionHasUnclaimedRewards");
+      }
+    });
+
+    it("close_position reclaims rent after the market is cancelled (positive path)", async () => {
+      // Phase 5 already exercises claim_refund; here we prove close_position works
+      // when trading is ended AND no payout is owed: a CANCELLED market.
+      const slot = await connection.getSlot();
+      const blockTime = await connection.getBlockTime(slot);
+      const now = blockTime ? blockTime : Math.floor(Date.now() / 1000);
+      const feed = Array(32).fill(0);
+      feed[0] = 77; // Unique feed ID
+      const result = await bootstrapMarket(
+        configPda,
+        "close_position rent reclaim?",
+        "Positive close_position on cancelled market",
+        0,
+        feed,
+        new anchor.BN(150_00),
+        -2,
+        0,
+        new anchor.BN(now + 3600),
+        new anchor.BN(now + 3600)
+      );
+      const m = result.marketPda;
+      const yesMint = result.yesMintPda;
+      const noMint = result.noMintPda;
+      const treasury = result.treasuryPda;
+      const b1YesAta = getAssociatedTokenAddressSync(yesMint, buyer1.publicKey);
+      const b1NoAta = getAssociatedTokenAddressSync(noMint, buyer1.publicKey);
+      const pos = getUserPositionPda(m, buyer1.publicKey, program.programId);
+
+      await program.methods
+        .buyShares({ yes: {} } as any, new anchor.BN(5), SLIPPAGE_MAX_COST)
+        .accounts({
+          buyer: buyer1.publicKey, market: m, treasury,
+          yesMint, noMint, buyerYesAta: b1YesAta, buyerNoAta: b1NoAta, userPosition: pos,
+          emergencyPause: null,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+
+      await program.methods
+        .cancelMarket("Cancelled for close_position test")
+        .accounts({ admin: admin.publicKey, config: configPda, market: m } as any)
+        .signers([admin])
+        .rpc();
+
+      const beforeBalance = await connection.getBalance(buyer1.publicKey);
+      await program.methods
+        .closePosition()
+        .accounts({
+          user: buyer1.publicKey,
+          market: m,
+          userPosition: pos,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .signers([buyer1])
+        .rpc();
+      const afterBalance = await connection.getBalance(buyer1.publicKey);
+
+      // The position PDA is closed → fetch must fail.
+      try {
+        await program.account.userPosition.fetch(pos);
+        expect.fail("Position should be closed after close_position");
+      } catch (err: any) {
+        // Expected — account no longer exists
+      }
+
+      // Rent (≈0.00152 SOL) was reclaimed back to the wallet.
+      expect(afterBalance - beforeBalance).to.be.greaterThan(1_000_000);
     });
   });
 });

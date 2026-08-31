@@ -28,6 +28,15 @@ describe("syncMarketSchema", () => {
       question: "Test question?",
       winningOutcome: "maybe",
     });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts uppercase winningOutcome", () => {
+    const result = syncMarketSchema.safeParse({
+      marketPubkey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      question: "Test question?",
+      winningOutcome: "NO",
+    });
     expect(result.success).toBe(true);
   });
 });

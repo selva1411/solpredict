@@ -18,6 +18,8 @@ import {
   categoryColor,
   statusLabel,
   outcomeLabel,
+  formatBpsPct,
+  assertBigIntSafe,
 } from "../../app/src/lib/format";
 
 describe("format utilities", () => {
@@ -164,6 +166,34 @@ describe("format utilities", () => {
   describe("isActive", () => {
     it("returns false for past timestamp", () => {
       expect(isActive(1_000)).to.be.false;
+    });
+  });
+
+  describe("formatBpsPct", () => {
+    it("returns '—' for null / undefined", () => {
+      expect(formatBpsPct(null)).to.equal("—");
+      expect(formatBpsPct(undefined)).to.equal("—");
+    });
+
+    it("formats bps as percent with one decimal", () => {
+      expect(formatBpsPct(5000)).to.equal("50.0%");
+      expect(formatBpsPct(0)).to.equal("0.0%");
+      expect(formatBpsPct(10000)).to.equal("100.0%");
+      expect(formatBpsPct(125)).to.equal("1.3%");
+    });
+  });
+
+  describe("assertBigIntSafe", () => {
+    it("returns BigInt for safe inputs", () => {
+      expect(assertBigIntSafe("1234")).to.equal(BigInt(1234));
+      expect(assertBigIntSafe(1234)).to.equal(BigInt(1234));
+      expect(assertBigIntSafe(BigInt(1234))).to.equal(BigInt(1234));
+    });
+
+    it("throws for unsafe inputs", () => {
+      expect(() => assertBigIntSafe("abc")).to.throw();
+      expect(() => assertBigIntSafe(-1)).to.throw();
+      expect(() => assertBigIntSafe("-3")).to.throw();
     });
   });
 });

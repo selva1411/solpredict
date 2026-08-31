@@ -33,6 +33,10 @@ jobs:
         working-directory: app
         run: npx tsc --noEmit
 
+      - name: Run Vitest Unit Tests
+        working-directory: app
+        run: npm test
+
       - name: Build Next.js Production App
         working-directory: app
         run: npm run build

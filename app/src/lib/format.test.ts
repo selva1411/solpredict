@@ -5,7 +5,7 @@ import {
   solToLamports, shortAddr, calcYesPct, calcNoPct,
   formatTs, timeUntil, formatTimeLeft, isActive,
   categoryName, categoryColor, statusLabel, outcomeLabel,
-  calcExpectedPayout,
+  calcExpectedPayout, formatBpsPct, assertBigIntSafe,
 } from "./format";
 
 describe("formatSol", () => {
@@ -182,6 +182,30 @@ describe("outcomeLabel", () => {
   it("returns — for 0 (unset)", () => expect(outcomeLabel(0)).toBe("—"));
   it("returns YES ✓ for 1", () => expect(outcomeLabel(1)).toBe("YES ✓"));
   it("returns NO ✓ for 2", () => expect(outcomeLabel(2)).toBe("NO ✓"));
+});
+
+describe("formatBpsPct", () => {
+  it("returns — for null", () => expect(formatBpsPct(null)).toBe("—"));
+  it("returns — for undefined", () => expect(formatBpsPct(undefined)).toBe("—"));
+  it("formats 5000 as 50.0%", () => expect(formatBpsPct(5000)).toBe("50.0%"));
+  it("formats 0 as 0.0%", () => expect(formatBpsPct(0)).toBe("0.0%"));
+  it("formats 10000 as 100.0%", () => expect(formatBpsPct(10000)).toBe("100.0%"));
+  it("formats fractional bps with one decimal", () => expect(formatBpsPct(125)).toBe("1.3%"));
+});
+
+describe("assertBigIntSafe", () => {
+  it("returns BigInt for valid string", () => expect(assertBigIntSafe("42")).toBe(42n));
+  it("returns BigInt for number", () => expect(assertBigIntSafe(42)).toBe(42n));
+  it("returns BigInt for bigint", () => expect(assertBigIntSafe(42n)).toBe(42n));
+  it("throws for negative values", () => {
+    expect(() => assertBigIntSafe(-1)).toThrow();
+    expect(() => assertBigIntSafe("-1")).toThrow();
+    expect(() => assertBigIntSafe(-1n)).toThrow();
+  });
+  it("throws for non-numeric input", () => {
+    expect(() => assertBigIntSafe("abc")).toThrow();
+    expect(() => assertBigIntSafe("12.5")).toThrow();
+  });
 });
 
 describe("calcExpectedPayout", () => {
