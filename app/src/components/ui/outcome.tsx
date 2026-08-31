@@ -8,12 +8,12 @@ export function Outcome({
   return (
     <button
       onClick={onSelect}
-      className={`sheen group flex w-full items-end justify-between rounded-[2px] border px-5 py-4 text-left transition-colors
-        ${selected ? "border-gold bg-panel-2" : "border-hairline bg-panel hover:border-ash-dim"}`}
+      className={`sheen group flex w-full items-end justify-between rounded-[2px] border px-5 py-4 text-left transition-colors duration-150 ease-[cubic-bezier(.22,.61,.36,1)]
+        ${selected ? "border-gold bg-panel-2" : "border-hairline bg-obsidian hover:border-ash-dim"}`}
     >
       <div>
         <LabelLux>{side}</LabelLux>
-        <div className={`mt-2 font-mono tnum text-[28px] ${tone}`}>{price}</div>
+        <div className={`num mt-2 text-[28px] ${tone}`}>{price}</div>
       </div>
       <div className="label-lux pb-1">{selected ? "SELECTED" : "SELECT"}</div>
     </button>
