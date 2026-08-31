@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { motion } from "framer-motion";
+import { Crown, Medal } from "lucide-react";
 import { useRealtime } from "@/hooks/useRealtime";
 import { EmptyState, LoadingState } from "@/components/StatePanels";
 import { LabelLux } from "@/components/ui/label-lux";
@@ -26,6 +28,24 @@ interface LeaderboardItem {
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
 }
+
+const RANK_STYLES: Record<number, { glow: string; icon: React.ReactNode; text: string }> = {
+  1: {
+    glow: "from-amber-400/25",
+    text: "text-amber",
+    icon: <Crown className="w-4 h-4 text-amber" />,
+  },
+  2: {
+    glow: "from-gold/20",
+    text: "text-gold-lite",
+    icon: <Medal className="w-4 h-4 text-gold-lite" />,
+  },
+  3: {
+    glow: "from-gold-deep/25",
+    text: "text-gold-lite",
+    icon: <Medal className="w-4 h-4 text-gold-lite" />,
+  },
+};
 
 function LeaderboardPage() {
   const wallet = useWallet();
@@ -76,18 +96,20 @@ function LeaderboardPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-10">
+      {/* Masthead */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10 rise">
         <div>
-          <LabelLux className="mb-2">Leaderboard</LabelLux>
-          <h1 className="text-[44px] text-ivory">Trader Rankings</h1>
-          <p className="mt-2 font-mono text-[10px] text-ash-dim uppercase tracking-[.16em]">
-            Indexed from on-chain user_stats
+          <LabelLux className="mb-3 !text-gold-lite">Hall of conviction</LabelLux>
+          <h1 className="text-[44px] sm:text-[56px] leading-[.95] uppercase font-bold">
+            The <span className="text-signal">Ranks</span>
+          </h1>
+          <p className="mt-2 font-mono text-[10px] text-ash-dim uppercase tracking-[.14em]">
+            Live from on-chain user stats · updates in realtime
           </p>
         </div>
 
-        {/* Sort — mono text rows, gold underline active */}
-        <div className="flex items-center gap-5 font-mono text-[10px] uppercase tracking-[.16em]">
-          <span className="text-ash-dim">Sort</span>
+        {/* Sort pills */}
+        <div className="flex items-center gap-1 surface rounded p-1 self-start">
           {[
             { key: "volume", label: "Volume" },
             { key: "profit", label: "Profit" },
@@ -96,83 +118,126 @@ function LeaderboardPage() {
             <button
               key={opt.key}
               onClick={() => setSortBy(opt.key as any)}
-              className={`cursor-pointer transition-colors ${
-                sortBy === opt.key ? "text-gold-lite border-b border-gold" : "text-ash hover:text-ivory"
+              className={`relative cursor-pointer px-4 py-2 font-mono text-[10px] uppercase tracking-[.12em] rounded transition-colors ${
+                sortBy === opt.key ? "text-void" : "text-ash hover:text-ivory"
               }`}
             >
-              {opt.label}
+              {sortBy === opt.key && (
+                <motion.span
+                  layoutId="lb-sort-pill"
+                  className="absolute inset-0 bg-gradient-to-r from-gold to-gold-deep rounded"
+                  style={{ boxShadow: "0 0 16px -4px rgba(34,211,238,.6)" }}
+                />
+              )}
+              <span className="relative z-10">{opt.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <Rule className="mb-10" />
+      <Rule className="mb-8" />
 
-      {/* Connected User Badge */}
+      {/* Your rank banner */}
       {myStats && (
-        <div className="surface p-4 mb-8 flex items-center justify-between border-l border-gold">
-          <div className="flex items-baseline gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="surface-feature p-5 mb-8 flex items-center justify-between relative overflow-hidden"
+        >
+          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-gold to-gold-deep" />
+          <div className="flex items-baseline gap-4">
             <span className="font-mono text-[10px] uppercase tracking-[.16em] text-ash-dim">Your Rank</span>
-            <span className="font-display text-[34px] text-gold-lite leading-none">#{myRankIndex + 1}</span>
+            <span className="font-display text-[36px] font-bold text-gold-lite leading-none tnum">
+              #{myRankIndex + 1}
+            </span>
             <span className="font-mono text-[13px] text-ivory">{shortAddr(myStats.wallet)}</span>
           </div>
           <div className="hidden sm:flex items-center gap-8 font-mono text-[12px] tnum">
-            <span className="text-ash-dim">Volume <span className="text-ivory">{myStats.totalWagered.toFixed(2)} SOL</span></span>
-            <span className="text-ash-dim">Win Rate <span className="text-gold-lite">{myStats.winRate !== null ? `${Math.round(myStats.winRate)}%` : "—"}</span></span>
+            <span className="text-ash-dim">Volume <span className="text-ivory font-bold">{myStats.totalWagered.toFixed(2)} ◎</span></span>
+            <span className="text-ash-dim">Win Rate <span className="text-gold-lite font-bold">{myStats.winRate !== null ? `${Math.round(myStats.winRate)}%` : "—"}</span></span>
+            <span className="text-ash-dim">PnL <span className={`font-bold ${myStats.totalProfit >= 0 ? "text-verdigris" : "text-bordeaux"}`}>{myStats.totalProfit >= 0 ? "+" : ""}{myStats.totalProfit.toFixed(2)} ◎</span></span>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Leaderboard table */}
+      {/* Table */}
       {loading ? (
         <LoadingState title="Loading leaderboard..." />
       ) : error ? (
         <EmptyState title="Error Loading Leaderboard" description={error} />
       ) : traders.length === 0 ? (
-        <EmptyState title="No Leaderboard Data" description="Be the first to trade on devnet and take the lead!" />
+        <EmptyState title="No Leaderboard Data" description="Be the first to trade and take the crown!" />
       ) : (
-        <div className="divide-y divide-hairline border-t border-hairline">
-          {traders.map((t, idx) => {
-            const isMe = myAddress === t.wallet;
-            const topThree = idx < 3;
-            const pnl = t.totalProfit;
-            return (
-              <div
-                key={t.wallet}
-                className={`grid grid-cols-12 items-center gap-4 py-5 transition-colors hover:bg-panel px-3 -mx-3 ${
-                  topThree ? "border-l border-gold pl-4 -ml-1" : ""
-                } ${isMe ? "bg-gold/5" : ""}`}
-              >
-                {/* Rank — serif, gold-deep */}
-                <span className="col-span-2 md:col-span-1 font-display text-[34px] leading-none text-gold-deep tnum">
-                  {String(idx + 1).padStart(2, "0")}
-                </span>
-                {/* Trader */}
-                <span className="col-span-6 md:col-span-4 min-w-0">
-                  <span className="block font-mono text-[13px] text-ivory truncate">
-                    {t.username || shortAddr(t.wallet)}
+        <>
+          <div className="hidden md:grid grid-cols-12 items-center gap-4 px-4 py-2 mb-2 border border-hairline border-b-0 rounded-t bg-obsidian/60">
+            <span className="col-span-1 label-lux">#</span>
+            <span className="col-span-5 label-lux">Trader</span>
+            <span className="col-span-2 label-lux text-right">Volume</span>
+            <span className="col-span-2 label-lux text-right">PnL</span>
+            <span className="col-span-2 label-lux text-right">Win / Markets</span>
+          </div>
+          <div className="board">
+            {traders.map((t, idx) => {
+              const isMe = myAddress === t.wallet;
+              const style = RANK_STYLES[idx + 1];
+              const pnl = t.totalProfit;
+              return (
+                <motion.div
+                  key={t.wallet}
+                  layout
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(idx * 0.03, 0.35) }}
+                  className={`board-row group w-full grid grid-cols-12 items-center gap-4 px-4 py-4 edge-glow ${
+                    isMe ? "!border-gold/50 bg-gold/[0.04]" : ""
+                  }`}
+                >
+                  {/* Rank */}
+                  <span className="col-span-2 md:col-span-1 flex items-center gap-2">
+                    {style?.icon}
+                    <span className={`font-display font-bold text-[26px] leading-none tnum ${style?.text ?? "text-ash-dim"} group-hover:text-gold-lite transition-colors`}>
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
                   </span>
-                  {isMe && <span className="label-lux mt-0.5 block">You</span>}
-                </span>
-                {/* Volume */}
-                <span className="col-span-2 md:col-span-2 font-mono tnum text-[13px] text-ash text-right">
-                  {t.totalWagered.toFixed(2)}
-                </span>
-                {/* PnL */}
-                <span className={`col-span-2 font-mono tnum text-[13px] text-right ${
-                  pnl > 0 ? "text-verdigris" : pnl < 0 ? "text-bordeaux" : "text-ash"
-                }`}>
-                  {pnl > 0 ? `+${pnl.toFixed(2)}` : pnl.toFixed(2)}
-                </span>
-                {/* Win Rate + Markets */}
-                <span className="col-span-2 hidden md:flex flex-col items-end font-mono text-[11px] tnum text-ash-dim">
-                  <span>{t.winRate !== null ? `${Math.round(t.winRate)}%` : "—"}</span>
-                  <span>{t.marketsTraded} markets</span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
+                  {/* Trader */}
+                  <span className="col-span-10 md:col-span-5 min-w-0 flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={t.avatarUrl}
+                      alt=""
+                      width={30}
+                      height={30}
+                      className="w-[30px] h-[30px] rounded-full border border-hairline shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-mono text-[13px] text-ivory truncate group-hover:text-gold-lite transition-colors">
+                        {t.username || shortAddr(t.wallet)}
+                      </span>
+                      {isMe && <span className="label-lux mt-0.5 block !text-gold-lite">You</span>}
+                    </span>
+                  </span>
+                  {/* Volume */}
+                  <span className="hidden md:block col-span-2 font-mono tnum text-[13px] text-ash text-right">
+                    {t.totalWagered.toFixed(2)} ◎
+                  </span>
+                  {/* PnL */}
+                  <span className={`col-span-6 md:col-span-2 font-mono tnum text-[14px] font-bold text-right ${
+                    pnl > 0 ? "text-verdigris" : pnl < 0 ? "text-bordeaux" : "text-ash"
+                  }`}>
+                    {pnl > 0 ? `+${pnl.toFixed(2)}` : pnl.toFixed(2)}
+                  </span>
+                  {/* Win rate */}
+                  <span className="col-span-4 md:col-span-2 hidden md:flex flex-col items-end font-mono text-[11px] tnum text-ash-dim">
+                    <span className={t.winRate !== null && t.winRate >= 50 ? "text-verdigris" : ""}>
+                      {t.winRate !== null ? `${Math.round(t.winRate)}%` : "—"}
+                    </span>
+                    <span>{t.marketsTraded} markets</span>
+                  </span>
+                </motion.div>
+              );
+            })}
+          </div>
+        </>
       )}
     </main>
   );
