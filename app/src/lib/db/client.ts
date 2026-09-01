@@ -46,7 +46,6 @@ function isTransientConnectError(err: unknown): boolean {
 function withConnectRetry<T extends (...args: never[]) => unknown>(sql: T): T {
   const retry = async <A extends unknown[]>(run: () => Promise<Awaited<unknown>>): Promise<unknown> => {
     let attempt = 0;
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
         return await run();

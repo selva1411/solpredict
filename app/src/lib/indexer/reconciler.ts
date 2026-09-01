@@ -7,6 +7,22 @@ import { applyEvent } from "@/lib/indexer/reducer";
 import { logger } from "@/lib/logger";
 import type { Solpredict } from "@/lib/idl/solpredict";
 
+/**
+ * Reducer writes are idempotent (upserts / onConflictDoNothing), so a single
+ * retry is always safe. Neon's serverless compute occasionally hiccups
+ * mid-session (observed once per ~10k ops); without this the affected market
+ * would silently skip a sync pass until the next loop.
+ */
+async function applyEventSafe(ev: Parameters<typeof import("./reducer").applyEvent>[0]): Promise<void> {
+  try {
+    await applyEvent(ev);
+  } catch {
+    await new Promise((r) => setTimeout(r, 500));
+    await applyEvent(ev);
+  }
+}
+
+
 type MarketAccount = IdlAccounts<Solpredict>["market"];
 type ConfigAccount = IdlAccounts<Solpredict>["config"];
 
@@ -89,10 +105,14 @@ export async function reconcileMarkets({ connection, program, limit = 500 }: Rec
       const category = CATEGORY_NAMES[m.category] ?? "Other";
       const status = STATUS_NAMES[m.status] ?? "open";
       const outcome = OUTCOME_NAMES[m.winningOutcome] ?? "unset";
-      await applyEvent({
+      await applyEventSafe({
         type: "market",
         marketPubkey: pda.toBase58(),
         marketId,
+        // The Market account's authority is the admin/creator that initialized
+        // it — surface it so every page can attribute markets without falling
+        // back to null.
+        creator: m.authority?.toBase58(),
         question: m.question,
         description: m.description,
         category,
@@ -106,6 +126,8 @@ export async function reconcileMarkets({ connection, program, limit = 500 }: Rec
         totalPayoutPoolLamports: toLamports(m.totalPayoutPool),
         endTs: m.endTs,
         resolveTs: m.resolveTs,
+        // Only meaningful once the market has actually settled (0 otherwise).
+        settledAt: m.settledAt > 0 ? m.settledAt : undefined,
       });
       synced++;
     } catch (e) {
@@ -182,7 +204,7 @@ export async function reconcileTrades({
         const rawCost = tIdx >= 0 ? (postBalances[tIdx] ?? 0) - (preBalances[tIdx] ?? 0) : 0;
         const lamportsIn = isBuy ? Math.abs(rawCost) : -Math.abs(rawCost);
 
-        await applyEvent({
+        await applyEventSafe({
           type: "trade",
           signature: s.signature,
           marketPubkey: marketPubkey.toBase58(),
@@ -250,7 +272,7 @@ export async function reconcilePositions({ program }: ReconcileOptions): Promise
 
       const now = Math.floor(Date.now() / 1000);
       for (const s of sides) {
-        await applyEvent({
+        await applyEventSafe({
           type: "trade",
           signature: `${pda.toBase58()}-${s.side === "YES" ? "y" : "n"}`,
           marketPubkey: market.toBase58(),

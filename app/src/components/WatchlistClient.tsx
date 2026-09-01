@@ -70,7 +70,6 @@ export default function WatchlistClient({ initialMarkets }: { initialMarkets: Ma
     // watchlistKeys is a dependency: the DB keys load async (after markets), so
     // the prune must re-run once they arrive. It converges — when pruned equals
     // the current list no state change is made.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, markets.length, publicKey, watchlistKeys]);
 
   const watchedMarkets = markets.filter((m) =>
@@ -79,13 +78,13 @@ export default function WatchlistClient({ initialMarkets }: { initialMarkets: Ma
   );
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="mb-6">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2 text-ivory flex items-center gap-2">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
+      <div className="mb-8">
+        <h1 className="font-display text-[26px] font-semibold text-ivory flex items-center gap-2">
           <Star className="w-6 h-6 text-gold" />
           Watchlist
         </h1>
-        <p className="text-[13px] text-ash">
+        <p className="text-[13px] text-ash mt-2">
           {watchedMarkets.length} tracked market{watchedMarkets.length !== 1 ? "s" : ""}
         </p>
       </div>
@@ -93,7 +92,7 @@ export default function WatchlistClient({ initialMarkets }: { initialMarkets: Ma
       {loading ? (
         <div className="text-center py-16 text-[13px] text-ash">Loading watchlist...</div>
       ) : watchedMarkets.length === 0 ? (
-        <div className="holo-card p-12 text-center space-y-4">
+        <div className="surface p-12 text-center space-y-4">
           <Star className="w-12 h-12 text-ash mx-auto" />
           <p className="text-ash">Star markets to track them here</p>
           <Link href="/markets"
@@ -105,12 +104,12 @@ export default function WatchlistClient({ initialMarkets }: { initialMarkets: Ma
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {watchedMarkets.map((m) => (
             <Link key={m.publicKey.toBase58()} href={`/market/${m.publicKey.toBase58()}`} className="block group">
-              <div className="holo-card p-5 flex flex-col gap-3">
+              <div className="surface p-5 flex flex-col gap-3 hover:border-gold-deep/60 transition-colors">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-panel-2 text-ash">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-[2px] bg-panel-2 text-ash">
                     {categoryName(m.account.category)}
                   </span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-[2px] ${
                     m.account.status === 0 ? "bg-verdigris/10 text-verdigris" : m.account.status === 1 ? "bg-gold/10 text-gold" : "bg-bordeaux/10 text-bordeaux"
                   }`}>
                     {m.account.status === 0 ? "Open" : m.account.status === 1 ? "Settled" : "Cancelled"}

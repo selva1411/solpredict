@@ -28,6 +28,19 @@ describe("cpmm (probability-based constant-product AMM) parity with amm_math.rs"
     expect(getSpotPriceNo(yes, no, 0) <= CPMM_SCALE).toBe(true);
   });
 
+  it('spot prices sum to 1 at non-zero fee (fee is not subtracted from probability)', () => {
+    // Regression: the fee used to be subtracted from each side independently,
+    // so p_yes + p_no < 1 at any real fee.
+    const yes = 4_000_000n;
+    const no = 6_000_000n;
+    for (const fee of [30, 100, 300]) {
+      const pYes = getSpotPriceYes(yes, no, fee);
+      const pNo = getSpotPriceNo(yes, no, fee);
+      expect(pYes).toBe((CPMM_SCALE * 40n) / 100n);
+      expect(pYes + pNo).toBe(CPMM_SCALE);
+    }
+  });
+
   it("buy increases spot price, sell decreases it", () => {
     let yes = 1_000_000n;
     let no = 1_000_000n;
@@ -64,14 +77,14 @@ describe("cpmm (probability-based constant-product AMM) parity with amm_math.rs"
   });
 
   it("symmetric pools produce clean spot price (200 bps fee)", () => {
+    // Spot price is the RAW probability — the fee does not shift it.
     const yes = 10_000_000n;
     const no = 10_000_000n;
     const fee = 200;
     const spot = getSpotPriceYes(yes, no, fee);
-    const feeAmt = (CPMM_SCALE / 2n) * 200n / 10_000n;
-    const expected = CPMM_SCALE / 2n - feeAmt;
-    const diff = expected > spot ? expected - spot : spot - expected;
-    expect(diff < 1000n).toBe(true);
+    expect(spot).toBe(CPMM_SCALE / 2n);
+    const noSpot = getSpotPriceNo(yes, no, fee);
+    expect(spot + noSpot).toBe(CPMM_SCALE);
   });
 
   it("gross buy cost never exceeds face value (probability basis)", () => {

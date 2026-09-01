@@ -113,7 +113,9 @@ pub fn handler(
     let seller_key = ctx.accounts.seller.key();
 
     let refund_u128 = if dy_in == 0 || pool_yes == 0 || pool_no == 0 {
-        payout_math::calculate_cost(quantity, market.share_price_lamports)? as u128
+        // Flat path charges the fee out of the seller's proceeds, mirroring
+        // the curve's sell quote (was previously fee-free).
+        payout_math::calculate_proceeds_with_fee(quantity, market.share_price_lamports, fee_bps)?
     } else {
         match is_yes {
             true => amm_math::get_sell_amount_out(pool_yes, pool_no, dy_in, fee_bps),

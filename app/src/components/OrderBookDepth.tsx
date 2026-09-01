@@ -183,7 +183,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
             ))}
           </div>
           <span className="text-[10px] font-mono text-graphite flex items-center gap-1 pl-2">
-            <span className="w-1.5 h-1.5 rounded-[2px] bg-verdigris animate-pulse inline-block" />
+            <span className="w-1.5 h-1.5 rounded-lg bg-verdigris animate-pulse inline-block" />
             <span>LIVE</span>
           </span>
         </div>
@@ -242,7 +242,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
         )}
 
         {/* Spread divider */}
-        <div className="py-1.5 px-3 flex justify-between items-center text-[10px] font-mono text-gold-lite font-bold border-y border-hairline/20 bg-gold-lite/5 rounded-[2px]">
+        <div className="py-1.5 px-3 flex justify-between items-center text-[10px] font-mono text-gold-lite font-bold border-y border-hairline/20 bg-gold-lite/5 rounded-lg">
           <span>BID: {bestBid} SOL</span>
           <span>SPREAD: {spreadSol} SOL</span>
           <span>ASK: {bestAsk} SOL</span>
@@ -325,7 +325,7 @@ export const OrderBookDepth = React.memo(function OrderBookDepth({ yesPoolLampor
           <span className="text-verdigris font-bold">{yesOdds.toFixed(1)}%</span>
         </div>
 
-        <div className="w-full h-2.5 bg-bordeaux/20 rounded-[2px] overflow-hidden flex border border-void">
+        <div className="w-full h-2.5 bg-bordeaux/20 rounded-lg overflow-hidden flex border border-void">
           <div
             style={{ width: `${yesOdds}%` }}
             className="h-full bg-verdigris transition-all duration-700 ease-out"

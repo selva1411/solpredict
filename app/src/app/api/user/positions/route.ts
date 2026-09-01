@@ -31,12 +31,13 @@ export const GET = apiHandler(async (req: NextRequest) => {
       totalSpentSol += p.costSol;
     }
 
+    // Win rate is only meaningful for settled markets where there is a known
+    // outcome. Counting unrealized P&L on open positions as "wins" produces
+    // misleading stats (e.g. 100% win rate from LP-inflated mark-to-market).
     const winRate =
       (userStat?.wins ?? 0) + (userStat?.losses ?? 0) > 0
         ? (userStat!.wins!) / ((userStat!.wins!) + (userStat!.losses!))
-        : positions.length > 0
-          ? positions.filter((p) => p.pnlSol > 0).length / positions.length
-          : 0;
+        : 0;
 
     return ok({
       ok: true,

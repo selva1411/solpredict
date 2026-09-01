@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, Share_Tech, Space_Mono, Orbitron, JetBrains_Mono } from "next/font/google";
+import { Unbounded, Sora, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { WalletContextProvider } from "@/components/WalletContextProvider";
@@ -16,39 +16,32 @@ if (typeof globalThis !== "undefined") {
   try { validateEnv(); } catch {}
 }
 
-const ibmPlexSans = IBM_Plex_Sans({
-  variable: "--font-geist-sans",
+const unbounded = Unbounded({
+  variable: "--font-unbounded",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800", "900"],
+});
+
+const sora = Sora({
+  variable: "--font-sora",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const shareTech = Share_Tech({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400"],
-});
-
-const spaceMono = Space_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-});
-
-const orbitron = Orbitron({
-  variable: "--font-orbitron",
-  subsets: ["latin"],
-  weight: ["600", "700", "800", "900"],
-});
-
 const jetBrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains",
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "SOLPREDICT — Institutional Solana Prediction Markets",
-  description: "Conviction, priced. Solana's premier prediction terminal — trade YES/NO on any outcome with CPMM pricing and Pyth oracle resolution, settled on-chain.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
+  ),
+  title: "SOLPREDICT — Trade the Future on Solana",
+  description:
+    "The fastest prediction market on Solana. Trade YES/NO positions with CPMM pricing, Pyth oracle resolution and instant on-chain settlement — lower fees, deeper liquidity, faster markets than anywhere else.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -65,11 +58,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${ibmPlexSans.variable} ${shareTech.variable} ${spaceMono.variable} ${orbitron.variable} ${jetBrainsMono.variable} min-h-screen bg-void text-ivory antialiased pb-16 md:pb-0`}
-      >
-        <div className="lux-bloom" aria-hidden />
-        <div className="lux-grain" aria-hidden />
-        {/* keep all existing providers here, unchanged */}
+      className={`${unbounded.variable} ${sora.variable} ${jetBrainsMono.variable} min-h-screen text-ivory antialiased pt-14 pb-16 md:pb-0`}
+    >
         <div className="relative z-10">
           <WalletContextProvider>
             <ErrorBoundary>

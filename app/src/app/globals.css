@@ -1,59 +1,66 @@
 @import "tailwindcss";
 
 /* ════════════════════════════════════════════════════════════════
-   OBSIDIAN TERMINAL — paint layer only. Behaviour, props, data flow
-   untouched. One accent (cyan), metal hairline architecture, tabular
-   numerals everywhere, typographic hierarchy as the layout.
+   SOLPredict — clean dark. Charcoal ground, white type, green/red
+   for YES/NO, blue for action. No gradients, no glow, no glass.
    ════════════════════════════════════════════════════════════════ */
 
 @theme {
-  /* ground — five steps of black, never pure #000 */
-  --color-void:      #05070C;
-  --color-obsidian:  #080B13;
-  --color-panel:     #0C111C;
-  --color-panel-2:   #111826;
-  --color-hairline:  #1B2334;
-  --color-hairline-2:#273350;
+  /* ground */
+  --color-void:      #09090B;
+  --color-obsidian:  #09090B;
+  --color-panel:     #18181B;
+  --color-panel-2:   #27272A;
+  --color-hairline:  #3F3F46;
+  --color-hairline-2:#52525B;
 
-  /* single accent: signal cyan */
-  --color-gold:      #22D3EE;   /* keep alias name for compatibility */
-  --color-gold-lite: #8CF0FF;
-  --color-gold-deep: #0B5F72;
+  /* primary — blue */
+  --color-gold:      #3B82F6;
+  --color-gold-lite: #60A5FA;
+  --color-gold-deep: #2563EB;
 
-  /* metal leaf — used ONLY for 1px edges, dividers, small marks */
-  --color-leaf:      #C8B486;
-  --color-leaf-dim:  #6B6045;
+  /* premium — silver */
+  --color-champagne: #E5E7EB;
+  --color-champagne-dim: #9CA3AF;
 
-  /* text ramp */
-  --color-ivory:     #ECF1FA;
-  --color-ash:       #8D97AE;
-  --color-ash-dim:   #6E7D9C;
+  /* secondary — violet */
+  --color-iris:      #8B5CF6;
+
+  /* text */
+  --color-ivory:     #FAFAFA;
+  --color-ash:       #A1A1AA;
+  --color-ash-dim:   #71717A;
 
   /* outcomes */
-  --color-verdigris: #2FD8A0;
-  --color-bordeaux:  #FF6B84;
-  --color-amber:     #F5B544;
-  --color-violet:    #9C8CFA;
+  --color-verdigris: #22C55E;
+  --color-bordeaux:  #EF4444;
+  --color-amber:     #F59E0B;
+  --color-violet:    #8B5CF6;
 
-  /* legacy compat token — warm caption gray, kept alive for text-graphite */
-  --color-graphite:  #A9A49A;
+  /* light surface */
+  --color-cream:     #FAFAFA;
+  --color-ink:       #18181B;
+
+  /* legacy compat */
+  --color-graphite:  #A1A1AA;
 
   /* type */
-  --font-display: var(--font-space-grotesk, "Space Grotesk"), sans-serif;
-  --font-sans:    var(--font-inter, "Inter"), system-ui, sans-serif;
+  --font-display: var(--font-unbounded, "Unbounded"), sans-serif;
+  --font-sans:    var(--font-sora, "Sora"), system-ui, sans-serif;
   --font-mono:    var(--font-jetbrains-mono, "JetBrains Mono"), ui-monospace, monospace;
 
-  /* geometry — sharp instrument, not a bubble */
-  --radius-data:  3px;
-  --radius-panel: 8px;
+  /* geometry */
+  --radius-data:  8px;
+  --radius-panel: 12px;
 
-  /* elevation: hairline + top highlight + long soft shadow */
-  --shadow-flat:  inset 0 1px 0 color-mix(in oklab, var(--color-ivory) 3.5%, transparent);
-  --shadow-panel: inset 0 1px 0 color-mix(in oklab, var(--color-ivory) 4.5%, transparent), 0 1px 0 color-mix(in oklab, var(--color-void) 60%, transparent), 0 24px 60px -32px color-mix(in oklab, var(--color-void) 90%, transparent);
-  --shadow-lift:  inset 0 1px 0 color-mix(in oklab, var(--color-ivory) 7%, transparent),  0 1px 0 color-mix(in oklab, var(--color-void) 60%, transparent), 0 32px 80px -28px color-mix(in oklab, var(--color-void) 95%, transparent);
-  --shadow-signal:0 0 0 1px color-mix(in oklab, var(--color-gold) 22%, transparent), 0 10px 44px -16px color-mix(in oklab, var(--color-gold) 30%, transparent);
+  /* elevation */
+  --shadow-flat:  none;
+  --shadow-panel: 0 1px 3px rgba(0,0,0,.4);
+  --shadow-lift:  0 4px 12px rgba(0,0,0,.5);
+  --shadow-signal: 0 0 0 1px var(--color-gold);
 
   --ease-lux: cubic-bezier(.22,.61,.36,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
 
   --animate-pulse-slow: pulseSlow 3s ease-in-out infinite;
   --animate-spin-slow: spin 14s linear infinite;
@@ -62,111 +69,96 @@
 @layer base {
   html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
   body {
-    background:
-      radial-gradient(90rem 48rem at 85% -12%, color-mix(in oklab, var(--color-gold) 5.5%, transparent), transparent 62%),
-      radial-gradient(70rem 42rem at -18% 108%, color-mix(in oklab, var(--color-leaf) 3%, transparent), transparent 64%),
-      var(--color-void);
+    background: var(--color-void);
     color: var(--color-ivory);
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.55;
   }
-  ::selection { background: color-mix(in oklab, var(--color-gold) 28%, transparent); color: var(--color-ivory); }
+  ::selection { background: var(--color-gold); color: white; }
 
-  /* universal keyboard focus — visible on every surface, unobtrusive */
   :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
     outline: 2px solid var(--color-gold);
     outline-offset: 2px;
   }
 
-  /* themed caret — text fields inherit the signal accent */
   :is(input, textarea, [contenteditable]) {
     caret-color: var(--color-gold);
   }
-  h1,h2,h3 {
-    font-family: var(--font-display);
-    font-weight: 600;
-    line-height: 1.06;
-    letter-spacing: -0.015em;
-  }
 
-  /* faint engineering grid over the whole canvas — 56px, 3% alpha */
-  body::before {
-    content: "";
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background-image:
-      linear-gradient(color-mix(in oklab, var(--color-ash) 3%, transparent) 1px, transparent 1px),
-      linear-gradient(90deg, color-mix(in oklab, var(--color-ash) 3%, transparent) 1px, transparent 1px);
-    background-size: 56px 56px;
-    mask-image: radial-gradient(75% 65% at 50% 38%, black 0%, transparent 100%);
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
   }
 }
 
 /* ---------- utilities ---------- */
 
-/* small caps metadata label — use for EVERY label in the app */
 @utility label-lux {
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.2em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-ash-dim);
 }
 
-/* leather-and-ink eyebrow — the Obsidian Terminal signature label */
 @utility eyebrow {
   font-family: var(--font-mono);
-  font-size: 10px; font-weight: 500;
-  letter-spacing: .2em; text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
   color: var(--color-ash-dim);
 }
 
 @utility rule-gold {
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-hairline) 14%, color-mix(in oklab, var(--color-gold) 45%, transparent) 50%, var(--color-hairline) 86%, transparent);
-  opacity: .75;
+  background: var(--color-hairline);
 }
 
-/* content surfaces */
 @utility surface {
-  background: color-mix(in oklab, var(--color-panel) 92%, transparent);
+  background: var(--color-panel);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-data);
-  backdrop-filter: blur(6px);
 }
 
 @utility surface-feature {
-  background:
-    radial-gradient(120% 110% at 0% 0%, color-mix(in oklab, var(--color-gold) 4%, transparent), transparent 52%),
-    var(--color-panel);
+  background: var(--color-panel);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-panel);
-  position: relative;
-  overflow: hidden;
 }
 
-/* the one true surface */
+@utility paper {
+  background: var(--color-ivory);
+  color: var(--color-ink);
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--color-hairline);
+}
+
 @utility panel-lux {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--color-panel-2) 70%, transparent), var(--color-panel));
+  background: var(--color-panel);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-panel);
-  position: relative;
 }
 
-/* hairline gold seam along the top edge — the signature detail */
 @utility seam-leaf {
   &::before {
-    content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
-    background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-leaf) 55%, transparent) 22%, color-mix(in oklab, var(--color-leaf) 55%, transparent) 78%, transparent);
-    opacity: .5; pointer-events: none;
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; z-index: 1;
+    background: var(--color-gold);
+    pointer-events: none;
+    border-radius: 9999px;
   }
 }
 
 @utility lift {
-  transition: transform .22s var(--ease-lux), box-shadow .22s var(--ease-lux), border-color .22s var(--ease-lux);
-  &:hover { transform: translateY(-2px); border-color: var(--color-hairline-2); box-shadow: var(--shadow-lift); }
+  transition: border-color .15s ease, box-shadow .15s ease;
+  &:hover {
+    border-color: var(--color-gold);
+    box-shadow: var(--shadow-lift);
+  }
 }
 
 @utility num {
@@ -177,54 +169,51 @@
 
 @utility display-xl {
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.028em;
-  line-height: .98;
-  font-size: clamp(2.6rem, 6.4vw, 5.25rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-size: clamp(2rem, 5vw, 3.5rem);
 }
 
 @utility focus-lux {
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--color-void), 0 0 0 4px color-mix(in oklab, var(--color-gold) 70%, transparent);
+    box-shadow: 0 0 0 2px var(--color-gold);
   }
 }
 
-/* glowing edge on hover — the signature interaction */
 @utility edge-glow {
-  transition: border-color .22s var(--ease-lux), box-shadow .22s var(--ease-lux), transform .22s var(--ease-lux);
+  transition: border-color .15s ease, box-shadow .15s ease;
   &:hover {
-    border-color: color-mix(in oklab, var(--color-gold) 40%, transparent);
-    box-shadow: 0 8px 32px -16px color-mix(in oklab, var(--color-gold) 22%, transparent);
+    border-color: var(--color-gold);
+    box-shadow: var(--shadow-lift);
   }
 }
 
-/* ── Odds Wall board utilities (kept as API, new skin) ────── */
+/* ── Board utilities ────── */
 
-@utility board { display: flex; flex-direction: column; gap: 8px; }
+@utility board { display: flex; flex-direction: column; gap: 6px; }
 
 @utility board-row {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 1rem;
-  padding: 0.875rem 1.125rem;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--color-panel) 94%, transparent), color-mix(in oklab, var(--color-obsidian) 94%, transparent));
+  padding: 0.75rem 1rem;
+  background: var(--color-panel);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-data);
-  box-shadow: var(--shadow-flat);
-  transition: border-color .18s var(--ease-lux), box-shadow .18s var(--ease-lux), transform .18s var(--ease-lux), background .18s var(--ease-lux);
+  transition: border-color .15s ease, background .15s ease;
   position: relative;
 }
 @utility board-row-reorder {
-  transition: transform .5s var(--ease-lux), border-color .18s ease-out, background .18s ease-out;
+  transition: transform .3s ease, border-color .15s ease, background .15s ease;
 }
 
-/* the odds numeral — bright, tabular, ticking */
 @utility odds {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -233,84 +222,64 @@
 @utility odds-sm {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: var(--color-ivory);
 }
 
-/* movement flash — cyan for up, rose for down */
-@utility odds-flash-up { animation: oddsFlashUp .55s ease-out; }
-@utility odds-flash-down { animation: oddsFlashDown .55s ease-out; }
+@utility odds-flash-up { animation: oddsFlashUp .4s ease-out; }
+@utility odds-flash-down { animation: oddsFlashDown .4s ease-out; }
 @keyframes oddsFlashUp {
-  0% { color: var(--color-verdigris); text-shadow: 0 0 20px color-mix(in oklab, var(--color-verdigris) 50%, transparent); }
-  100% { color: var(--color-ivory); text-shadow: none; }
+  0% { color: var(--color-verdigris); }
+  100% { color: var(--color-ivory); }
 }
 @keyframes oddsFlashDown {
-  0% { color: var(--color-bordeaux); text-shadow: 0 0 20px color-mix(in oklab, var(--color-bordeaux) 50%, transparent); }
-  100% { color: var(--color-ivory); text-shadow: none; }
+  0% { color: var(--color-bordeaux); }
+  100% { color: var(--color-ivory); }
 }
 
-/* YES / NO two-way line */
 @utility line {
   display: inline-flex;
   align-items: baseline;
   gap: 0.35rem;
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 @utility line-yes { color: var(--color-verdigris); }
 @utility line-no  { color: var(--color-bordeaux); }
 
-/* sheen sweep on hover */
 @utility sheen {
   position: relative;
   overflow: hidden;
   &::after {
     content: "";
     position: absolute; inset: 0;
-    background: linear-gradient(105deg, transparent 40%, color-mix(in oklab, var(--color-gold-lite) 7%, transparent) 50%, transparent 60%);
+    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.04) 50%, transparent 60%);
     transform: translateX(-120%);
-    transition: transform .9s var(--ease-lux);
+    transition: transform .6s ease;
     pointer-events: none;
   }
   &:hover::after { transform: translateX(120%); }
 }
 
-/* film grain — mounted once in layout, ≤3.5% */
-@utility lux-grain {
-  position: fixed; inset: 0; z-index: 60; pointer-events: none;
-  opacity: .03; mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* ambient corner glows — mounted once in layout: one cyan bloom top-right,
-   one leaf-gold bloom bottom-left, both sub-6% */
-@utility lux-bloom {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(58% 44% at 82% -6%, color-mix(in oklab, var(--color-gold) 6%, transparent), transparent 68%),
-    radial-gradient(52% 40% at -8% 102%, color-mix(in oklab, var(--color-leaf) 3%, transparent), transparent 66%);
-}
-
 @utility tnum { font-variant-numeric: tabular-nums; }
 
 @keyframes riseIn { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform:none; } }
-@utility rise { animation: riseIn .5s cubic-bezier(.22,.61,.36,1) both; }
+@utility rise { animation: riseIn .4s ease-out both; }
 
 @keyframes tick { 0%{transform:translateY(-40%);opacity:0} 100%{transform:none;opacity:1} }
-@utility tick { animation: tick .22s ease-out both; }
+@utility tick { animation: tick .2s ease-out both; }
 
-/* live pulsing dot */
 @utility live-dot {
   position: relative;
-  width: 7px; height: 7px; border-radius: 9999px;
-  background: var(--color-gold);
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: var(--color-verdigris);
   &::before {
     content: ""; position: absolute; inset: -4px; border-radius: 9999px;
-    background: color-mix(in oklab, var(--color-gold) 35%, transparent);
+    background: rgba(34,197,94,.3);
     animation: livePing 1.8s cubic-bezier(0,0,.2,1) infinite;
   }
 }
@@ -319,18 +288,54 @@
   80%, 100% { transform: scale(2.1); opacity: 0; }
 }
 
-/* gradient headline text — cyan bleed, no violet */
 @utility text-signal {
-  background: linear-gradient(96deg, var(--color-ivory) 20%, var(--color-gold-lite) 58%, color-mix(in oklab, var(--color-gold) 65%, var(--color-ivory)) 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--color-gold);
 }
 
-/* ────────────────────────────────────────────────────────────────
-   Legacy compatibility — maps tokens + component classes used by
-   not-yet-rewritten pages onto the SIGNAL palette. Presentation only.
-   ──────────────────────────────────────────────────────────────── */
+@utility ribbon {
+  width: 100%;
+  background: var(--color-panel);
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+@utility data-cell {
+  background: var(--color-panel);
+  border: 1px solid var(--color-hairline);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-mono);
+}
+
+@utility price-yes {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-verdigris);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+@utility price-no {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-bordeaux);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+@utility hero-stat {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-hairline);
+}
+
+/* ── Legacy compatibility ────── */
 :root {
   --surface-0: var(--color-void);
   --surface-1: var(--color-panel);
@@ -345,21 +350,21 @@
   --popover: var(--color-panel);
   --popover-foreground: var(--color-ivory);
   --primary: var(--color-gold);
-  --primary-foreground: var(--color-void);
+  --primary-foreground: white;
   --secondary: var(--color-panel-2);
   --secondary-foreground: var(--color-ivory);
   --muted: var(--color-panel-2);
   --muted-foreground: var(--color-ash);
   --destructive: var(--color-bordeaux);
-  --destructive-foreground: var(--color-ivory);
+  --destructive-foreground: white;
   --input: var(--color-hairline);
   --ring: var(--color-gold);
   --color-border: var(--color-hairline);
-  --color-border-subtle: color-mix(in oklab, var(--color-ivory) 6%, transparent);
+  --color-border-subtle: rgba(255,255,255,.06);
   --color-primary: var(--color-gold);
-  --color-primary-foreground: var(--color-void);
+  --color-primary-foreground: white;
   --color-destructive: var(--color-bordeaux);
-  --color-destructive-foreground: var(--color-ivory);
+  --color-destructive-foreground: white;
   --color-yes: var(--color-verdigris);
   --color-no: var(--color-bordeaux);
   --color-crypto: var(--color-gold);
@@ -373,11 +378,11 @@
   --color-chart-4: var(--color-violet);
   --color-chart-5: var(--color-gold-lite);
   --color-gray-100: var(--color-ivory);
-  --color-gray-200: color-mix(in oklab, var(--color-ivory) 78%, var(--color-void));
-  --color-gray-300: color-mix(in oklab, var(--color-ivory) 62%, var(--color-void));
+  --color-gray-200: #E5E7EB;
+  --color-gray-300: #D1D5DB;
   --color-gray-400: var(--color-ash);
-  --color-gray-500: color-mix(in oklab, var(--color-ash) 72%, var(--color-void));
-  --color-gray-600: color-mix(in oklab, var(--color-ash-dim) 85%, var(--color-void));
+  --color-gray-500: #6B7280;
+  --color-gray-600: #4B5563;
   --color-gray-700: var(--color-hairline-2);
   --color-gray-800: var(--color-hairline);
   --color-gray-900: var(--color-obsidian);
@@ -391,101 +396,110 @@
   --color-surface: var(--color-panel);
   --color-surface-variant: var(--color-panel-2);
   --border: var(--color-hairline);
-  --radius: 4px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }
 
 @layer components {
   .terminal-card {
     background: var(--color-panel);
     border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-data, 4px);
-    transition: border-color 0.15s ease-out;
+    border-radius: 8px;
+    transition: border-color 0.15s ease;
   }
-  .terminal-card:hover { border-color: var(--color-gray-700); }
+  .terminal-card:hover { border-color: var(--color-hairline-2); }
+
   .glass-panel {
     background: var(--color-panel);
     border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-panel, 10px);
+    border-radius: 12px;
   }
+
   .holo-card {
     position: relative;
     background: var(--color-panel);
     border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-data, 4px);
-    transition: border-color 0.2s ease;
+    border-radius: 8px;
+    transition: border-color 0.15s ease;
   }
-  .holo-card:hover { border-color: color-mix(in oklab, var(--color-gold) 45%, transparent); }
+  .holo-card:hover { border-color: var(--color-gold); }
   .holo-card-3d { perspective: 900px; }
-
   .board-panel {
     background: var(--color-panel);
     border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-data, 4px);
+    border-radius: 8px;
   }
-  .glass-panel-hover { transition: border-color 0.18s ease; }
-  .glass-panel-hover:hover { border-color: color-mix(in oklab, var(--color-gold) 35%, transparent); }
+  .glass-panel-hover { transition: border-color 0.15s ease; }
+  .glass-panel-hover:hover { border-color: var(--color-gold); }
 
   .btn-terminal-primary, .btn-royale, .btn-primary, .btn-amber {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    background: linear-gradient(135deg, var(--color-gold), var(--color-gold-deep));
-    color: var(--color-void);
-    font-weight: 700;
+    padding: 0 1.5rem;
+    height: 44px;
+    background: var(--color-gold);
+    color: white;
+    font-family: var(--font-sans);
+    font-weight: 600;
     font-size: 0.875rem;
-    border-radius: var(--radius-data, 4px);
+    border-radius: 8px;
     cursor: pointer;
-    transition: filter .18s ease, box-shadow .18s ease;
+    transition: background .15s ease, transform .15s ease;
   }
   .btn-terminal-primary:hover, .btn-royale:hover, .btn-primary:hover, .btn-amber:hover {
-    filter: brightness(1.12);
-    box-shadow: 0 6px 24px -8px color-mix(in oklab, var(--color-gold) 50%, transparent);
+    background: var(--color-gold-deep);
+    transform: translateY(-1px);
   }
+  .btn-terminal-primary:active, .btn-royale:active, .btn-primary:active, .btn-amber:active {
+    transform: scale(0.98);
+  }
+
   .btn-outline-royale, .btn-terminal-secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    background: var(--color-panel);
-    color: var(--color-ivory);
+    padding: 0 1.5rem;
+    height: 44px;
+    background: transparent;
+    color: var(--color-ash);
     border: 1px solid var(--color-hairline);
-    font-weight: 500;
+    font-family: var(--font-sans);
+    font-weight: 600;
     font-size: 0.875rem;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: border-color .18s ease;
+    transition: border-color .15s ease, color .15s ease;
   }
-  .btn-outline-royale:hover, .btn-terminal-secondary:hover { border-color: color-mix(in oklab, var(--color-gold) 40%, transparent); }
-
+  .btn-outline-royale:hover, .btn-terminal-secondary:hover {
+    border-color: var(--color-gold);
+    color: var(--color-ivory);
+  }
 
   .text-gradient-gold, .text-gradient {
-    background: linear-gradient(96deg, var(--color-ivory) 20%, var(--color-gold-lite) 58%, var(--color-gold) 96%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--color-gold);
   }
 
   .split-flap-char {
     display: inline-block;
     min-width: 0.7em;
-    padding: 0.1em 0.2em;
+    padding: 0.1em 0.28em;
     text-align: center;
     color: var(--color-gold-lite);
-    background: var(--color-obsidian);
+    background: var(--color-panel);
     border: 1px solid var(--color-hairline);
     border-radius: 4px;
     font-family: var(--font-mono), monospace;
     font-weight: 700;
   }
+
   .skeleton-box, .skeleton-shimmer, .shimmer {
-    background: linear-gradient(90deg, var(--color-panel-2) 0%, var(--color-hairline-2) 50%, var(--color-panel-2) 100%);
+    background: linear-gradient(90deg, var(--color-panel) 0%, var(--color-panel-2) 50%, var(--color-panel) 100%);
     background-size: 200% 100%;
     animation: shimmer-anim 1.8s infinite;
   }
@@ -493,56 +507,78 @@
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
   }
-  .flash-up { animation: flash-green 0.4s ease-out; }
+
+  .flash-up { animation: flash-green 0.3s ease-out; }
   @keyframes flash-green {
-    0% { background-color: color-mix(in oklab, var(--color-verdigris) 18%, transparent); }
+    0% { background-color: rgba(34,197,94,.12); }
     100% { background-color: transparent; }
   }
-  .flash-down { animation: flash-red 0.4s ease-out; }
+  .flash-down { animation: flash-red 0.3s ease-out; }
   @keyframes flash-red {
-    0% { background-color: color-mix(in oklab, var(--color-bordeaux) 18%, transparent); }
+    0% { background-color: rgba(239,68,68,.12); }
     100% { background-color: transparent; }
   }
-  .hover-lift { transition: border-color 0.18s ease, transform .18s ease; }
-  .hover-lift:hover { border-color: color-mix(in oklab, var(--color-gold) 35%, transparent); }
+
+  .hover-lift { transition: border-color 0.15s ease; }
+  .hover-lift:hover { border-color: var(--color-gold); }
 
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
   .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
-  .bg-gradient-radial { background: radial-gradient(circle at center, var(--color-panel-2), var(--color-void)); }
-  .animate-fade-in { animation: fadeIn .3s ease-out both; }
+  .bg-gradient-radial { background: var(--color-panel); }
+  .animate-fade-in { animation: fadeIn .2s ease-out both; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .flip-digit { display: inline-block; animation: tick .22s ease-out both; }
+  .flip-digit { display: inline-block; animation: tick .2s ease-out both; }
+
+  .trade-side-yes-active {
+    border: 2px solid var(--color-verdigris);
+    background: rgba(34,197,94,.06);
+    border-radius: 8px;
+  }
+  .trade-side-yes-inactive {
+    border: 1px solid var(--color-hairline);
+    background: transparent;
+    border-radius: 8px;
+  }
+  .trade-side-no-active {
+    border: 2px solid var(--color-bordeaux);
+    background: rgba(239,68,68,.06);
+    border-radius: 8px;
+  }
+  .trade-side-no-inactive {
+    border: 1px solid var(--color-hairline);
+    background: transparent;
+    border-radius: 8px;
+  }
 }
 
-/* wallet adapter theming — kill the stock purple */
+/* wallet adapter */
 .wallet-button-wrapper,
 .wallet-button-wrapper > * {
   --wallet-adapter-bg: transparent !important;
 }
 .wallet-adapter-button:not([class*="trigger"]):not([data-variant]) {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-gold) 16%, transparent), color-mix(in oklab, var(--color-gold-deep) 14%, transparent)) !important;
-  border: 1px solid color-mix(in oklab, var(--color-gold) 40%, transparent) !important;
-  color: var(--color-ivory) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 12px !important;
-  letter-spacing: .04em;
-  border-radius: var(--radius-data) !important;
+  background: var(--color-gold) !important;
+  border: none !important;
+  color: white !important;
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  border-radius: 8px !important;
   padding: 0 16px !important;
-  height: 38px !important;
-  transition: border-color .15s ease !important;
+  height: 40px !important;
+  transition: background .15s ease !important;
 }
 .wallet-adapter-button:not([class*="trigger"]):not([data-variant]):hover {
-  border-color: color-mix(in oklab, var(--color-gold) 80%, transparent) !important;
-  box-shadow: 0 0 24px -6px color-mix(in oklab, var(--color-gold) 45%, transparent) !important;
+  background: var(--color-gold-deep) !important;
 }
 .wallet-adapter-modal-wrapper { background: var(--color-obsidian) !important; }
-.wallet-adapter-modal { background: color-mix(in oklab, var(--color-void) 86%, transparent) !important; backdrop-filter: blur(8px); }
+.wallet-adapter-modal { background: var(--color-panel) !important; }
 
-/* Custom scrollbars */
+/* scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--color-void); }
-::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-hairline-2); }
 
 @media (prefers-reduced-motion: reduce) {

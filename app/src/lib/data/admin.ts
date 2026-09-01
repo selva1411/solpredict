@@ -411,7 +411,7 @@ export async function getAdminSettings() {
     structured: {
       feeBps: Number(settingsMap.feeBps || 200),
       adminWallet: settingsMap.adminWallet || process.env.ADMIN_WALLET || '',
-      platformName: settingsMap.platformName || 'PREDICT-X',
+      platformName: settingsMap.platformName || 'SOLPredict',
       maintenanceMode: settingsMap.maintenanceMode === 'true',
       maxMarketDuration: Number(settingsMap.maxMarketDuration || 2592000),
       minMarketDuration: Number(settingsMap.minMarketDuration || 300),

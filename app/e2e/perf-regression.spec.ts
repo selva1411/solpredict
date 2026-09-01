@@ -47,7 +47,7 @@ test.describe("Performance regression budgets", () => {
   }
 
   test("home page renders hero within budget", async ({ page }) => {
-    // The hero text ("Conviction,") streams with the static shell BEFORE the
+    // The board ("Live Lines") renders once the server’s DB-backed market list
     // server's getMarketList/getPlatformStats DB queries resolve, so waiting
     // on it would let the warm visit return early — leaving the Neon cold
     // start for the measured navigation. Wait on a DB-driven market question
@@ -58,7 +58,7 @@ test.describe("Performance regression budgets", () => {
     await warmRoute(page, "/", "Manchester");
     const t0 = Date.now();
     await page.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 30_000 });
-    await expect(page.getByText("Conviction,").first()).toBeVisible({ timeout: HOME_BUDGET });
+    await expect(page.getByText("Live Lines").first()).toBeVisible({ timeout: HOME_BUDGET });
     console.log(`PERF home hero visible: ${Date.now() - t0}ms (budget ${HOME_BUDGET}ms)`);
     expect(Date.now() - t0).toBeLessThan(HOME_BUDGET);
   });

@@ -46,7 +46,7 @@ export function ActivityFeedSection({ activity }: { activity: ActivityItem[] }) 
             return (
               <div
                 key={item.signature + "-" + index}
-                className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-hairline/10 hover:bg-ivory/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-gold/3 border-l-2 border-l-verdigris" : ""}`}
+                className={`flex flex-col sm:flex-row sm:items-center justify-between py-2.5 border-b border-hairline/10 hover:bg-ivory/5 px-2 rounded gap-1 sm:gap-0 ${isNew ? "bg-verdigris/5" : ""}`}
               >
                 <div className="flex items-center space-x-2.5 min-w-0">
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${badgeColor}`}>

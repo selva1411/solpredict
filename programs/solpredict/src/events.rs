@@ -56,8 +56,8 @@ pub struct RewardsClaimed {
 #[event]
 pub struct MarketCancelled {
     pub market_id: u64,
-    pub cancelled_by: Pubkey,
     pub reason: String,
+    pub settled_price: i64,
 }
 
 /// Emitted when a user claims a refund on a cancelled market.

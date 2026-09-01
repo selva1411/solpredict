@@ -130,9 +130,11 @@ pub fn handler(
 
     // Probability-based CPMM (amm_math). Empty-side pools keep the documented
     // Flat Linear Minting (baseline cost = quantity × share_price) — the curve
-    // takes over once BOTH sides carry value.
+    // takes over once BOTH sides carry value. The flat path applies fee_bps on
+    // top of the base price, matching how the curve quotes (previously this
+    // path was fee-free and early traders bypassed the protocol fee).
     let cost_u128 = if dy_out == 0 || pool_yes == 0 || pool_no == 0 {
-        payout_math::calculate_cost(quantity, market.share_price_lamports)? as u128
+        payout_math::calculate_cost_with_fee(quantity, market.share_price_lamports, fee_bps)?
     } else {
         match side {
             Side::Yes => amm_math::get_buy_cost_in(pool_yes, pool_no, dy_out, fee_bps),

@@ -140,9 +140,6 @@ pub enum SolPredictError {
     #[msg("Nothing to refund")]
     NothingToRefund,
 
-    #[msg("No winning tokens to claim")]
-    NoWinningTokens,
-
     #[msg("Outcome not set")]
     OutcomeNotSet,
 
@@ -154,9 +151,6 @@ pub enum SolPredictError {
 
     #[msg("Pyth price feed ID mismatch")]
     OracleFeedMismatch,
-
-    #[msg("Pyth price is stale (older than 60 seconds)")]
-    StalePrice,
 
     #[msg("Use Pyth oracle to settle Crypto markets")]
     UsePythForCrypto,
@@ -236,4 +230,13 @@ pub enum SolPredictError {
 
     #[msg("Cannot remove guardian: required confirmations exceed remaining guardians")]
     ThresholdExceedsGuardians,
+
+    #[msg("share_price_lamports can no longer be changed once shares have been minted")]
+    SharePriceImmutable,
+
+    #[msg("LP deposit is below the minimum required (0.01 SOL)")]
+    LpDepositTooSmall,
+
+    #[msg("This position has unclaimed rewards — claim before closing it")]
+    PositionHasUnclaimedRewards,
 }

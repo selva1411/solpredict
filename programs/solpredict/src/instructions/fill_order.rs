@@ -66,6 +66,15 @@ pub struct FillOrder<'info> {
 pub fn handler(ctx: Context<FillOrder>, quantity: u64) -> Result<()> {
     check_not_paused(&ctx.accounts.emergency_pause)?;
 
+    // P2P fills must respect the same trading deadline as buy_shares and
+    // sell_shares: a market stays status=Open until settled, so without this
+    // check standing orders could fill at post-close prices.
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp < ctx.accounts.market.end_ts,
+        SolPredictError::MarketExpired
+    );
+
     // Determine the mint this order trades: the market's YES or NO mint
     // depending on the order's side. The token accounts the caller passes in
     // MUST be ATAs of this exact mint, owned by the expected party. Without

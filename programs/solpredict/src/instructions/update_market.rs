@@ -80,6 +80,14 @@ pub fn handler(
 
     if let Some(sp) = share_price_lamports {
         require!(sp >= MIN_SHARE_PRICE, SolPredictError::SharePriceTooLow);
+        // The share price anchors every recorded total_spent_lamports and the
+        // flat-mint/refund math. Changing it once shares exist silently
+        // corrupts every holder's accounting — lock it after first mint.
+        require!(
+            sp == market.share_price_lamports
+                || (market.yes_supply == 0 && market.no_supply == 0),
+            SolPredictError::SharePriceImmutable
+        );
         market.share_price_lamports = sp;
     }
 

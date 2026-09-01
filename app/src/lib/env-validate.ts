@@ -4,6 +4,10 @@ const PROD_REQUIRED_VARS: string[] = [
   "NEXT_PUBLIC_RPC_URL",
   "NEXT_PUBLIC_CLUSTER",
   "NEXT_PUBLIC_PROGRAM_ID",
+  "DATABASE_URL",
+  "ADMIN_WALLET",
+  "SESSION_SECRET",
+  "HELIUS_WEBHOOK_SECRET",
 ];
 
 export function validateEnv(): void {

@@ -220,12 +220,43 @@ pub mod solpredict {
             require!(outcome == 1 || outcome == 2, SolPredictError::InvalidOutcome);
 
             let account_info = &ctx.remaining_accounts[i];
+
+            // remaining_accounts bypass Anchor's seed constraints, so the PDA
+            // derivation is verified manually: the account must be owned by
+            // this program AND re-derive from ["market", market_id] with the
+            // bump stored inside it. A forged account fails here.
             let mut market = Account::<Market>::try_from(account_info)?;
+            require!(
+                account_info.owner == &crate::ID,
+                SolPredictError::InvalidMarket
+            );
+            let expected_pda = Pubkey::create_program_address(
+                &[
+                    MARKET_SEED,
+                    &market.market_id.to_le_bytes(),
+                    &[market.bump],
+                ],
+                &crate::ID,
+            )
+            .map_err(|_| SolPredictError::InvalidMarket)?;
+            require!(
+                account_info.key == &expected_pda,
+                SolPredictError::InvalidMarket
+            );
 
             require!(market.status == MarketStatus::Open, SolPredictError::MarketNotOpen);
 
             let clock = Clock::get()?;
-            require!(clock.unix_timestamp >= market.end_ts, SolPredictError::MarketNotEnded);
+            // Oracle/manual settlement both wait for resolve_ts — the dispute
+            // buffer between end_ts and resolve_ts must elapse everywhere.
+            require!(
+                clock.unix_timestamp >= market.resolve_ts,
+                SolPredictError::TooEarlyToSettle
+            );
+
+            // Hold the reentrancy lock BEFORE any state mutation or value is
+            // derived from mutable state.
+            market.reentrancy_lock.acquire(&crate::ID)?;
 
             let losing_pool = match outcome {
                 1 => market.no_pool_lamports,
@@ -233,7 +264,7 @@ pub mod solpredict {
                 _ => 0,
             };
 
-            let fee = payout_math::calculate_fee(losing_pool, ctx.accounts.config.fee_bps)?;
+            let fee = payout_math::calculate_fee(losing_pool, market.fee_bps)?;
             market.fee_collected = fee;
 
             let total_pool = market.yes_pool_lamports
@@ -249,6 +280,7 @@ pub mod solpredict {
             // remaining_accounts are NOT auto-persisted by Anchor's exit(), so
             // we call Account::exit manually (includes the 8-byte discriminator).
             market.exit(&crate::ID)?;
+            market.reentrancy_lock.release();
 
             emit!(MarketSettled {
                 market_id: market.market_id,

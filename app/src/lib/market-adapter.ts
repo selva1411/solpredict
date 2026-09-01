@@ -1,7 +1,7 @@
 /**
  * Market Adapter
  * Converts Solana on-chain Market accounts (Anchor decoded) into the
- * UI-friendly Market shape used by the PREDICT-X components.
+ * UI-friendly Market shape used by the SOLPredict components.
  *
  * Usage:
  *   import { onChainToUiMarket } from "@/lib/market-adapter";
@@ -22,7 +22,7 @@ export const CATEGORY_ICONS: Record<CategoryName, string> = {
 };
 
 /**
- * The UI shape that PREDICT-X components (MarketCard, TradePanel, etc.)
+ * The UI shape that SOLPredict components (MarketCard, TradePanel, etc.)
  * expect.
  */
 export interface UiMarket {

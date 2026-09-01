@@ -31,41 +31,37 @@ fn isqrt(x: u128) -> u128 {
 /// to each outcome; the fraction of total commitment backing YES IS the implied
 /// probability. Returns 0 on an empty (0/0) pool — callers default to the flat
 /// baseline price in that case.
-pub fn get_spot_price_yes(pool_yes: u128, pool_no: u128, fee_bps: u16) -> Result<u128> {
+pub fn get_spot_price_yes(pool_yes: u128, pool_no: u128, _fee_bps: u16) -> Result<u128> {
     let total = pool_yes.checked_add(pool_no).ok_or(SolPredictError::MathOverflow)?;
     if total == 0 {
         return Ok(0);
     }
-    let gross = pool_yes
+    // The RAW probability: a trade's fee is a cost on the transaction, not a
+    // reduction in probability. Subtracting it here broke the p_yes + p_no =
+    // 1 invariant at any non-zero fee (both sides shrank by their own fee).
+    // Fees belong to cost/refund quotes (get_buy_cost_in / get_sell_amount_out),
+    // which already apply them. `_fee_bps` kept for call-site compatibility.
+    let _ = _fee_bps;
+    pool_yes
         .checked_mul(SCALE)
         .ok_or(SolPredictError::MathOverflow)?
         .checked_div(total)
-        .ok_or(SolPredictError::MathOverflow)?;
-    let fee = gross
-        .checked_mul(fee_bps as u128)
-        .ok_or(SolPredictError::MathOverflow)?
-        .checked_div(10_000)
-        .ok_or(SolPredictError::MathOverflow)?;
-    Ok(gross.checked_sub(fee).ok_or(SolPredictError::MathOverflow)?)
+        .ok_or_else(|| error!(SolPredictError::MathOverflow))
 }
 
 /// Spot price of NO as a probability (mirror of get_spot_price_yes).
-pub fn get_spot_price_no(pool_yes: u128, pool_no: u128, fee_bps: u16) -> Result<u128> {
+pub fn get_spot_price_no(pool_yes: u128, pool_no: u128, _fee_bps: u16) -> Result<u128> {
     let total = pool_yes.checked_add(pool_no).ok_or(SolPredictError::MathOverflow)?;
     if total == 0 {
         return Ok(0);
     }
-    let gross = pool_no
+    // Mirror of get_spot_price_yes — raw probability, no fee adjustment.
+    let _ = _fee_bps;
+    pool_no
         .checked_mul(SCALE)
         .ok_or(SolPredictError::MathOverflow)?
         .checked_div(total)
-        .ok_or(SolPredictError::MathOverflow)?;
-    let fee = gross
-        .checked_mul(fee_bps as u128)
-        .ok_or(SolPredictError::MathOverflow)?
-        .checked_div(10_000)
-        .ok_or(SolPredictError::MathOverflow)?;
-    Ok(gross.checked_sub(fee).ok_or(SolPredictError::MathOverflow)?)
+        .ok_or_else(|| error!(SolPredictError::MathOverflow))
 }
 
 /// Cost (in lamports) to buy `dy_out`-value of the traded side.
@@ -235,6 +231,20 @@ mod tests {
         assert_eq!(p_yes, SCALE / 2);
         assert_eq!(p_no, SCALE / 2);
         assert_eq!(p_yes + p_no, SCALE);
+
+    #[test]
+    fn spot_prices_sum_to_one_at_nonzero_fee() {
+        // Regression: the fee used to be subtracted from each side's
+        // probability independently, so p_yes + p_no < 1 at any real fee.
+        for fee in [30u16, 100u16, 300u16] {
+            let yes = 4_000_000u128;
+            let no = 6_000_000u128;
+            let p_yes = get_spot_price_yes(yes, no, fee).unwrap();
+            let p_no = get_spot_price_no(yes, no, fee).unwrap();
+            assert_eq!(p_yes, SCALE * 40 / 100);
+            assert_eq!(p_yes + p_no, SCALE);
+        }
+    }
     }
 
     #[test]
@@ -371,12 +381,13 @@ mod tests {
         let yes = 10_000_000u128;
         let no = 10_000_000u128;
         let fee = 200u16;
+        // Spot price is the RAW probability — the trade fee does not shift it
+        // (fees apply to cost/refund quotes). Symmetric pools price at 50%
+        // regardless of fee, and both sides still sum to 1.
         let spot = get_spot_price_yes(yes, no, fee).unwrap();
-        // gross = SCALE/2, fee taken off the gross: SCALE/2 * fee/10000.
-        let fee_amt = (SCALE / 2) * 200 / 10_000;
-        let expected = SCALE / 2 - fee_amt;
-        let diff = expected.max(spot) - expected.min(spot);
-        assert!(diff < 1000, "symmetric spot price deviates: spot={} expected={}", spot, expected);
+        assert_eq!(spot, SCALE / 2);
+        let no_spot = get_spot_price_no(yes, no, fee).unwrap();
+        assert_eq!(spot + no_spot, SCALE);
     }
 
     #[test]

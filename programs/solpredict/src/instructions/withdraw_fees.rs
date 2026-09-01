@@ -42,6 +42,14 @@ pub fn handler(ctx: Context<WithdrawFees>) -> Result<()> {
     require!(ctx.accounts.market.status == MarketStatus::Settled, SolPredictError::MarketNotSettled);
 
     let fee_amount = ctx.accounts.market.fee_collected;
+    let market_id = ctx.accounts.market.market_id;
+
+    // Checks-effects-interactions: mark the fees as withdrawn and hold the
+    // reentrancy lock BEFORE any lamports move. The transfer below is the
+    // interaction; the flag is the effect that makes this instruction
+    // un-repeatable even if a CPI re-entered mid-flight.
+    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
+    ctx.accounts.market.fee_withdrawn = true;
 
     let market_key = ctx.accounts.market.key();
     let treasury_bump = ctx.accounts.market.treasury_bump;
@@ -65,13 +73,6 @@ pub fn handler(ctx: Context<WithdrawFees>) -> Result<()> {
     let min_balance = rent.minimum_balance(0);
     let balance = treasury_info.lamports();
     require!(balance >= min_balance || balance == 0, SolPredictError::TreasuryInsufficient);
-
-    let market_id = ctx.accounts.market.market_id;
-
-    ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
-
-    let market = &mut ctx.accounts.market;
-    market.fee_withdrawn = true;
 
     ctx.accounts.market.reentrancy_lock.release();
 

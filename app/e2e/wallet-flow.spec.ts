@@ -431,7 +431,7 @@ test.describe.serial("Wallet UI flow: buy / sell / LP on-chain", () => {
     // Open the Advanced panel and flip the limit-order switch (a real button,
     // not the adjacent label text).
     await page.getByText("Advanced: Limit Order").click();
-    await page.getByTestId("limit-toggle").click();
+    await page.getByTestId("buy-limit-toggle").click();
 
     // Set a limit price BELOW the current spot so the order stays open
     // (a resting bid, not immediately matchable by the AMM).

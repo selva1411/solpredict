@@ -102,3 +102,7 @@ pub const SOL_USD_FEED_ID: [u8; 32] = [
     0x2a, 0x0d, 0x2f, 0x8e, 0xd0, 0xc6, 0xc7, 0xbc,
     0x0f, 0x4c, 0xfa, 0xc8, 0xc2, 0x80, 0xb5, 0x6d,
 ];
+
+/// Minimum total LP deposit (yes + no) accepted by add_liquidity. Dust
+/// positions cost the provider rent and pollute pool accounting.
+pub const MIN_LP_LAMPORTS: u64 = 10_000_000; // 0.01 SOL

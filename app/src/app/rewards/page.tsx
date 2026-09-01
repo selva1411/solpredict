@@ -55,10 +55,10 @@ export default function RewardsPage() {
 
   if (!publicKey) {
     return (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="holo-card p-12 text-center max-w-md mx-auto">
+      <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
+        <div className="surface p-12 text-center max-w-md mx-auto">
           <Award className="w-12 h-12 mx-auto mb-4 text-gold" />
-          <h2 className="font-display text-[21px] font-bold mb-2">Connect your wallet</h2>
+          <h2 className="font-display text-[22px] font-semibold uppercase mb-2">Connect your wallet</h2>
           <p className="text-[13px] text-ash mb-5">Connect to view your achievement gallery.</p>
           <ClientWalletButton />
         </div>
@@ -67,16 +67,16 @@ export default function RewardsPage() {
   }
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
       <div className="mb-8">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
+        <h1 className="font-display text-[46px] font-semibold uppercase mb-2">
           <span className="text-gold-lite">Rewards</span>
         </h1>
         <p className="text-ash">Achievements and badges</p>
       </div>
 
       {loading ? (
-        <div className="holo-card p-12 text-center text-ash">Loading achievements...</div>
+        <div className="surface p-12 text-center text-ash">Loading achievements...</div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {ACHIEVEMENTS.map((ach) => {
@@ -85,7 +85,7 @@ export default function RewardsPage() {
             return (
               <div
                 key={ach.key}
-                className={`holo-card p-5 flex flex-col items-center text-center gap-3 transition-all relative ${
+                className={`surface p-5 flex flex-col items-center text-center gap-3 transition-all relative ${
                   status.unlocked ? "" : "opacity-50 grayscale"
                 }`}
               >

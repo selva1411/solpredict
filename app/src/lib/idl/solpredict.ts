@@ -2639,92 +2639,6 @@ export type Solpredict = {
       ]
     },
     {
-      "name": "mockCreatePriceUpdate",
-      "docs": [
-        "Create mock Pyth PriceUpdateV2 account data (devnet-only, never ship to mainnet)."
-      ],
-      "discriminator": [
-        103,
-        162,
-        52,
-        4,
-        77,
-        138,
-        211,
-        58
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "priceUpdate",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  111,
-                  99,
-                  107,
-                  95,
-                  112,
-                  114,
-                  105,
-                  99,
-                  101,
-                  95,
-                  102,
-                  101,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feedId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "price",
-          "type": "i64"
-        },
-        {
-          "name": "conf",
-          "type": "u64"
-        },
-        {
-          "name": "exponent",
-          "type": "i32"
-        },
-        {
-          "name": "publishTime",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "placeOrder",
       "docs": [
         "Place an on-chain limit order (Bid or Ask) for a prediction outcome."
@@ -4971,158 +4885,163 @@ export type Solpredict = {
     },
     {
       "code": 6045,
-      "name": "noWinningTokens",
-      "msg": "No winning tokens to claim"
-    },
-    {
-      "code": 6046,
       "name": "outcomeNotSet",
       "msg": "Outcome not set"
     },
     {
-      "code": 6047,
+      "code": 6046,
       "name": "zeroSupply",
       "msg": "Zero winning supply"
     },
     {
-      "code": 6048,
+      "code": 6047,
       "name": "zeroPayout",
       "msg": "Zero payout calculated"
     },
     {
-      "code": 6049,
+      "code": 6048,
       "name": "oracleFeedMismatch",
       "msg": "Pyth price feed ID mismatch"
     },
     {
-      "code": 6050,
-      "name": "stalePrice",
-      "msg": "Pyth price is stale (older than 60 seconds)"
-    },
-    {
-      "code": 6051,
+      "code": 6049,
       "name": "usePythForCrypto",
       "msg": "Use Pyth oracle to settle Crypto markets"
     },
     {
-      "code": 6052,
+      "code": 6050,
       "name": "marketPaused",
       "msg": "Market is paused for maintenance"
     },
     {
-      "code": 6053,
+      "code": 6051,
       "name": "reentrancyDetected",
       "msg": "Reentrancy detected — call rejected"
     },
     {
-      "code": 6054,
+      "code": 6052,
       "name": "insufficientLiquidity",
       "msg": "Not enough liquidity in pool"
     },
     {
-      "code": 6055,
+      "code": 6053,
       "name": "liquidityPositionNotFound",
       "msg": "Liquidity position not found"
     },
     {
-      "code": 6056,
+      "code": 6054,
       "name": "noLpTokens",
       "msg": "No LP tokens to withdraw"
     },
     {
-      "code": 6057,
+      "code": 6055,
       "name": "slippageExceeded",
       "msg": "Slippage tolerance exceeded"
     },
     {
-      "code": 6058,
+      "code": 6056,
       "name": "minSpendNotMet",
       "msg": "Minimum spend not met"
     },
     {
-      "code": 6059,
+      "code": 6057,
       "name": "signatureVerificationFailed",
       "msg": "Signature verification failed"
     },
     {
-      "code": 6060,
+      "code": 6058,
       "name": "alreadyCancelled",
       "msg": "Market already cancelled"
     },
     {
-      "code": 6061,
+      "code": 6059,
       "name": "invalidCategory",
       "msg": "Invalid category"
     },
     {
-      "code": 6062,
+      "code": 6060,
       "name": "alreadyPaused",
       "msg": "Emergency pause is already active"
     },
     {
-      "code": 6063,
+      "code": 6061,
       "name": "notPaused",
       "msg": "Emergency pause is not active"
     },
     {
-      "code": 6064,
+      "code": 6062,
       "name": "emergencyPaused",
       "msg": "Trading is halted — the market is under an emergency pause"
     },
     {
-      "code": 6065,
+      "code": 6063,
       "name": "multisigRequired",
       "msg": "Admin operation requires multisig approval"
     },
     {
-      "code": 6066,
+      "code": 6064,
       "name": "resolutionSourceMismatch",
       "msg": "Market resolution source mismatch"
     },
     {
-      "code": 6067,
+      "code": 6065,
       "name": "batchSizeExceeded",
       "msg": "Batch size exceeds maximum"
     },
     {
-      "code": 6068,
+      "code": 6066,
       "name": "proposalNotPending",
       "msg": "Proposal is not in Pending state"
     },
     {
-      "code": 6069,
+      "code": 6067,
       "name": "proposalBondTooLow",
       "msg": "Proposal bond is below the minimum required"
     },
     {
-      "code": 6070,
+      "code": 6068,
       "name": "invalidGuardian",
       "msg": "Guardian pubkey is invalid (cannot be the zero address)"
     },
     {
-      "code": 6071,
+      "code": 6069,
       "name": "guardianAlreadyExists",
       "msg": "Guardian is already registered"
     },
     {
-      "code": 6072,
+      "code": 6070,
       "name": "maxGuardiansReached",
       "msg": "Maximum number of guardians reached (3)"
     },
     {
-      "code": 6073,
+      "code": 6071,
       "name": "guardianNotFound",
       "msg": "Guardian not found in the set"
     },
     {
-      "code": 6074,
+      "code": 6072,
       "name": "invalidThreshold",
       "msg": "Threshold must be between 1 and the number of registered guardians"
     },
     {
-      "code": 6075,
+      "code": 6073,
       "name": "thresholdExceedsGuardians",
       "msg": "Cannot remove guardian: required confirmations exceed remaining guardians"
+    },
+    {
+      "code": 6074,
+      "name": "sharePriceImmutable",
+      "msg": "share_price_lamports can no longer be changed once shares have been minted"
+    },
+    {
+      "code": 6075,
+      "name": "lpDepositTooSmall",
+      "msg": "LP deposit is below the minimum required (0.01 SOL)"
+    },
+    {
+      "code": 6076,
+      "name": "positionHasUnclaimedRewards",
+      "msg": "This position has unclaimed rewards — claim before closing it"
     }
   ],
   "types": [
@@ -5757,12 +5676,12 @@ export type Solpredict = {
             "type": "u64"
           },
           {
-            "name": "cancelledBy",
-            "type": "pubkey"
-          },
-          {
             "name": "reason",
             "type": "string"
+          },
+          {
+            "name": "settledPrice",
+            "type": "i64"
           }
         ]
       }

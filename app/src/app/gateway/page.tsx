@@ -30,11 +30,11 @@ export default function GatewayPage() {
   return (
     <main className="mx-auto w-full max-w-[1240px] px-6 py-14 min-h-screen flex items-center justify-center">
       <div className="surface p-8 sm:p-12 max-w-lg w-full text-center">
-        <div className="w-16 h-16 rounded-[2px] bg-gradient-to-br from-gold to-gold-deep flex items-center justify-center mx-auto mb-6">
-          <Icon className="w-8 h-8 text-void" />
+        <div className="w-16 h-16 rounded-lg bg-gold flex items-center justify-center mx-auto mb-6">
+          <Icon className="w-8 h-8 text-white" />
         </div>
 
-        <h1 className="font-display text-3xl font-semibold uppercase mb-4 text-ivory">
+        <h1 className="font-display text-2xl font-semibold mb-4 text-ivory">
           {current.title}
         </h1>
         <p className="text-ash mb-8 leading-relaxed">

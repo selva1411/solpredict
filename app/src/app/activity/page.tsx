@@ -1,18 +1,20 @@
 "use client";
 import ActivityFeed from "@/components/ActivityFeed";
+import { LabelLux } from "@/components/ui/label-lux";
 
 export default function ActivityPage() {
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="mb-6">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2 text-ivory">
-          Activity
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
+      <div className="mb-8">
+        <LabelLux className="mb-2">Activity</LabelLux>
+        <h1 className="font-display text-[46px] font-semibold uppercase text-ivory">
+          The Tape
         </h1>
-        <p className="text-[13px] text-ash">
+        <p className="text-[13px] text-ash mt-2">
           Recent transactions across all markets
         </p>
       </div>
-      <div className="holo-card p-5">
+      <div className="surface p-5">
         <ActivityFeed limit={50} />
       </div>
     </main>

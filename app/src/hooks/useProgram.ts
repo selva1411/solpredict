@@ -163,6 +163,9 @@ export function useProgram() {
   const { connection } = useConnection();
   const wallet = useWallet();
 
+  const walletPubkeyB58 = wallet.publicKey?.toBase58();
+  const walletConnected = wallet.connected;
+
   const program = useMemo(() => {
     const provider = new AnchorProvider(
       connection,
@@ -173,7 +176,8 @@ export function useProgram() {
     const idlCopy = { ...idl, address: ENV.programId.toBase58() };
     const rawProgram = new Program(idlCopy as Idl, provider);
 
-    const parseCategory = (categoryObj: any): number => {
+    type AnchorEnumObj = Record<string, Record<string, never> | undefined>;
+    const parseCategory = (categoryObj: AnchorEnumObj | number | null | undefined): number => {
       if (typeof categoryObj === "number") return categoryObj;
       if (!categoryObj) return 4;
       if (categoryObj.crypto !== undefined) return 0;
@@ -189,7 +193,7 @@ export function useProgram() {
       return 4;
     };
 
-    const parseComparison = (comparisonObj: any): number => {
+    const parseComparison = (comparisonObj: AnchorEnumObj | number | null | undefined): number => {
       if (typeof comparisonObj === "number") return comparisonObj;
       if (!comparisonObj) return 0;
       if (comparisonObj.greaterThan !== undefined) return 0;
@@ -261,7 +265,7 @@ export function useProgram() {
     // reference on every render, which previously forced the entire program
     // (provider + proxies) to be rebuilt constantly, causing UI flicker and
     // redundant RPC connections.
-  }, [connection, wallet.publicKey?.toBase58(), wallet.connected]);
+  }, [connection, walletPubkeyB58]);
 
   return { program, connection, wallet };
 }

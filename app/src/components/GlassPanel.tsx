@@ -21,7 +21,9 @@ export function GlassPanel({
   animate = false,
   delay = 0,
 }: GlassPanelProps) {
-  const baseClass = `glass-panel ${interactive ? "glass-panel-interactive cursor-pointer" : ""} ${className}`;
+  const baseClass = `bg-void/60 border border-hairline rounded-2xl ${
+    interactive ? "cursor-pointer hover:border-hairline-2 transition-colors" : ""
+  } ${className}`;
 
   if (animate) {
     return (

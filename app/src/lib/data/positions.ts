@@ -1,6 +1,6 @@
 import { db } from '@/lib/db/client';
 import { positions, marketsCache, marketOutcomes, liquidityPositions } from '@/lib/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 
 const SHARE_PRICE_SOL = 0.01;
 
@@ -46,7 +46,7 @@ export async function getPositions(wallet: string) {
       label: marketOutcomes.label,
     })
     .from(marketOutcomes)
-    .where(sql`${marketOutcomes.marketPubkey} IN ${pubkeys}`);
+    .where(inArray(marketOutcomes.marketPubkey, pubkeys));
 
   const outcomeMap = new Map<string, typeof outcomes>();
   for (const o of outcomes) {

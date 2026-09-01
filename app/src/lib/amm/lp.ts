@@ -89,6 +89,8 @@ export interface LpPreview {
  * is derived from the same split + rounding the on-chain program applies.
  */
 export function lpPreview(option: LpAllocation, amountSol: number, currentYesPoolSol: number, currentNoPoolSol: number): LpPreview {
+  // Minimum LP deposit enforced by UI: 0.1 SOL. On-chain: no minimum (by design for now).
+  // TODO: Add MIN_LP_LAMPORTS = 10_000_000 check in add_liquidity.rs when LP spam becomes an issue.
   const { yesSol, noSol } = lpSplitFor(option, amountSol);
   const { yesLamports, noLamports } = lpSplitLamports(option, amountSol);
   return {

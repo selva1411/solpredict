@@ -108,6 +108,10 @@ export const ENV = {
     return this.cluster === "mainnet-beta";
   },
 
+  get isLocalnet(): boolean {
+    return (process.env.NEXT_PUBLIC_CLUSTER ?? "devnet") === "localnet";
+  },
+
   get usdcMint(): PublicKey {
     // Only mainnet and devnet have a canonical, widely-deployed USDC mint.
     // Testnet has no standard USDC deployment — returning a fake address there

@@ -1,7 +1,7 @@
 import { test, expect, Page } from "@playwright/test";
 
 /**
- * Comprehensive end-to-end test suite for the PREDICT-X app.
+ * Comprehensive end-to-end test suite for the SOLPredict app.
  * Covers every page and key interaction. Requires the localnet validator +
  * seeded DB (dev server on :3000 with the app/.env.local pointing at localnet).
  */
@@ -32,16 +32,16 @@ test.describe("Navigation shell", () => {
 test.describe("Home page", () => {
   test("hero + stats + trending load", async ({ page }) => {
     await gotoWithSettled(page, "/");
-    await expect(page.locator("text=Conviction").first()).toBeVisible();
-    await expect(page.locator("text=priced.").first()).toBeVisible();
-    await expect(page.locator("text=Enter Markets").first()).toBeVisible();
-    await expect(page.locator("text=Live Book").first()).toBeVisible();
+    await expect(page.locator("text=The Board").first()).toBeVisible();
+    await expect(page.locator("text=Constant-product pricing").first()).toBeVisible();
+    await expect(page.locator("text=Explore Markets").first()).toBeVisible();
+    await expect(page.locator("text=Live Lines").first()).toBeVisible();
   });
 
   test("stat cards render values", async ({ page }) => {
     await gotoWithSettled(page, "/");
-    await expect(page.locator("text=Volume").first()).toBeVisible();
-    await expect(page.locator("text=Open Markets").first()).toBeVisible();
+    await expect(page.locator("text=Volume Total").first()).toBeVisible();
+    await expect(page.locator("text=Liquidity").first()).toBeVisible();
   });
 
   test("market cards link to market detail", async ({ page }) => {
@@ -57,7 +57,7 @@ test.describe("Home page", () => {
 test.describe("Markets directory", () => {
   test("loads market directory with markets", async ({ page }) => {
     await gotoWithSettled(page, "/markets");
-    await expect(page.locator("text=Market Directory").first()).toBeVisible();
+    await expect(page.locator("text=The Board").first()).toBeVisible();
   });
 
   test("category filtering works", async ({ page }) => {
@@ -65,14 +65,14 @@ test.describe("Markets directory", () => {
     const crypto = page.locator("button:has-text('Crypto')").first();
     await crypto.click();
     // Should still render the directory; ensure no crash
-    await expect(page.locator("text=Market Directory").first()).toBeVisible();
+    await expect(page.locator("text=The Board").first()).toBeVisible();
   });
 
   test("search filters markets", async ({ page }) => {
     await gotoWithSettled(page, "/markets");
-    const search = page.locator("input[placeholder*='question, description']");
+    const search = page.locator("input[placeholder*='Search markets']");
     await search.fill("SOL");
-    await expect(page.locator("text=Market Directory").first()).toBeVisible();
+    await expect(page.locator("text=The Board").first()).toBeVisible();
   });
 
   test("grid/table view toggle", async ({ page }) => {

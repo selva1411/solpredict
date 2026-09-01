@@ -6,7 +6,7 @@ use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount};
 use crate::constants::*;
 use crate::errors::SolPredictError;
 use crate::events::LiquidityRemoved;
-use crate::state::{EmergencyPause, LiquidityPosition, Market};
+use crate::state::{EmergencyPause, LiquidityPosition, Market, MarketStatus};
 use crate::utils::check_not_paused;
 
 #[derive(Accounts)]
@@ -114,13 +114,14 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
             .unwrap_or(0) as u64,
     );
 
-    // Proportional token amounts to burn (same ratio as the SOL refunds).
-    let burn_yes = ((lp.yes_deposited as u128)
+    // Full deposit-proportional token burn amounts (scaled to actual payout
+    // further down so burns track the lamports that actually leave).
+    let burn_yes_raw = ((lp.yes_deposited as u128)
         .checked_mul(lp_ratio)
         .ok_or(SolPredictError::MathOverflow)?
         .checked_div(PRECISION as u128))
         .ok_or(SolPredictError::MathOverflow)? as u64;
-    let burn_no = ((lp.no_deposited as u128)
+    let burn_no_raw = ((lp.no_deposited as u128)
         .checked_mul(lp_ratio)
         .ok_or(SolPredictError::MathOverflow)?
         .checked_div(PRECISION as u128))
@@ -135,6 +136,40 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
     let rent = Rent::get()?;
     let rent_min = rent.minimum_balance(0);
     let safe_refund = total_refund.min(treasury_balance.saturating_sub(rent_min.min(treasury_balance)));
+
+    // Winner-solvency guard: on a SETTLED market the pools ARE the payout.
+    // After this withdrawal the treasury must still cover every unclaimed
+    // winner share (total_payout_pool − total_claimed), mirroring the check
+    // claim_rewards runs. Once all winners have claimed, remaining == 0 and
+    // LPs can exit freely; on OPEN markets remaining is 0 by definition.
+    if market.status == MarketStatus::Settled {
+        let remaining_payout = market
+            .total_payout_pool
+            .saturating_sub(market.total_claimed);
+        let spendable_after = treasury_balance
+            .saturating_sub(rent_min)
+            .saturating_sub(safe_refund);
+        require!(
+            spendable_after >= remaining_payout,
+            SolPredictError::TreasuryInsufficient
+        );
+    }
+
+    // Scale the token burns to what is ACTUALLY paid out (safe_refund may be
+    // capped below the requested refund). Burning the full deposit-proportional
+    // amount while paying less would drift the pool-lamports-per-share ratio
+    // for everyone else — the burns must track the lamports that leave.
+    let payout_ratio_num = safe_refund as u128;
+    let payout_ratio_den = if total_refund > 0 { total_refund as u128 } else { 1 };
+    let scale_burn = |full: u64| -> u64 {
+        ((full as u128)
+            .checked_mul(payout_ratio_num)
+            .unwrap_or(0)
+            .checked_div(payout_ratio_den)
+            .unwrap_or(0)) as u64
+    };
+    let burn_yes = scale_burn(burn_yes_raw);
+    let burn_no = scale_burn(burn_no_raw);
 
     let yes_payout = if total_refund > 0 {
         (safe_refund as u128)
@@ -184,7 +219,7 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
         )?;
     }
 
-    if has_yes {
+    if has_yes && burn_yes > 0 {
         token::burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -198,7 +233,7 @@ pub fn handler(ctx: Context<RemoveLiquidity>, lp_tokens_to_burn: u64) -> Result<
         )?;
     }
 
-    if has_no {
+    if has_no && burn_no > 0 {
         token::burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),

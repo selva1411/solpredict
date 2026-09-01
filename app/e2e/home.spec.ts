@@ -7,19 +7,20 @@ test.describe("Home page", () => {
     // during a full-suite run, which can exceed the 5s default. The navigation
     // test below uses the same 30s window for the same reason.
     await expect(page.locator("text=SOLPREDICT").first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator("text=Conviction,").first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator("text=ENTER MARKETS").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("text=The Board").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("text=Explore Markets").first()).toBeVisible({ timeout: 30_000 });
   });
 
   test("shows stats strip", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=VOLUME").first()).toBeVisible();
-    await expect(page.locator("text=OPEN MARKETS").first()).toBeVisible();
+    // getByText matches substrings case-insensitively by default
+    await expect(page.getByText("Volume Total").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Liquidity").first()).toBeVisible({ timeout: 30_000 });
   });
 
   test("shows the live book panel", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=LIVE BOOK").first()).toBeVisible();
+    await expect(page.locator("text=Live Lines").first()).toBeVisible();
   });
 
   test("navigates to /markets on button click", async ({ page }) => {
@@ -36,7 +37,7 @@ test.describe("Home page", () => {
 
   test("shows mechanics section", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=02 — MECHANICS").first()).toBeVisible();
+    await expect(page.locator("text=Why SOLPREDICT").first()).toBeVisible();
   });
 });
 

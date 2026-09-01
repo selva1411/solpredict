@@ -7,7 +7,7 @@ const cspHeader = [
   "style-src-elem 'self' 'unsafe-inline' https: http:",
   "font-src 'self' https: data:",
   "img-src 'self' data: https: blob:",
-  "connect-src 'self' https: wss: ws: http://127.0.0.1:* http://localhost:*",
+  "connect-src 'self' https: wss: ws: http://127.0.0.1:* http://localhost:* https://hermes.pyth.network https://api.coingecko.com https://api.binance.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
   transpilePackages: ["three", "@react-three/fiber", "@react-three/drei"],
   turbopack: {
     root: __dirname,
+    resolveAlias: {
+      // Prevent Turbopack issues with certain packages
+      "three": "three",
+    },
   },
   async headers() {
     return [
@@ -39,6 +43,25 @@ const nextConfig: NextConfig = {
         destination: "http://127.0.0.1:8899",
       },
     ];
+  },
+  // Improve chunk loading reliability
+  experimental: {
+    optimizePackageImports: ["three", "@react-three/fiber", "@react-three/drei", "lucide-react"],
+  },
+  // Webpack fallback for Turbopack issues
+  webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      // Reduce chunk splitting in development to avoid ChunkLoadError
+      config.optimization.splitChunks = {
+        ...config.optimization.splitChunks,
+        cacheGroups: {
+          ...config.optimization.splitChunks?.cacheGroups,
+          default: false,
+          vendors: false,
+        },
+      };
+    }
+    return config;
   },
 };
 

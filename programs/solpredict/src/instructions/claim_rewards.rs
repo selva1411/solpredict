@@ -98,7 +98,13 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
             .ok_or(SolPredictError::MathOverflow)?
     };
     let treasury_balance = ctx.accounts.treasury.to_account_info().lamports();
-    require!(treasury_balance >= remaining, SolPredictError::TreasuryInsufficient);
+    let fee_held = if ctx.accounts.market.fee_withdrawn {
+        0u64
+    } else {
+        ctx.accounts.market.fee_collected
+    };
+    let spendable = treasury_balance.saturating_sub(fee_held);
+    require!(spendable >= remaining, SolPredictError::TreasuryInsufficient);
 
     ctx.accounts.user_position.yes_amount = 0;
     ctx.accounts.user_position.no_amount = 0;

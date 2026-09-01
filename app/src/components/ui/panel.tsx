@@ -4,8 +4,8 @@ export function Panel({
   children, feature = false, className = "",
 }: { children: React.ReactNode; feature?: boolean; className?: string }) {
   return (
-    <div className={cn("panel-lux", feature && "seam-leaf", className)}>
-      {feature && <div className="rule-gold absolute inset-x-6 top-0" aria-hidden />}
+    <div className={cn("surface", className)}>
+      {feature && <div className="h-0.5 bg-gold" aria-hidden />}
       {children}
     </div>
   );

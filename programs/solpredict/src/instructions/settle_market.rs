@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::SolPredictError;
-use crate::events::MarketSettled;
+use crate::events::{MarketCancelled, MarketSettled};
 use crate::state::{Config, Market, MarketStatus, WinningOutcome};
 use crate::utils::{oracle, payout_math};
 
@@ -37,7 +37,7 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
 
     require!(market.oracle_feed_id != [0u8; 32], SolPredictError::UseManualSettlement);
     require!(market.status == MarketStatus::Open, SolPredictError::AlreadySettled);
-    require!(clock.unix_timestamp >= market.end_ts || clock.unix_timestamp >= market.resolve_ts, SolPredictError::TooEarlyToSettle);
+    require!(clock.unix_timestamp >= market.resolve_ts, SolPredictError::TooEarlyToSettle);
 
     let validated_price = oracle::validate_and_read_price(
         &ctx.accounts.price_update.to_account_info(), &clock, &market.oracle_feed_id, MAX_STALENESS_SECS,
@@ -68,7 +68,7 @@ pub fn handler(ctx: Context<SettleMarket>) -> Result<()> {
         market.settled_at = clock.unix_timestamp;
         ctx.accounts.market.reentrancy_lock.release();
 
-        emit!(MarketSettled { market_id, winning_outcome: winning_outcome as u8, settled_price, total_payout_pool: 0 });
+        emit!(MarketCancelled { market_id, reason: "zero_winning_supply".to_string(), settled_price });
         return Ok(());
     }
 

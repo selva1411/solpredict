@@ -8,7 +8,7 @@ export function Outcome({
   return (
     <button
       onClick={onSelect}
-      className={`sheen group flex w-full items-end justify-between rounded-[2px] border px-5 py-4 text-left transition-colors duration-150 ease-[cubic-bezier(.22,.61,.36,1)]
+      className={`group flex w-full items-end justify-between rounded-lg border px-5 py-4 text-left transition-colors duration-150
         ${selected ? "border-gold bg-panel-2" : "border-hairline bg-obsidian hover:border-ash-dim"}`}
     >
       <div>

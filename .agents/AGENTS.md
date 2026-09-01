@@ -17,3 +17,6 @@ All future workspace adjustments must align with this style system:
 - **Tactile Switches**: Clickable tabs/filter buttons must use `.mechanical-switch-active` or `.mechanical-switch-inactive` with inset shadow/bevel details to feel physical.
 - **WebGL**: Limit canvas items strictly to direct controls (like the 3D probability semicircle dial).
 - **3D Hero Moment**: Lazy load the Drei `SplitFlapBoard3D` canvas on desktop; fall back to a simplified 2D CSS grid on mobile to keep views light and responsive.
+
+## 3. Workspace Authority & Admin Wallet
+- **Dad Wallet Default Admin**: Always use `dad8hrG9n3xoJcUVSZcVcoQQxbBhMS7CEypM2HR3wqf` ("dad wallet") as the default admin/guardian wallet in environment defaults, seed scripts, transfer scripts, and role checks.

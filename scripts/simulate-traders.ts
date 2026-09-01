@@ -13,6 +13,7 @@ import {
 } from "@solana/spl-token";
 import * as fs from "fs";
 import * as path from "path";
+import { getEmergencyPausePda, getOrderEscrowPda, getOrderPda } from "../app/src/lib/pda";
 
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8899";
 const connection = new Connection(RPC_URL, "confirmed");
@@ -101,20 +102,27 @@ async function getTokenBalance(
   }
 }
 
-async function syncTradeToNeon(marketPubkey: string, trader: string, side: "YES" | "NO", qty: number, isBuy: boolean) {
+async function syncTradeToNeon(
+  signature: string,
+  marketPubkey: string,
+  trader: string,
+  side: "YES" | "NO",
+  qty: number,
+  isBuy: boolean
+) {
   try {
+    // The sync API verifies the on-chain transaction before recording, so the
+    // REAL tx signature is mandatory — client-reported amounts are discarded.
     await fetch("http://localhost:3000/api/sync/trade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        signature,
         marketPubkey,
         trader,
         side,
         lamportsIn: isBuy ? qty * 10_000_000 : 0,
         tokensOut: qty * 1_000_000,
-        yesPoolSol: 1.0,
-        noPoolSol: 1.0,
-        yesPct: 50,
       }),
     });
   } catch {}
@@ -377,8 +385,8 @@ async function main() {
           `  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr}` +
           `  │ YES: ${yesProb}%  NO: ${100 - yesProb}%  Pool: ${(totalPool / LAMPORTS_PER_SOL).toFixed(3)} SOL`
         );
-        await botProgram.methods
-          .buyShares(sideParam, new anchor.BN(qty))
+        const buySig = await botProgram.methods
+          .buyShares(sideParam, new anchor.BN(qty), new anchor.BN(5_000_000_000))
           .accounts({
             buyer: botPub,
             market: marketPda,
@@ -388,9 +396,13 @@ async function main() {
             buyerYesAta: botYesAta,
             buyerNoAta: botNoAta,
             userPosition: positionPda,
+            emergencyPause: getEmergencyPausePda(programId),
+            tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+            associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
           } as any)
           .rpc();
-        await syncTradeToNeon(marketPda.toBase58(), botPub.toBase58(), sideStr as "YES" | "NO", qty, true);
+        await syncTradeToNeon(buySig, marketPda.toBase58(), botPub.toBase58(), sideStr as "YES" | "NO", qty, true);
         wins++;
 
       } else if (roll < 75) {
@@ -398,10 +410,8 @@ async function main() {
         const priceBps = Math.floor(Math.random() * 3000) + 3500; // 0.35–0.65
         const limitQty = Math.floor(Math.random() * 8) + 2;
         const orderId = new anchor.BN(Date.now() % 1_000_000_000 + Math.floor(Math.random() * 99999));
-        const [orderPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("order"), marketPda.toBuffer(), botPub.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],
-          programId
-        );
+        const orderPda = getOrderPda(marketPda, botPub, orderId, programId);
+        const orderEscrowPda = getOrderEscrowPda(marketPda, botPub, orderId, programId);
         const chosenMint = "yes" in sideParam ? yesMintPda : noMintPda;
         const makerTokenAta = getAssociatedTokenAddressSync(chosenMint, botPub);
         const orderTokenEscrow = getAssociatedTokenAddressSync(chosenMint, orderPda, true);
@@ -417,6 +427,10 @@ async function main() {
             order: orderPda,
             makerTokenAta,
             orderTokenEscrow,
+            orderEscrow: orderEscrowPda,
+            emergencyPause: getEmergencyPausePda(programId),
+            tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
           } as any)
           .rpc();
         wins++;
@@ -430,7 +444,7 @@ async function main() {
           // No tokens — do a buy instead
           console.log(`  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr} (no ${sideStr} tokens for sell)`);
           await botProgram.methods
-            .buyShares(sideParam, new anchor.BN(qty))
+            .buyShares(sideParam, new anchor.BN(qty), new anchor.BN(5_000_000_000))
             .accounts({
               buyer: botPub,
               market: marketPda,
@@ -440,6 +454,10 @@ async function main() {
               buyerYesAta: botYesAta,
               buyerNoAta: botNoAta,
               userPosition: positionPda,
+              emergencyPause: getEmergencyPausePda(programId),
+              tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+              associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+              systemProgram: anchor.web3.SystemProgram.programId,
             } as any)
             .rpc();
           wins++;
@@ -449,8 +467,8 @@ async function main() {
           const sellQty = Math.min(qty, maxShares, 5); // sell at most 5 at a time
           if (sellQty > 0) {
             console.log(`  [${step}] [${botName}] 📉 SELL ${sellQty} ${sideStr} (have ${maxShares} shares)`);
-            await botProgram.methods
-              .sellShares(sideParam, new anchor.BN(sellQty))
+            const sellSig = await botProgram.methods
+              .sellShares(sideParam, new anchor.BN(sellQty), new anchor.BN(0))
               .accounts({
                 seller: botPub,
                 market: marketPda,
@@ -460,8 +478,20 @@ async function main() {
                 sellerYesAta: botYesAta,
                 sellerNoAta: botNoAta,
                 userPosition: positionPda,
+                emergencyPause: getEmergencyPausePda(programId),
+                tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+                associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
               } as any)
               .rpc();
+            await syncTradeToNeon(
+              sellSig,
+              marketPda.toBase58(),
+              botPub.toBase58(),
+              sideStr as "YES" | "NO",
+              sellQty,
+              false
+            );
             wins++;
           }
         }
@@ -510,6 +540,9 @@ async function main() {
                   takerTokenAta,
                   makerTokenAta,
                   orderTokenEscrow,
+                  emergencyPause: getEmergencyPausePda(programId),
+                  tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+                  systemProgram: anchor.web3.SystemProgram.programId,
                 } as any)
                 .rpc();
               wins++;
@@ -517,7 +550,7 @@ async function main() {
               // Fallback to AMM Buy if order fill failed
               console.log(`  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr} (fallback)`);
               await botProgram.methods
-                .buyShares(sideParam, new anchor.BN(qty))
+                .buyShares(sideParam, new anchor.BN(qty), new anchor.BN(5_000_000_000))
                 .accounts({
                   buyer: botPub,
                   market: marketPda,
@@ -527,6 +560,10 @@ async function main() {
                   buyerYesAta: botYesAta,
                   buyerNoAta: botNoAta,
                   userPosition: positionPda,
+                  emergencyPause: getEmergencyPausePda(programId),
+                  tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+                  associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+                  systemProgram: anchor.web3.SystemProgram.programId,
                 } as any)
                 .rpc();
               wins++;
@@ -535,7 +572,7 @@ async function main() {
             // Fall back to buy
             console.log(`  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr} (no tokens for P2P fill)`);
             await botProgram.methods
-              .buyShares(sideParam, new anchor.BN(qty))
+              .buyShares(sideParam, new anchor.BN(qty), new anchor.BN(5_000_000_000))
               .accounts({
                 buyer: botPub,
                 market: marketPda,
@@ -545,6 +582,10 @@ async function main() {
                 buyerYesAta: botYesAta,
                 buyerNoAta: botNoAta,
                 userPosition: positionPda,
+                emergencyPause: getEmergencyPausePda(programId),
+                tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+                associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+                systemProgram: anchor.web3.SystemProgram.programId,
               } as any)
               .rpc();
             wins++;
@@ -553,7 +594,7 @@ async function main() {
           // No fillable orders — just buy
           console.log(`  [${step}] [${botName}] 📈 BUY ${qty} ${sideStr} (no fillable orders)`);
           await botProgram.methods
-            .buyShares(sideParam, new anchor.BN(qty))
+            .buyShares(sideParam, new anchor.BN(qty), new anchor.BN(5_000_000_000))
             .accounts({
               buyer: botPub,
               market: marketPda,
@@ -563,6 +604,10 @@ async function main() {
               buyerYesAta: botYesAta,
               buyerNoAta: botNoAta,
               userPosition: positionPda,
+              emergencyPause: getEmergencyPausePda(programId),
+              tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+              associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
+              systemProgram: anchor.web3.SystemProgram.programId,
             } as any)
             .rpc();
           wins++;

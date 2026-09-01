@@ -29,7 +29,6 @@ pub fn handler(ctx: Context<CancelMarket>, reason: String) -> Result<()> {
     require!(reason.len() <= MAX_DESCRIPTION_LEN, SolPredictError::InvalidDescription);
 
     let market_id = ctx.accounts.market.market_id;
-    let admin_key = ctx.accounts.admin.key();
 
     ctx.accounts.market.reentrancy_lock.acquire(&crate::ID)?;
 
@@ -38,7 +37,7 @@ pub fn handler(ctx: Context<CancelMarket>, reason: String) -> Result<()> {
 
     ctx.accounts.market.reentrancy_lock.release();
 
-    emit!(MarketCancelled { market_id, cancelled_by: admin_key, reason });
+    emit!(MarketCancelled { market_id, reason, settled_price: 0 });
 
     Ok(())
 }

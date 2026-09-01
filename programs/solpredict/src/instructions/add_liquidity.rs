@@ -78,12 +78,22 @@ pub struct AddLiquidity<'info> {
 pub fn handler(ctx: Context<AddLiquidity>, yes_lamports: u64, no_lamports: u64) -> Result<()> {
     check_not_paused(&ctx.accounts.emergency_pause)?;
 
+    // Minimum LP deposit enforced by UI: 0.1 SOL. On-chain: no minimum (by design for now).
+    // TODO: Add MIN_LP_LAMPORTS = 10_000_000 check in add_liquidity.rs when LP spam becomes an issue.
+
     // Get AccountInfo before mutable borrow
     let market_info = ctx.accounts.market.to_account_info();
     let market = &mut ctx.accounts.market;
 
     require!(market.status == MarketStatus::Open, SolPredictError::MarketNotOpen);
     require!(yes_lamports > 0 || no_lamports > 0, SolPredictError::InvalidQuantity);
+    // Dust deposits mint an LP position PDA (provider-paid rent) while adding
+    // negligible depth — enforce a floor on the combined deposit.
+    require!(
+        yes_lamports
+            .saturating_add(no_lamports) >= MIN_LP_LAMPORTS,
+        SolPredictError::LpDepositTooSmall
+    );
 
     let clock = Clock::get()?;
     require!(clock.unix_timestamp < market.end_ts, SolPredictError::MarketExpired);

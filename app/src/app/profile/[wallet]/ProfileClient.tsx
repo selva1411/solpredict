@@ -154,11 +154,12 @@ export default function ProfileClient({
   ];
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="holo-card p-6 sm:p-8 mb-8">
+    <main className="mx-auto w-full max-w-[1240px] px-6 py-14">
+      <div className="surface p-6 sm:p-8 mb-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
           <div className="w-20 h-20 rounded-[2px] bg-gradient-to-br from-gold to-gold-deep p-0.5 flex-shrink-0">
             {profile?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- external avatar URLs; next/image would need remotePatterns config
               <img src={profile.avatarUrl} alt={username} className="w-full h-full rounded-[2px] object-cover" />
             ) : (
               <div className="w-full h-full rounded-[2px] bg-panel flex items-center justify-center font-bold text-2xl text-gold">
@@ -169,7 +170,7 @@ export default function ProfileClient({
 
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="font-display text-2xl sm:text-3xl font-bold text-ivory">
+              <h1 className="font-display text-[32px] font-semibold uppercase text-ivory">
                 {username}
               </h1>
               <span className="text-xs text-ash bg-panel-2 px-2 py-0.5 rounded-[2px] font-mono">
@@ -187,7 +188,7 @@ export default function ProfileClient({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full sm:w-auto">
             {stats.map((s) => (
               <div key={s.label} className="text-center p-3 bg-panel-2 rounded-[2px] border border-hairline">
-                <p className="font-display text-[21px] font-bold text-gradient">{s.value}</p>
+                <p className="font-display text-[22px] font-bold text-gold-lite">{s.value}</p>
                 <p className="text-[10px] text-ash uppercase font-mono">{s.label}</p>
               </div>
             ))}
@@ -211,7 +212,7 @@ export default function ProfileClient({
         ))}
       </div>
 
-      <div className="holo-card p-6">
+      <div className="surface p-6">
         {loading ? (
           <div className="py-12 text-center text-ash animate-pulse">Loading profile data...</div>
         ) : activeTab === "positions" ? (

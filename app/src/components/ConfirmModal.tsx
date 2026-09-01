@@ -53,7 +53,7 @@ export function ConfirmModal({
             className="relative glass-panel p-8 max-w-md w-full space-y-6 z-10"
           >
             <div className="flex items-start space-x-4">
-              <div className={`p-3 rounded-[2px] ${destructive ? "bg-red-500/10 text-bordeaux" : "bg-amber-500/10 text-amber-400"}`}>
+              <div className={`p-3 rounded-lg ${destructive ? "bg-bordeaux/10 text-bordeaux" : "bg-gold/10 text-gold"}`}>
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div className="space-y-2 flex-1">
@@ -69,15 +69,15 @@ export function ConfirmModal({
             <div className="flex items-center justify-end space-x-3 pt-2">
               <button
                 onClick={onCancel}
-                className="px-5 py-2.5 text-xs font-semibold rounded-[2px] bg-panel-2 border border-hairline hover:bg-ivory/5 text-text-muted hover:text-text-primary transition-all cursor-pointer"
+                className="px-5 py-2.5 text-xs font-semibold rounded-lg bg-panel-2 border border-hairline hover:bg-ivory/5 text-text-muted hover:text-text-primary transition-all cursor-pointer"
               >
                 {cancelLabel}
               </button>
               <button
                 onClick={onConfirm}
-                className={`px-5 py-2.5 text-xs font-semibold rounded-[2px] transition-all cursor-pointer ${
+                className={`px-5 py-2.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                   destructive
-                    ? "bg-red-500/15 border border-red-500/30 text-bordeaux hover:bg-red-500/25"
+                    ? "bg-bordeaux/15 border border-bordeaux/30 text-bordeaux hover:bg-bordeaux/25"
                     : "btn-primary"
                 }`}
               >

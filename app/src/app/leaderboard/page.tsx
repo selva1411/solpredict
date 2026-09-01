@@ -99,17 +99,17 @@ function LeaderboardPage() {
       {/* Masthead */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10 rise">
         <div>
-          <LabelLux className="mb-3 !text-gold-lite">Hall of conviction</LabelLux>
-          <h1 className="text-[44px] sm:text-[56px] leading-[.95] uppercase font-bold">
-            The <span className="text-signal">Ranks</span>
+          <LabelLux className="mb-1">Leaderboard</LabelLux>
+          <h1 className="font-display text-[28px] font-semibold text-ivory">
+            The Ranks
           </h1>
-          <p className="mt-2 font-mono text-[10px] text-ash-dim uppercase tracking-[.14em]">
-            Live from on-chain user stats · updates in realtime
+          <p className="mt-1 font-mono text-[10px] text-ash-dim uppercase tracking-wider">
+            Live from on-chain user stats
           </p>
         </div>
 
         {/* Sort pills */}
-        <div className="flex items-center gap-1 surface rounded p-1 self-start">
+        <div className="flex items-center gap-1 p-1 rounded-lg self-start" style={{ background: "var(--color-panel)", border: "1px solid var(--color-hairline)" }}>
           {[
             { key: "volume", label: "Volume" },
             { key: "profit", label: "Profit" },
@@ -118,18 +118,11 @@ function LeaderboardPage() {
             <button
               key={opt.key}
               onClick={() => setSortBy(opt.key as any)}
-              className={`relative cursor-pointer inline-flex items-center min-h-[40px] px-4 py-2 font-mono text-[10px] uppercase tracking-[.12em] rounded transition-colors ${
-                sortBy === opt.key ? "text-void" : "text-ash hover:text-ivory"
+              className={`px-3 py-1.5 rounded font-mono text-[11px] font-medium tracking-wide transition-colors cursor-pointer ${
+                sortBy === opt.key ? "bg-gold text-white" : "text-ash hover:text-ivory"
               }`}
             >
-              {sortBy === opt.key && (
-                <motion.span
-                  layoutId="lb-sort-pill"
-                  className="absolute inset-0 bg-gradient-to-r from-gold to-gold-deep rounded"
-                  style={{ boxShadow: "0 0 16px -4px color-mix(in oklab, var(--color-gold) 60%, transparent)" }}
-                />
-              )}
-              <span className="relative z-10">{opt.label}</span>
+              {opt.label}
             </button>
           ))}
         </div>
@@ -142,12 +135,11 @@ function LeaderboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="surface-feature p-5 mb-8 flex items-center justify-between relative overflow-hidden"
+          className="surface-feature p-5 mb-8 flex items-center justify-between"
         >
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-gold to-gold-deep" />
           <div className="flex items-baseline gap-4">
-            <span className="font-mono text-[10px] uppercase tracking-[.16em] text-ash-dim">Your Rank</span>
-            <span className="font-display text-[36px] font-bold text-gold-lite leading-none tnum">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-ash-dim">Your Rank</span>
+            <span className="font-display text-[32px] font-bold text-gold-lite leading-none">
               #{myRankIndex + 1}
             </span>
             <span className="font-mono text-[13px] text-ivory">{shortAddr(myStats.wallet)}</span>

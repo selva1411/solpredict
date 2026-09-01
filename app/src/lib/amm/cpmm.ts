@@ -44,21 +44,21 @@ export function isqrt(x: bigint): bigint {
  * price_yes = pool_yes / (pool_yes + pool_no), fee-adjusted. Mirrors
  * get_spot_price_yes. Returns 0 on an empty pool.
  */
-export function getSpotPriceYes(poolYes: bigint, poolNo: bigint, feeBps: number): bigint {
+export function getSpotPriceYes(poolYes: bigint, poolNo: bigint, _feeBps: number): bigint {
   const total = poolYes + poolNo;
   if (total === 0n) return 0n;
-  const gross = (poolYes * BigInt(CPMM_SCALE)) / total;
-  const fee = (gross * BigInt(feeBps)) / 10000n;
-  return gross - fee;
+  // RAW probability — fees apply to cost/refund quotes, not to probability.
+  // Subtracting them here broke p_yes + p_no = 1 at any non-zero fee.
+  void _feeBps;
+  return (poolYes * BigInt(CPMM_SCALE)) / total;
 }
 
 /** Spot price of NO as a probability. Mirrors get_spot_price_no. */
-export function getSpotPriceNo(poolYes: bigint, poolNo: bigint, feeBps: number): bigint {
+export function getSpotPriceNo(poolYes: bigint, poolNo: bigint, _feeBps: number): bigint {
   const total = poolYes + poolNo;
   if (total === 0n) return 0n;
-  const gross = (poolNo * BigInt(CPMM_SCALE)) / total;
-  const fee = (gross * BigInt(feeBps)) / 10000n;
-  return gross - fee;
+  void _feeBps;
+  return (poolNo * BigInt(CPMM_SCALE)) / total;
 }
 
 /**

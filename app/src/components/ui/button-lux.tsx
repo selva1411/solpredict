@@ -5,15 +5,14 @@ export function ButtonLux({
   variant = "gold", className, ...p
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: V }) {
   const base =
-    "inline-flex h-11 items-center justify-center gap-2 rounded-[2px] px-5 font-mono text-[11px] " +
-    "uppercase tracking-[.16em] transition-[background-color,border-color,box-shadow,transform,color] duration-150 " +
-    "ease-[cubic-bezier(.22,.61,.36,1)] focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 " +
+    "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-6 font-medium text-[13px] " +
+    "transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 " +
     "focus-visible:ring-offset-void focus-visible:outline-none active:translate-y-px disabled:opacity-40 " +
     "disabled:pointer-events-none";
   const v: Record<V, string> = {
-    gold: "bg-gold text-void hover:bg-gold-lite",
-    ghost: "border border-hairline text-ivory hover:border-gold-deep hover:text-gold-lite",
-    quiet: "text-ash hover:text-ivory",
+    gold: "bg-gold text-white hover:bg-gold-deep",
+    ghost: "border border-hairline text-ivory hover:border-gold hover:text-gold-lite",
+    quiet: "text-ash hover:text-gold-lite",
   };
   return <button className={cn(base, v[variant], className)} {...p} />;
 }

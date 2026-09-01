@@ -1,11 +1,12 @@
 {
-  "name": "PREDICT-X — Predict the Future. Win the Future.",
-  "short_name": "PREDICT-X",
+  "name": "SOLPredict — Predict the Future. Win the Future.",
+  "short_name": "SOLPredict",
   "description": "Solana's premier prediction market. Trade YES/NO on any outcome with sub-second settlement, CPMM pricing, and Pyth oracle resolution.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#050507",
-  "theme_color": "#7B3FE4",
+  "background_color": "#07090B",
+  "theme_color": "#E8B23A",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml" },

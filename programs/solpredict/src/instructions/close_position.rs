@@ -42,6 +42,20 @@ pub struct ClosePosition<'info> {
 /// Closes the `UserPosition` PDA account and transfers the rent-exempt SOL deposit
 /// back to the user's wallet.
 pub fn handler(ctx: Context<ClosePosition>) -> Result<()> {
+    // Winners' guard: on a SETTLED market the UserPosition PDA is what
+    // claim_rewards keys off. Closing it before claiming destroys the only
+    // record of the position and permanently strands the payout. A position
+    // may be closed when it is already claimed, fully flattened (both amounts
+    // zero — e.g. a loser who zeroed out via claim), or on a CANCELLED market.
+    if ctx.accounts.market.status == MarketStatus::Settled {
+        let flattened = ctx.accounts.user_position.yes_amount == 0
+            && ctx.accounts.user_position.no_amount == 0;
+        require!(
+            ctx.accounts.user_position.claimed || flattened,
+            SolPredictError::PositionHasUnclaimedRewards
+        );
+    }
+
     let rent_reclaimed = ctx.accounts.user_position.to_account_info().lamports();
 
     emit!(PositionClosed {

@@ -1,6 +1,8 @@
 import { getMarketList } from "@/lib/data/markets";
 import { getPlatformStats } from "@/lib/data/platform";
+import { getRecentActivity } from "@/lib/data/trades";
 import HomeClient from "@/components/HomeClient";
+import { TradeTape } from "@/components/TradeTape";
 import type { MarketCacheEntry } from "@/lib/db/markets-store";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +18,11 @@ export const dynamic = "force-dynamic";
  * loads stay fast.
  */
 export default async function HomePage() {
-  const [listResult, stats] = await Promise.all([
+  const [listResult, stats, recent] = await Promise.all([
     getMarketList({ status: "open", sort: "newest", limit: 50 }),
     getPlatformStats(),
+    // The tape seeds server-side too — first paint already shows the last fills.
+    getRecentActivity(null, 16).catch(() => []),
   ]);
 
   const initialMarkets = (listResult.markets ?? []) as unknown as MarketCacheEntry[];
@@ -34,6 +38,18 @@ export default async function HomePage() {
   };
 
   return (
-    <HomeClient initialMarkets={initialMarkets} initialStats={initialStats} />
+    <>
+      <TradeTape
+        initial={(recent as Array<Record<string, unknown>>).map((a) => ({
+          signature: String(a.signature ?? ""),
+          trader: String(a.trader ?? ""),
+          side: (a.side === "NO" ? "NO" : "YES") as "YES" | "NO",
+          lamportsIn: Number(a.lamportsIn ?? 0),
+          tokensOut: Number(a.tokensOut ?? 0),
+          blockTime: String(a.blockTime ?? ""),
+        }))}
+      />
+      <HomeClient initialMarkets={initialMarkets} initialStats={initialStats} />
+    </>
   );
 }

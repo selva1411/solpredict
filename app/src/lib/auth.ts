@@ -68,7 +68,7 @@ export function verifySignature(message: string, signature: Uint8Array, wallet: 
     // Challenge-format messages carry a `Nonce: <hex>` line. For those,
     // enforce consume-once + expiry: the nonce must have been issued by
     // generateChallenge, must not be expired, and is deleted on first use.
-    // (Messages without a Nonce line — e.g. the PREDICT-X admin/user request
+    // (Messages without a Nonce line — e.g. the SOLPredict admin/user request
     // format — are validated purely cryptographically as before.)
     const nonceMatch = /\bNonce:\s*([0-9a-fA-F]{8,})/.exec(message);
     if (nonceMatch) {

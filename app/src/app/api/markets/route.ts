@@ -70,8 +70,10 @@ export const POST = apiHandler(async (req: NextRequest) => {
       return ok({ ok: false, error: "question and endTs are required" }, { status: 400 });
     }
 
-    const countRes = await db.select({ count: sql<number>`COUNT(*)::int` }).from(marketsCache);
-    const nextId = (countRes[0]?.count ?? 0) + 1;
+    // TODO: This COUNT/MAX-based id generation does not fully fix concurrent
+    // collisions. A full fix requires a DB sequence for market ids.
+    const maxRes = await db.select({ maxId: sql<number>`COALESCE(MAX(market_id), 0)::int` }).from(marketsCache);
+    const nextId = (maxRes[0]?.maxId ?? 0) + 1;
     // market_pubkey must be the REAL PDA for this id — a client-supplied
     // pubkey is never trusted.
     const pubkey = getMarketPda(new anchor.BN(nextId), ENV.programId).toBase58();

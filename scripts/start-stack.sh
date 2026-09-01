@@ -180,8 +180,19 @@ if is_running "solana-test-validator"; then
     (cd "$REPO_DIR" && anchor deploy --provider.cluster localnet >"$LOG_DIR/deploy.log" 2>&1) \
       || { log "deploy failed (see $LOG_DIR/deploy.log)"; exit 1; }
     log "program deployed"
+    if [[ -f "$REPO_DIR/scripts/seed-localnet.ts" ]]; then
+      log "reseeding chain & initializing on-chain markets"
+      (cd "$REPO_DIR" && npx tsx scripts/seed-localnet.ts --fast >"$LOG_DIR/seed.log" 2>&1) \
+        || log "WARN: seed-localnet failed (see $LOG_DIR/seed.log)"
+      (cd "$APP_DIR" && node --env-file=.env.local --import tsx src/workers/indexer.ts --once >"$LOG_DIR/indexer-init.log" 2>&1) \
+        || log "WARN: indexer initial sync failed"
+    fi
   else
     log "program already deployed (skip)"
+  fi
+  # Ensure config.admin is transferred to dad wallet if initialized with CLI keypair
+  if [[ -f "$REPO_DIR/scripts/transfer-admin.ts" ]]; then
+    (cd "$REPO_DIR" && npx tsx scripts/transfer-admin.ts dad8hrG9n3xoJcUVSZcVcoQQxbBhMS7CEypM2HR3wqf >/dev/null 2>&1) || true
   fi
 fi
 

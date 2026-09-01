@@ -25,7 +25,7 @@ export function TrustSignalsSection({
           <div className="font-bold text-ivory text-[13px] pt-1">
             {lamportsToSol(treasuryBalance).toFixed(3)} SOL
           </div>
-          <div className="text-[8px] text-ash/60 pt-0.5">Secure Escrow PDA</div>
+          <div className="text-[9px] text-ash pt-0.5">Secure Escrow PDA</div>
         </div>
 
         <div className="p-4 bg-panel rounded border border-hairline/30">
@@ -33,7 +33,7 @@ export function TrustSignalsSection({
           <div className="font-bold text-ivory text-[13px] pt-1">
             {feeBps !== null ? `${(feeBps / 100).toFixed(1)}%` : "— BPS"}
           </div>
-          <div className="text-[8px] text-ash/60 pt-0.5">Max capped at 10%</div>
+          <div className="text-[9px] text-ash pt-0.5">Max capped at 10%</div>
         </div>
 
         <div className="p-4 bg-panel rounded border border-board-border/30">
@@ -41,7 +41,7 @@ export function TrustSignalsSection({
           <div className="font-bold text-verdigris text-[13px] pt-1">
             {isOracleCategory(marketCategory) ? "Pyth Pull Oracle" : "Manual Settle"}
           </div>
-          <div className="text-[8px] text-ash/60 pt-0.5">Automated on-chain feed</div>
+          <div className="text-[9px] text-ash pt-0.5">Automated on-chain feed</div>
         </div>
       </div>
 

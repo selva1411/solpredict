@@ -41,19 +41,64 @@ export function TradeTape({ initial }: { initial: TapeItem[] }) {
   if (trades.length === 0) return null;
 
   return (
-    <div className="border-b border-hairline bg-obsidian/70 overflow-hidden" aria-label="Recent trades">
-      <div className="mx-auto max-w-[1240px] px-6 h-8 flex items-center gap-2 overflow-x-auto no-scrollbar">
-        <span className="label-lux shrink-0 !text-gold-lite">Tape</span>
-        <span className="w-px h-3.5 bg-hairline shrink-0" />
+    <div
+      className="w-full overflow-hidden py-2"
+      style={{
+        background: "color-mix(in srgb, var(--color-void) 80%, transparent)",
+        borderTop: "1px solid var(--color-hairline)",
+        borderBottom: "1px solid var(--color-hairline)",
+      }}
+      aria-label="Recent trades"
+    >
+      <div className="mx-auto max-w-[1240px] px-6 flex items-center gap-0 overflow-x-auto no-scrollbar">
+        <span className="font-mono text-[9px] uppercase tracking-[.18em] text-ash-dim shrink-0 mr-3">
+          Tape
+        </span>
+        <span
+          className="w-px h-3 shrink-0 mr-3"
+          style={{ background: "var(--color-hairline)" }}
+          aria-hidden
+        />
         {trades.map((t, i) => (
-          <span key={t.signature} className="shrink-0 flex items-center gap-1.5 font-mono text-[10.5px] tnum whitespace-nowrap">
-            <span className={t.side === "YES" ? "text-verdigris font-bold" : "text-bordeaux font-bold"}>
-              {t.side === "YES" ? "BUY YES" : "BUY NO"}
-            </span>
-            <span className="text-ivory">{(Math.abs(t.tokensOut || 0) / 1e6).toFixed(0)}×</span>
-            <span className="text-ash">@ {((Math.abs(t.lamportsIn || 0)) / 1e9 / Math.max(1e-9, Math.abs(t.tokensOut || 1) / 1e6)).toFixed(2)} SOL</span>
+          <span
+            key={t.signature}
+            className="shrink-0 inline-flex items-center gap-1.5 font-mono text-[10px] tnum whitespace-nowrap pr-4"
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{
+                background:
+                  t.side === "YES"
+                    ? "var(--color-verdigris)"
+                    : "var(--color-bordeaux)",
+              }}
+              aria-hidden
+            />
             <span className="text-ash-dim">{short(t.trader)}</span>
-            {i < trades.length - 1 && <span className="text-hairline ml-1.5">·</span>}
+            <span className="text-ivory font-semibold">
+              {(Math.abs(t.tokensOut || 0) / 1e6).toFixed(0)}×
+            </span>
+            <span
+              className={
+                t.side === "YES"
+                  ? "text-verdigris font-bold"
+                  : "text-bordeaux font-bold"
+              }
+            >
+              {t.side}
+            </span>
+            <span className="text-ash">
+              @{" "}
+              {(
+                Math.abs(t.lamportsIn || 0) /
+                1e9 /
+                Math.max(1e-9, Math.abs(t.tokensOut || 1) / 1e6)
+              ).toFixed(3)}{" "}
+              SOL
+            </span>
+            {i < trades.length - 1 && (
+              <span className="text-hairline ml-1">·</span>
+            )}
           </span>
         ))}
       </div>
