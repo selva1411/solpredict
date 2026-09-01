@@ -3,6 +3,8 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { verifySignature, verifySessionToken, isAdminWallet, type Session } from "./auth";
 import { ADMIN_MESSAGE_PREFIX } from "./admin-message";
 import { getConfigPda } from "./pda";
+import { ENV } from "./env";
+import { isDevAuthEnabled } from "./dev-auth";
 
 export interface AdminIdentity {
   wallet: string;
@@ -31,8 +33,9 @@ export async function requireAdmin(req: NextRequest): Promise<
   // Development (localnet): the panel runs against a local test validator and
   // the admin wallet is any browser wallet connected to the app (e.g. it was
   // made the on-chain `config.admin` via "Initialize Config PDA"). Allow any
-  // request here; production below still enforces real authentication.
-  if (process.env.NODE_ENV === "development") {
+  // request ONLY when dev auth is explicitly enabled; production and any dev
+  // build without `DEV_AUTH_ENABLED=1` still enforce real authentication.
+  if (isDevAuthEnabled()) {
     return { ok: true, identity: { wallet: "dev", method: "dev" } };
   }
 
@@ -112,13 +115,7 @@ async function fetchOnChainAdmin(): Promise<string | null> {
   }
 
   try {
-    const rpcUrl =
-      process.env.NEXT_PUBLIC_RPC_URL?.replace(
-        /localhost:\d+|127\.0\.0\.1:\d+/,
-        "127.0.0.1:8899",
-      ) || process.env.LOCALNET_RPC_URL || "http://127.0.0.1:8899";
-
-    const conn = new Connection(rpcUrl, "confirmed");
+    const conn = new Connection(ENV.serverRpcUrl, "confirmed");
     const configPda = getConfigPda(PROGRAM_ID);
     const info = await conn.getAccountInfo(configPda);
     if (!info || !info.data) return null;

@@ -4,8 +4,10 @@ import { NextRequest } from "next/server";
 import { assertDb } from "@/lib/db/client";
 import { rewards, userStats, trades, marketsCache } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { walletSchema } from "@/lib/schemas";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { requireUser } from "@/lib/user-guard";
 import { PublicKey } from "@solana/web3.js";
 import { verifySignature } from "@/lib/auth";
 import { verifyRewardClaimSignature } from "@/lib/indexer/onchain";
@@ -20,10 +22,18 @@ import { verifyRewardClaimSignature } from "@/lib/indexer/onchain";
  */
 export const GET = apiHandler(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
-  const wallet = searchParams.get("wallet");
-  if (!wallet || wallet.length < 32) {
+  const rawWallet = searchParams.get("wallet");
+  const parsedWallet = walletSchema.safeParse(rawWallet ?? "");
+  if (!parsedWallet.success) {
     return badRequest("Valid wallet address required");
   }
+  const wallet = parsedWallet.data;
+
+  // Rewards expose claimable monetary balances and quest progress. This is
+  // owner-sensitive data (no public "view anyone's rewards" page exists), so
+  // require the caller to prove ownership of the requested wallet.
+  const auth = await requireUser(req, wallet);
+  if (!auth.ok) return auth.response;
 
   try {
     const db = assertDb();

@@ -7,9 +7,10 @@ import { db } from "@/lib/db/client";
 import { treasuryLedger } from "@/lib/db/schema";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { ENV } from "@/lib/env";
 import { requireAdmin } from "@/lib/admin-guard";
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+const RPC_URL = ENV.serverRpcUrl;
 
 /**
  * GET /api/admin/treasury

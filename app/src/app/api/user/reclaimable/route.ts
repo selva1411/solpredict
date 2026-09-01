@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { getReclaimableMarkets } from "@/lib/data/markets";
 import { walletSchema } from "@/lib/schemas";
+import { requireUser } from "@/lib/user-guard";
 import { ok, badRequest, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
 
@@ -12,6 +13,7 @@ const RECLAIM_COOLDOWN_MS = 7 * 24 * 3600 * 1000; // 7 days post-settlement
  * GET /api/user/reclaimable?wallet=
  *
  * Returns markets created by the wallet with rent deposit eligibility & reason per spec §3.3.
+ * Owner-sensitive (rent amounts owed to the wallet) — callers must prove ownership.
  */
 export const GET = apiHandler(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
@@ -20,6 +22,9 @@ export const GET = apiHandler(async (req: NextRequest) => {
 
   const parsed = walletSchema.safeParse(wallet);
   if (!parsed.success) return badRequest("Valid wallet address required");
+
+  const auth = await requireUser(req, parsed.data);
+  if (!auth.ok) return auth.response;
 
   try {
     const markets = await getReclaimableMarkets(parsed.data, RECLAIM_COOLDOWN_MS);

@@ -4,6 +4,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { sign } from "jsonwebtoken";
 import { verify } from "jsonwebtoken";
 import { randomBytes, randomUUID } from "crypto";
+import { isDevAuthEnabled } from "./dev-auth";
 
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -143,10 +144,11 @@ export function isAdminWallet(wallet: string | null | undefined, adminWallets?: 
   if (!wallet) return false;
   const configured = adminWallets || (process.env.ADMIN_WALLET ? process.env.ADMIN_WALLET.split(",") : []);
   if (configured.length === 0) {
-    // Fail CLOSED in production: with no admin wallets configured, nobody is
-    // an admin. (The previous `return true` made every connected wallet an
-    // admin whenever ADMIN_WALLET was unset — a critical authorization hole.)
-    return process.env.NODE_ENV !== "production";
+    // Fail CLOSED: with no admin wallets configured, nobody is an admin. Only
+    // the localnet dev flow (NODE_ENV=development + DEV_AUTH_ENABLED=1) keeps
+    // the previous permissive behavior so the localnet admin panel works
+    // without importing a specific wallet keypair.
+    return isDevAuthEnabled();
   }
   return configured.map(w => w.trim()).includes(wallet.trim());
 }

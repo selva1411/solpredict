@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { verifySignature, verifySessionToken, type Session } from "./auth";
 import { USER_MESSAGE_PREFIX } from "./user-message";
+import { isDevAuthEnabled } from "./dev-auth";
 
 export interface UserIdentity {
   wallet: string;
@@ -31,9 +32,10 @@ export async function requireUser(
   expectedWallet?: string,
 ): Promise<{ ok: true; identity: UserIdentity } | { ok: false; response: NextResponse }> {
   // Development (localnet): the wallet adapter signs via the browser, but the
-  // seed/tests exercise the endpoints directly. Skip proof-of-ownership in
-  // development only; production below always enforces it.
-  if (process.env.NODE_ENV === "development") {
+  // seed/tests exercise the endpoints directly. Skip proof-of-ownership ONLY
+  // when dev auth is explicitly enabled; production and any dev build without
+  // `DEV_AUTH_ENABLED=1` always enforce it.
+  if (isDevAuthEnabled()) {
     const wallet = expectedWallet ?? req.headers.get("x-wallet") ?? "dev";
     return { ok: true, identity: { wallet, method: "dev" } };
   }

@@ -324,7 +324,7 @@ export function TradingPanel(p: TradingPanelProps) {
                 value={quantity}
                 min={1}
                 onChange={(e) =>
-                  setQuantity(Math.max(1, Number(e.target.value)))
+                  setQuantity(Math.max(1, Math.floor(Number(e.target.value)) || 0))
                 }
                 className="flex-1 rounded-lg px-4 py-3 font-mono text-[18px] font-bold text-ivory text-center focus:outline-none transition-all"
                 style={{
@@ -695,7 +695,7 @@ export function TradingPanel(p: TradingPanelProps) {
                 value={sellQuantity}
                 min={1}
                 onChange={(e) =>
-                  setSellQuantity(Math.max(1, Number(e.target.value)))
+                  setSellQuantity(Math.max(1, Math.floor(Number(e.target.value)) || 0))
                 }
                 className="flex-1 bg-panel border border-hairline/40 rounded-md px-3 py-2 text-center text-[13px] font-mono text-ivory focus:outline-none focus:border-gold/60"
               />

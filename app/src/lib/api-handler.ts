@@ -3,9 +3,9 @@ import { serverError } from "./api-response";
 import { toError } from "./errors";
 import { checkRateLimit } from "./rate-limit";
 import { logAudit } from "./audit";
+import { isDevAuthEnabled } from "./dev-auth";
 
 type RouteHandler = (req: NextRequest, context: { params?: Promise<Record<string, string>> }) => Promise<Response>;
-
 interface HandlerOptions {
   cacheMaxAge?: number;
   cacheTags?: string[];
@@ -21,7 +21,9 @@ export function getClientIp(req: NextRequest): string {
 export function requireServiceKey(req: NextRequest): boolean {
   const key = req.headers.get("x-service-key");
   const expected = process.env.SERVICE_API_KEY;
-  if (!expected) return process.env.NODE_ENV !== "production";
+  // If no service key is configured, only allow the call when dev auth is
+  // explicitly enabled (never in production or a bare dev build).
+  if (!expected) return isDevAuthEnabled();
   return key === expected;
 }
 

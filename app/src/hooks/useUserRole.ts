@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useProgram } from "@/hooks/useProgram";
 import { getConfigPda } from "@/lib/pda";
+import { isDevAuthEnabled } from "@/lib/dev-auth";
 
 export type UserRole = "admin" | "user" | "disconnected";
 
@@ -21,8 +22,9 @@ export function useUserRole() {
 
       // Development (localnet): mirror the server-side `requireAdmin` dev
       // bypass so the admin panel is reachable without importing a specific
-      // wallet. Production still resolves the role from on-chain ownership.
-      if (process.env.NODE_ENV === "development") {
+      // wallet. Production (or a dev build without `DEV_AUTH_ENABLED=1`)
+      // still resolves the role from on-chain ownership.
+      if (isDevAuthEnabled()) {
         setRole("admin");
         setConfigExists(false);
         setIsLoading(false);

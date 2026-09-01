@@ -5,9 +5,10 @@ import { getDb } from "@/lib/db/client";
 import { getCursor, saveCursor, applyEvent } from "@/lib/indexer/reducer";
 import { ok, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { ENV } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
+const RPC_URL = ENV.serverRpcUrl;
 const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
 
 export const GET = apiHandler(async (req: NextRequest) => {

@@ -22,11 +22,10 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, AnchorProvider, type Idl, type IdlAccounts } from "@coral-xyz/anchor";
 import type { Solpredict } from "@/lib/idl/solpredict";
 import idlJson from "@/lib/idl/solpredict.json";
+import { ENV } from "@/lib/env";
 
 const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL
-  ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL
-  ?? "https://api.devnet.solana.com";
+const RPC_URL = ENV.serverRpcUrl;
 
 const BASE_UNITS_PER_SHARE = 1_000_000;
 

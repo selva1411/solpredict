@@ -7,8 +7,9 @@ import { marketsCache, marketOutcomes, trades, positions, userStats } from "@/li
 import { sql } from "drizzle-orm";
 import { ok, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { ENV } from "@/lib/env";
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
+const RPC_URL = ENV.serverRpcUrl;
 
 export const GET = apiHandler(async (req: NextRequest) => {
   const db = getDb();

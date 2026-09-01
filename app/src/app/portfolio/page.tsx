@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { ClientWalletButton } from "@/components/ClientWalletButton";
 import { useSolPrice } from "@/hooks/useSolPrice";
 import { useProgram } from "@/hooks/useProgram";
+import { useRealtime } from "@/hooks/useRealtime";
 import { keys } from "@/lib/api/keys";
 import { getYesMintPda, getNoMintPda } from "@/lib/pda";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -73,6 +74,7 @@ export default function PortfolioPage() {
   const { publicKey } = useWallet();
   const { program, connection } = useProgram();
   const { solPrice } = useSolPrice();
+  const queryClient = useQueryClient();
   const [positions, setPositions] = useState<Position[]>([]);
   const [lpPositions, setLpPositions] = useState<LpPosition[]>([]);
   const [stats, setStats] = useState<PortfolioStats>({
@@ -193,11 +195,26 @@ export default function PortfolioPage() {
     enabled: !!walletStr,
     // Live-updating: poll every 12s so the portfolio revalues positions and
     // picks up new trades without a manual refresh. The detail page also
-    // invalidates this key after every buy/sell/LP, so it refreshes instantly.
+    // invalidates this key after every buy/sell/LP, and the realtime push
+    // below refreshes it instantly, so it reflects trades immediately.
     refetchInterval: 12_000,
     refetchOnWindowFocus: true,
     staleTime: 5_000,
   });
+
+  // Realtime push: after a confirmed buy/sell/LP the WS server broadcasts fresh
+  // positions on the `positions:<wallet>` channel. Listen for it so the
+  // portfolio re-reads the DB immediately instead of waiting for the 12s poll —
+  // this is what makes trades appear/disappear on the portfolio right away.
+  const rt = useRealtime(walletStr ? `positions:${walletStr}` : undefined);
+  useEffect(() => {
+    const unsub = rt.on("positions", () => {
+      queryClient.invalidateQueries({
+        queryKey: keys.user.positions(walletStr ?? "none"),
+      });
+    });
+    return () => unsub?.();
+  }, [rt, queryClient, walletStr]);
   const loading = !!walletStr ? isLoading : false;
   const fetchError = !!walletStr ? isError : false;
 

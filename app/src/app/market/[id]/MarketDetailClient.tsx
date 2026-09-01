@@ -27,6 +27,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { getFriendlyErrorMessage } from "@/lib/error-map";
 import { lamportsToSol, bnToNum } from "@/lib/format";
+import { clampQuantity } from "@/lib/utils";
 import { buyCostLamports, sellRefundLamports as sellRefundFn } from "@/lib/amm/cpmm";
 import { lpPreview } from "@/lib/amm/lp";
 import { toast } from "sonner";
@@ -474,29 +475,31 @@ export default function MarketDetailPage({
   const fetchUserBalances = async () => {
     if (!wallet?.publicKey) return;
     try {
-      const yesMintPda = getYesMintPda(marketPda, program.programId);
-      const noMintPda = getNoMintPda(marketPda, program.programId);
-      const yesAta = getAssociatedTokenAddressSync(yesMintPda, wallet.publicKey);
-      const noAta = getAssociatedTokenAddressSync(noMintPda, wallet.publicKey);
-      const [yesAcc, noAcc] = await Promise.all([
-        connection.getTokenAccountBalance(yesAta).catch(() => null),
-        connection.getTokenAccountBalance(noAta).catch(() => null),
-      ]);
-      let yesBal = yesAcc ? yesAcc.value.uiAmount ?? 0 : 0;
-      let noBal = noAcc ? noAcc.value.uiAmount ?? 0 : 0;
+      // Source of truth: the DB net position for THIS market + wallet — exactly
+      // what the Portfolio page shows — so the sell column matches Portfolio.
+      //
+      // We deliberately do NOT fall back to the raw on-chain SPL token-account
+      // balance: on this protocol LP providers are minted their provisioned
+      // YES/NO shares (collateral), so the on-chain balance conflates trade
+      // positions with LP collateral and looks like huge bogus "held" numbers.
+      // The sell column should reflect only separable trade positions.
+      const marketB58 = marketPda.toBase58();
+      let yesBal = 0;
+      let noBal = 0;
 
-      if (yesBal === 0 || noBal === 0) {
-        try {
-          const res = await fetch(`/api/user/positions?wallet=${wallet.publicKey.toBase58()}`);
-          const data = await res.json();
-          if (data.ok && data.positions) {
-            const mktPosList = data.positions.filter((p: any) => p.marketPubkey === marketPda.toBase58());
-            for (const p of mktPosList) {
-              if (p.side === "YES" && yesBal === 0) yesBal = p.shares;
-              if (p.side === "NO" && noBal === 0) noBal = p.shares;
-            }
+      try {
+        const res = await fetch(`/api/user/positions?wallet=${wallet.publicKey.toBase58()}`);
+        const data = await res.json();
+        if (data?.ok && data.positions) {
+          const mktPosList = data.positions.filter((p: any) => p.marketPubkey === marketB58);
+          for (const p of mktPosList) {
+            if (p.side === "YES" && p.shares > 0) yesBal = Math.max(yesBal, p.shares);
+            if (p.side === "NO" && p.shares > 0) noBal = Math.max(noBal, p.shares);
           }
-        } catch {}
+        }
+      } catch {
+        // DB unreachable — leave balances at 0 rather than surface misleading
+        // LP-collateral token balances from on-chain.
       }
 
       setUserYesBalance(yesBal);
@@ -548,6 +551,11 @@ export default function MarketDetailPage({
     prevYesLamports: number,
     prevNoLamports: number
   ): Promise<MarketDetails | undefined> => {
+    // Poll with an adaptive, faster cadence so the post-trade DB sync (and thus
+    // the price/balance/portfolio reflection) lands as quickly as possible.
+    // Start at 80ms and back off, finishing well under a second in the common
+    // case instead of the previous fixed 250ms × 12 (~3s) worst case.
+    let delay = 80;
     for (let i = 0; i < 12; i++) {
       try {
         const acc = await program.account.market.fetch(marketPda) as unknown as MarketDetails;
@@ -557,7 +565,8 @@ export default function MarketDetailPage({
       } catch {
         /* keep polling */
       }
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 1.5, 300);
     }
     return undefined;
   };
@@ -839,7 +848,11 @@ export default function MarketDetailPage({
       return;
     }
     const targetSide = isBuy ? tradeSide : sellSide;
-    const targetQty = isBuy ? quantity : sellQuantity;
+    const targetQty = clampQuantity(isBuy ? quantity : sellQuantity);
+    if (targetQty <= 0) {
+      toast.error("Enter a valid whole-number share quantity");
+      return;
+    }
 
     if (!isBuy) {
       const currentHoldings = targetSide === "YES" ? userYesBalance : userNoBalance;
@@ -1339,7 +1352,7 @@ export default function MarketDetailPage({
   // a cached fee.
   const fee = market.feeBps ?? feeBps ?? 0;
   const sharePriceLamportsBI = BigInt(market.sharePriceLamports.toNumber());
-  const qtyBI = BigInt(Math.max(0, quantity));
+  const qtyBI = BigInt(clampQuantity(quantity));
   const dyOutBI = qtyBI * sharePriceLamportsBI; // value being traded, on-chain semantics
 
   // Exactly mirrors buy_shares.rs: flat baseline cost when either pool is
@@ -1428,6 +1441,11 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
       toast.error("Please connect your wallet to trade");
       return;
     }
+    const qty = clampQuantity(quantity);
+    if (qty <= 0) {
+      toast.error("Enter a valid whole-number share quantity to buy");
+      return;
+    }
     setTxState("idle");
 
     // Run balance + deployed checks in PARALLEL so the wallet popup opens as
@@ -1467,7 +1485,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
       const maxCostLamports = new anchor.BN((quoteValueBI * 105n) / 100n);
       const sig = await sendTxWithBlockhashRetry(
         program.methods
-          .buyShares(sideParam, new anchor.BN(quantity), maxCostLamports)
+          .buyShares(sideParam, new anchor.BN(qty), maxCostLamports)
           .accounts(txAccounts({
             buyer: wallet.publicKey,
             market: marketPda,
@@ -1487,7 +1505,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
       setSuccessFlip(true);
       setTimeout(() => setSuccessFlip(false), 800);
 
-      toast.success(`Position acquired: ${quantity} ${tradeSide} shares!`);
+      toast.success(`Position acquired: ${qty} ${tradeSide} shares!`);
       setIsMobileDrawerOpen(false);
 
       // Re-enable the button immediately — the tx already landed. All DB
@@ -1504,7 +1522,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
           await syncTradeToDb(
             sig,
             tradeSide,
-            quantity,
+            qty,
             true,
             freshAcc
               ? {
@@ -1519,6 +1537,7 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
         () => {
           fetchMarket();
           fetchActivity();
+          fetchUserBalances();
         }
       );
     } catch (err: unknown) {
@@ -1533,6 +1552,11 @@ const avgPerShareSol = quantity > 0 ? tradeCost / quantity : 0;
 const handleSell = async () => {
     if (!wallet.connected || !wallet.publicKey) {
       toast.error("Please connect your wallet to trade");
+      return;
+    }
+    const qty = clampQuantity(sellQuantity);
+    if (qty <= 0) {
+      toast.error("Enter a valid whole-number share quantity to sell");
       return;
     }
     setTxState("idle");
@@ -1567,7 +1591,7 @@ const handleSell = async () => {
       const minProceedsLamports = new anchor.BN((sellRefundTreasuryCapBI * 95n) / 100n);
       const sig = await sendTxWithBlockhashRetry(
         program.methods
-          .sellShares(sideParam, new anchor.BN(sellQuantity), minProceedsLamports)
+          .sellShares(sideParam, new anchor.BN(qty), minProceedsLamports)
           .accounts(txAccounts({
             seller: wallet.publicKey,
             market: marketPda,
@@ -1581,7 +1605,7 @@ const handleSell = async () => {
           }))
       );
 
-      toast.success(`Sold ${sellQuantity} ${sellSide} shares!`);
+      toast.success(`Sold ${qty} ${sellSide} shares!`);
 
       // Re-enable the button immediately; sync + refetch run in the background.
       setSubmitting(false);
@@ -1593,7 +1617,7 @@ const handleSell = async () => {
           await syncTradeToDb(
             sig,
             sellSide,
-            sellQuantity,
+            qty,
             false,
             freshAcc
               ? {

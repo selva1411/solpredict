@@ -91,10 +91,19 @@ describe("requireAdmin", () => {
     if (res.ok) expect(res.identity.method).toBe("session");
   });
 
-  it("allows requests in development without auth", async () => {
+  it("allows requests in development when dev auth is explicitly enabled", async () => {
     vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("DEV_AUTH_ENABLED", "1");
     const res = await requireAdmin(makeRequest({}));
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.identity.method).toBe("dev");
+  });
+
+  it("does NOT bypass auth in dev unless DEV_AUTH_ENABLED is set", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    // DEV_AUTH_ENABLED unset -> auth is required even in development.
+    const res = await requireAdmin(makeRequest({}));
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.response.status).toBe(401);
   });
 });

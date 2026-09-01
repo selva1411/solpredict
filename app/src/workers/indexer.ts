@@ -17,15 +17,12 @@ import { Program, AnchorProvider, Wallet, type Idl } from "@coral-xyz/anchor";
 import { reconcileMarkets, reconcileTrades, reconcilePositions } from "@/lib/indexer/reconciler";
 import { logger } from "@/lib/logger";
 import type { Solpredict } from "@/lib/idl/solpredict";
+import { ENV } from "@/lib/env";
 
-const NEXT_PUBLIC_RPC = process.env.NEXT_PUBLIC_RPC_URL ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "";
 // Standalone workers run outside the Next.js dev server, so the app's own
-// /api/rpc proxy (localhost:3000) is unavailable. Fall back to the local
-// validator directly.
-const RPC_URL =
-  NEXT_PUBLIC_RPC.includes("localhost:3000") || NEXT_PUBLIC_RPC.includes("127.0.0.1:3000")
-    ? process.env.LOCALNET_RPC_URL ?? "http://127.0.0.1:8899"
-    : NEXT_PUBLIC_RPC || "https://api.devnet.solana.com";
+// /api/rpc proxy (localhost:3000) is unavailable. ENV.serverRpcUrl already
+// normalizes local/LAN endpoints to the direct loopback validator.
+const RPC_URL = ENV.serverRpcUrl;
 const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID
   ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
 

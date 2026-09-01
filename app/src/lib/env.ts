@@ -56,6 +56,28 @@ export const ENV = {
     return configured;
   },
 
+  /**
+   * Server-side only: the REAL validator endpoint, never the `/api/rpc` proxy.
+   *
+   * Server code (indexers, cron, admin-guard, on-chain verification) must talk
+   * directly to the validator, not through an HTTP rewrite meant for browsers.
+   * When the configured endpoint is a local/LAN address (localnet) we normalize
+   * any `localhost`/`NEXT_PUBLIC_RPC_URL` proxy value to the loopback validator.
+   * In production/remote clusters the configured public endpoint is used as-is.
+   */
+  get serverRpcUrl(): string {
+    const configured = process.env.NEXT_PUBLIC_RPC_URL
+      ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL
+      ?? process.env.LOCALNET_RPC_URL
+      ?? "https://api.devnet.solana.com";
+
+    if (isLocalHostUrl(configured) || configured.includes("/api/rpc")) {
+      // Localnet: normalize to the loopback validator, ignoring any browser proxy.
+      return process.env.LOCALNET_RPC_URL || "http://127.0.0.1:8899";
+    }
+    return configured;
+  },
+
   get wsEndpoint(): string {
     const configured = process.env.NEXT_PUBLIC_WS_ENDPOINT
       ?? "ws://127.0.0.1:8900";

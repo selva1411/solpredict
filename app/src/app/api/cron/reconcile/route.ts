@@ -6,10 +6,11 @@ import { getDb } from "@/lib/db/client";
 import { reconcileMarkets, reconcileTrades } from "@/lib/indexer/reconciler";
 import { ok, serverError } from "@/lib/api-response";
 import { apiHandler } from "@/lib/api-handler";
+import { ENV } from "@/lib/env";
 import type { Solpredict } from "@/lib/idl/solpredict";
 import rawIdl from "@/lib/idl/solpredict.json";
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
+const RPC_URL = ENV.serverRpcUrl;
 const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID ?? "AWbRCjgFzoe3zMqtXxRzPz7zFo8PP34RLDYmpd8LyGKG";
 
 export const GET = apiHandler(async (req: NextRequest) => {
